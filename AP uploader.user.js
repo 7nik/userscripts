@@ -4,7 +4,7 @@
 // @version      1.0
 // @description  Uploading without reloading the page + drag'n'drop.
 // @author       7nik
-// @match        https://anime-pictures.net/pictures/view_add_wall?lang=ru
+// @match        https://anime-pictures.net/pictures/view_add_wall*
 // @grant        none
 // ==/UserScript==
 
