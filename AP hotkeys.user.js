@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP hotkeys
 // @namespace    7nik@anime-pictures.net
-// @version      1.1.3
+// @version      1.2.0
 // @description  Adds support of hotkeys
 // @author       7nik
 // @match        https://anime-pictures.net/*
@@ -18,16 +18,17 @@
     2. support asking of a tag param
     3. fold a selected text with the tag and put the cursor after it or insert the empty tag and put the cursor inside it
     */
-    function pasteBBTag(textarea, bbtag, askParam) {
+    function pasteBBTag(textarea, bbtag, askParam, param = "") {
         const getSelText = (text) => window.getSelection ? window.getSelection().toString() : document.selection.createRange().text;
         let text = getSelText();
         textarea.focus();
         if (!text) text = getSelText();
 
-        let param = "";
         if (askParam) {
-            param = prompt(askParam, "");
-            param = param ? "="+param : "";
+            param = prompt(askParam, param) || param;
+        }
+        if (param) {
+            param = "=" + param;
         }
 
         // set the cursor after the bbtag if any text was selected, otherwise - inside the bbtag
@@ -199,6 +200,13 @@
             pages: ["/profile/messages_from_user/", "/chat/view", "/pictures/view_post/", "/pictures/view_edit_tag/"],
             selectors: ["textarea:focus", "textarea"],
             action: (element) => (pasteBBTag(element, "URL", "Paste URL")),
+        },
+        {
+            descr: "fold selected text as tag",
+            hotkey: "Ctrl+E",
+            pages: ["/profile/messages_from_user/", "/chat/view", "/pictures/view_post/", "/pictures/view_edit_tag/"],
+            selectors: ["textarea:focus", "textarea"],
+            action: (element) => (pasteBBTag(element, "URL", null, "https://anime-pictures.net/pictures/view_posts/0?search_tag="+getSelText().replace(/\s/g, "+"))),
         },
         {
             descr: "send message",
