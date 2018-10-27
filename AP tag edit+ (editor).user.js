@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP tag edit+ (editor)
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.0
+// @version      1.0.1
 // @description  Replace tag id with tag name in tag edit window, autoset tag type, unsave exit protection, convert links to a tag to the tag name
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_edit_tag/*

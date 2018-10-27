@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP uploader
 // @namespace    7nik@anime-pictures.net
-// @version      1.0
+// @version      1.0.1
 // @description  Uploading without reloading the page + drag'n'drop.
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_add_wall*

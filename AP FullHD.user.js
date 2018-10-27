@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP FullHD
 // @namespace    7nik@anime-pictures.net
-// @version      1.0
+// @version      1.0.1
 // @description  Makes almost everything visible in a brower window when it is maximazed
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*

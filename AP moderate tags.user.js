@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP moderate tags
 // @namespace    7nik@anime-pictures.net
-// @version      1.1
+// @version      1.1.1
 // @description  Allow moderate recommended tags the way as regular one
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*moderation=1

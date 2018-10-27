@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP hotkeys
 // @namespace    7nik@anime-pictures.net
-// @version      1.1.2
+// @version      1.1.3
 // @description  Adds support of hotkeys
 // @author       7nik
 // @match        https://anime-pictures.net/*

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP loading cursor
 // @namespace    7nik@anime-pictures.net
-// @version      0.1
+// @version      0.1.1
 // @description  Set "progress" cursor during executing long queries to the server
 // @author       7nik
 // @match        https://anime-pictures.net/*

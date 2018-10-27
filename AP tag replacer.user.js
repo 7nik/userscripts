@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP tag replacer
 // @namespace    7nik@anime-pictures.net
-// @version      0.1
+// @version      0.1.1
 // @description  Add button and hotkey to add and/or remove a tag
 // @author       You
 // @match        https://anime-pictures.net/pictures/view_post/*

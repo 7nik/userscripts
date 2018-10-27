@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP mass tag remover
 // @namespace    7nik@anime-pictures.net
-// @version      1.0
+// @version      1.0.1
 // @description  Add button to remove tag from multiple pictures
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_posts/*
