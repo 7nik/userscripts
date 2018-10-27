@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         AP hotkeys
-// @namespace    https://anime-pictures.net/
+// @namespace    7nik@anime-pictures.net
 // @version      1.1.2
 // @description  Adds support of hotkeys
 // @author       7nik
-// @match        http*://anime-pictures.net/*
+// @match        https://anime-pictures.net/*
 // @run-at       document-end
 // @grant        none
 // ==/UserScript==
@@ -16,7 +16,7 @@
     /* difference from the std.js's implementation:
     1. don't corrupt history of the field changes
     2. support asking of a tag param
-    3. fold a selected text by the tag and put the cursor after it or insert the empty tag and put the cursor inside it
+    3. fold a selected text with the tag and put the cursor after it or insert the empty tag and put the cursor inside it
     */
     function pasteBBTag(textarea, bbtag, askParam) {
         const getSelText = (text) => window.getSelection ? window.getSelection().toString() : document.selection.createRange().text;
@@ -135,14 +135,14 @@
             hotkey: "F",
             pages: ["/pictures/view_post/"],
             selectors: ["select[name='favorite_folder']"],
-            action: (e) => {e.value = "default"; e.fireEvent ? e.fireEvent("onchange") : e.dispatchEvent(new Event('change'))},
+            action: (e) => {e.value = "default"; if (e.fireEvent) e.fireEvent("onchange"); else e.dispatchEvent(new Event('change'));},
         },
         {
             descr: "(unFavorite) remove the image from favorite",
             hotkey: "Shift+F",
             pages: ["/pictures/view_post/"],
             selectors: ["select[name='favorite_folder']"],
-            action: (e) => {e.value = "Null"; e.fireEvent ? e.fireEvent("onchange") : e.dispatchEvent(new Event('change'))},
+            action: (e) => {e.value = "Null"; if (e.fireEvent)  e.fireEvent("onchange"); else e.dispatchEvent(new Event('change'));},
         },
         {
             descr: "(comment) focus on the comment/message textarea",
@@ -249,28 +249,28 @@
                 hotkey: "1",
                 pages: ["/pictures/view_post/"],
                 selectors: ["form[action*='set_post_status']"],
-                action: (e) => {e.querySelector("select").value = 0; e.querySelector("[type=submit]").focus()},
+                action: (e) => {e.querySelector("select").value = 0; e.querySelector("[type=submit]").focus();},
             },
             {
                 descr: "choose image status PRE",
                 hotkey: "2",
                 pages: ["/pictures/view_post/"],
                 selectors: ["form[action*='set_post_status']"],
-                action: (e) => {e.querySelector("select").value = -2; e.querySelector("[type=submit]").focus()},
+                action: (e) => {e.querySelector("select").value = -2; e.querySelector("[type=submit]").focus();},
             },
             {
                 descr: "choose image status PUBLIC",
                 hotkey: "3",
                 pages: ["/pictures/view_post/"],
                 selectors: ["form[action*='set_post_status']"],
-                action: (e) => {e.querySelector("select").value = 1; e.querySelector("[type=submit]").focus()},
+                action: (e) => {e.querySelector("select").value = 1; e.querySelector("[type=submit]").focus();},
             },
             {
                 descr: "choose image status BAN",
                 hotkey: "4",
                 pages: ["/pictures/view_post/"],
                 selectors: ["form[action*='set_post_status']"],
-                action: (e) => {e.querySelector("select").value = 2; e.querySelector("[name=status_type]").focus()},
+                action: (e) => {e.querySelector("select").value = 2; e.querySelector("[name=status_type]").focus();},
             },
             {
                 descr: "(add) focus on an input field for tag copying",
@@ -308,8 +308,8 @@
             controlHotKey = true;
         }
         hotkey += (event.key.length > 1) ? event.key : String.fromCharCode(event.which || event.keyCode);
-        let focusElem = document.activeElement;
-        // remove focus on Escape
+        const focusElem = document.activeElement;
+        // unfocus on Escape
         if ((hotkey === "Escape") && (focusElem !== document.body)) {
             focusElem.blur();
             event.preventDefault();
@@ -336,7 +336,6 @@
     });
 
     // add a link to show avaible for current page hotkeys
-
     if (document.querySelector("#footer span")) {
         document.querySelector("#footer span").innerHTML += ", <a id='show_hotkeys' href='#' style='color:white;'>shortcuts</a>";
         document.getElementById("show_hotkeys").onclick = function (event) {

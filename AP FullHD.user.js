@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         AP FullHD
-// @namespace    http://tampermonkey.net/
+// @namespace    7nik@anime-pictures.net
 // @version      1.0
-// @description  Make almost everything visible in a brower window when it is maximazed
+// @description  Makes almost everything visible in a brower window when it is maximazed
 // @author       7nik
-// @match        http*://anime-pictures.net/pictures/view_post/*
+// @match        https://anime-pictures.net/pictures/view_post/*
 // @run-at       document-end
 // @grant        none
 // ==/UserScript==

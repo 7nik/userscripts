@@ -1,17 +1,18 @@
 // ==UserScript==
 // @name         AP tag replacer
-// @namespace    http://tampermonkey.net/
+// @namespace    7nik@anime-pictures.net
 // @version      0.1
 // @description  Add button and hotkey to add and/or remove a tag
 // @author       You
-// @match        http*://anime-pictures.net/pictures/view_post/*
+// @match        https://anime-pictures.net/pictures/view_post/*
 // @grant        none
 // @run-at       document-end
 // ==/UserScript==
 
+/* global AnimePictures:false lang:false post_id:false get_by_id:false ts:false ajax_request2:false*/
+
 (function() {
     'use strict';
-    /* global AnimePictures:false lang:false post_id:false get_by_id:false ts:false ajax_request2:false*/
 
     let add_tag_name = "", add_tag_id = 160396;
     let remove_tag_name = "hair up", remove_tag_id = 13828;

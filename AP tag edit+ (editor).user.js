@@ -1,16 +1,17 @@
 // ==UserScript==
 // @name         AP tag edit+ (editor)
-// @namespace    https://anime-pictures.net/
+// @namespace    7nik@anime-pictures.net
 // @version      1.0.0
 // @description  Replace tag id with tag name in tag edit window, autoset tag type, unsave exit protection, convert links to a tag to the tag name
 // @author       7nik
-// @match        http*://anime-pictures.net/pictures/view_edit_tag/*
+// @match        https://anime-pictures.net/pictures/view_edit_tag/*
 // @grant        none
 // ==/UserScript==
 
+/* global AnimePictures:false lang:false post_id:false get_by_id:false ajax_request2:false */
+
 (function() {
     'use strict';
-    /* global AnimePictures:false lang:false post_id:false get_by_id:false ajax_request2:false */
 
     // convert raw HTML to DOMElement
     const HTMLToDOM = (html) => new DOMParser().parseFromString(html, 'text/html').body.firstChild;
@@ -42,34 +43,38 @@
 
     // take tag name from the source field and put tag id or "" to the target field
     function get_tag_id(source, target) {
-        const categories = /*lang == "jp" ?*/ {
-            "不明": 0,
-            "キャラクター名": 1,
-            "特性、状態": 2,
-            "作品名（製品名）": 3,
-            "アーティスト名": 4,
-            "作品名（ゲーム）": 5,
-            "other copyright": 6,
-            "物質": 7,
-        // } : lang == "ru" ? {
-            "неизвестно": 0,
-            "персонаж": 1,
-            "описание": 2,
-            "копирайт (продукт)": 3,
-            "автор": 4,
-            "игровой копирайт": 5,
-            "иной копирайт": 6,
-            "объект": 7,
-        // } : {
-            "unknown": 0,
-            "character": 1,
-            "reference": 2,
-            "copyright (product)": 3,
-            "author": 4,
-            "game copyright": 5,
-            "other copyright": 6,
-            "object": 7,
-        };
+        const categories = ((langs, lang, def) => langs[lang] || langs[def])({
+            "en" : {
+                "unknown": 0,
+                "character": 1,
+                "reference": 2,
+                "copyright (product)": 3,
+                "author": 4,
+                "game copyright": 5,
+                "other copyright": 6,
+                "object": 7,
+            },
+            "ru": {
+                "неизвестно": 0,
+                "персонаж": 1,
+                "описание": 2,
+                "копирайт (продукт)": 3,
+                "автор": 4,
+                "игровой копирайт": 5,
+                "иной копирайт": 6,
+                "объект": 7,
+            },
+            "jp": {
+                "不明": 0,
+                "キャラクター名": 1,
+                "特性、状態": 2,
+                "作品名（製品名）": 3,
+                "アーティスト名": 4,
+                "作品名（ゲーム）": 5,
+                "other copyright": 6,
+                "物質": 7,
+            },
+        }, document.body.parentElement.lang, "en");
         const progress_gif = get_by_id("page_load_progress");
         let value = "";
         if (source.value.trim() !== "") {

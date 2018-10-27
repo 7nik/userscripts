@@ -1,18 +1,17 @@
 // ==UserScript==
 // @name         AP tag edit+ (tag list updater)
-// @namespace    https://anime-pictures.net/
+// @namespace    7nik@anime-pictures.net
 // @version      1.0.0
 // @description  Replace tag id with tag name in tag edit window
 // @author       7nik
-// @match        http*://anime-pictures.net/pictures/view_post/*
+// @match        https://anime-pictures.net/pictures/view_post/*
 // @grant        none
 // ==/UserScript==
 
+/* global AnimePictures:false lang:false post_id:false get_by_id:false ts:false ajax_request2:false*/
+
 (function() {
     'use strict';
-    /* global AnimePictures:false lang:false post_id:false get_by_id:false ts:false ajax_request2:false*/
-
-    let get_by_id = (id) => document.getElementById(id);
 
     function add_tag(add_new_tag) {
         let input_tag = get_by_id("add_tag_input");
@@ -80,4 +79,5 @@
     AnimePictures.post.add_tag = add_tag;
     get_by_id("add_tag_submit").addEventListener("click", AnimePictures.post.add_tag);
     get_by_id("add_tag_form").addEventListener("submit", AnimePictures.post.add_tag);
+
 })();

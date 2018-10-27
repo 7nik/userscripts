@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         AP loading cursor
-// @namespace    http://tampermonkey.net/
+// @namespace    7nik@anime-pictures.net
 // @version      0.1
 // @description  Set "progress" cursor during executing long queries to the server
 // @author       7nik
@@ -8,9 +8,10 @@
 // @grant        none
 // ==/UserScript==
 
+/* global ajax_request2:true */
+
 (function() {
     'use strict';
-    /* global ajax_request2:true */
 
     let timer = null;
     ajax_request2 = function(url, params, handler, type_r) {
@@ -31,6 +32,6 @@
             handler(request);
         };
         request.send(form_data);
-    }
+    };
 
 })();
