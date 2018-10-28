@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP moderate tags
 // @namespace    7nik@anime-pictures.net
-// @version      1.1.1
+// @version      1.1.2
 // @description  Allow moderate recommended tags the way as regular one
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*moderation=1
@@ -14,8 +14,8 @@
 (function() {
     'use strict';
 
-    // const log = (...args) => console.log(...args);
-    const log = () => {};
+    const log = (...args) => console.log(...args);
+    // const log = () => {};
 
     if (window.location.pathname.startsWith("/pictures/moderating_pre_tags/")) {
         document.querySelectorAll(".messages td:nth-child(3) a").forEach(a => (a.href += "&moderation=1"));
@@ -26,6 +26,10 @@
     let cache, pretags, scrollTop = 0;
     window.addEventListener("unload", () => cache && (localStorage["mt_cache"] = JSON.stringify(cache)));
     window.addEventListener("unload", () => pretags && (localStorage["mt_pretags"] = JSON.stringify(pretags)));
+
+    let style = document.createElement("style");
+    style.innerHTML = "body.wait * {cursor: wait;} body.wait a, body.wait a * { cursor: progress; }";
+    document.body.appendChild(style);
 
     function ajax(url, params, method = "POST") {
         // if params is skipped
