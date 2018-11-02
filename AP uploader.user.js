@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP uploader
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.1
+// @version      1.0.2
 // @description  Uploading without reloading the page + drag'n'drop.
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_add_wall*
@@ -12,49 +12,51 @@
     'use strict';
 
     const TEXT = (window.lang == "ru") ?
-          {
-              reading: "Открытие",
-              pending: "Ожидание",
-              noSlots: "Нет свободных слотов",
-              bigFile: "Файл слишком большой",
-              processing: "Обработка",
-              dublicate: "Дубликат",
-              netError: "Ошибка сети",
-              uploading: "Загрузка",
-              dragndrop: "Перетащите файлы",
-              fileLabel: "Выберите или перещати файлы сюда",
-              slots: (n1, n2) => `У вас <span id="usedSlots">${n1}</span> ${n1>11&&n1<20||(n1%10)>4||(n1%10)==0 ? "непроверенных изображний" : (n1%10)==1 ? "непроверенное изображние" : "непроверенных изображния"}, вы можете загрузить ещё <span id="freeSlots">${n2}</span>.`,
-          } : {
-              reading: "Reading",
-              pending: "Pending",
-              noSlots: "No free slots",
-              bigFile: "File is too big",
-              processing: "Processing",
-              dublicate: "Dublicate",
-              netError: "Network error",
-              uploading: "Uploading",
-              fileLabel: "Choose files or drag'n'drop them",
-              dragndrop: "Drag'n'drop files",
-              slots: (n1, n2) => `You have <span id="usedSlots">${n1}</span> unproven ${n1>1 ? "pictures" : "picture"} you can still upload <span id="freeSlots">${n2}</span>.`,
-          };
+        {
+            reading: "Открытие",
+            pending: "Ожидание",
+            noSlots: "Нет свободных слотов",
+            bigFile: "Файл слишком большой",
+            processing: "Обработка",
+            dublicate: "Дубликат",
+            netError: "Ошибка сети",
+            uploading: "Загрузка",
+            dragndrop: "Перетащите файлы",
+            fileLabel: "Выберите или перещати файлы сюда",
+            plural: (n, plurals) => n>=11&&n<20||(n%10)>4||(n%10)==0 ? plurals[2] : (n%10)==1 ? plurals[0] : plurals[1],
+            slots: (used, free) => `У вас ${used} ${TEXT.plural(used, ["непроверенное изображние", "непроверенных изображния", "непроверенных изображний"])}, вы можете загрузить ещё ${free}.`,
+        } : {
+            reading: "Reading",
+            pending: "Pending",
+            noSlots: "No free slots",
+            bigFile: "File is too big",
+            processing: "Processing",
+            dublicate: "Dublicate",
+            netError: "Network error",
+            uploading: "Uploading",
+            fileLabel: "Choose files or drag'n'drop them",
+            dragndrop: "Drag'n'drop files",
+            plural: (n, plurals) => n == 1 ? plurals[0] : plurals[1],
+            slots: (used, free) => `You have ${used} unproven ${TEXT.plural(used, ["picture", "pictures"])} you can still upload ${free}.`,
+        };
 
     class Post {
-        constructor(file) {
+        constructor(file, postContainer) {
             this.file = file;
             this.post = document.createElement("span");
             this.post.className = "img_block_big";
             this.post.style.boxSizing = "border-box";
-            this.post.innerHTML = `
-<a>
-  <canvas class='img_sp' style='max-height:100%;max-width:100%;' />
-</a>
-<div class='img_block_text' style='background:rgba(128,128,128,0.7);color:white;visibility:1'>
-  <strong></strong>
-  <br>
-  <span>${TEXT.reading}</span>
-  <div style='width:100%;height:100%;position:absolute;bottom:0;z-index:-1;'></div>
-</div>`;
-            posts.appendChild(this.post);
+            this.post.innerHTML =
+                `<a target="_blank">
+                  <canvas class='img_sp' style='max-height:100%;max-width:100%;' />
+                </a>
+                <div class='img_block_text' style='background:rgba(128,128,128,0.7);color:white;visibility:1'>
+                  <strong></strong>
+                  <br>
+                  <span>${TEXT.reading}</span>
+                  <div style='width:100%;height:100%;position:absolute;bottom:0;z-index:-1;'></div>
+                </div>`;
+            postContainer.appendChild(this.post);
             this._color = {r: 128, g: 128, b: 128};
             this._status = this.getEl("span");
             this._prog1 = this.getEl(".img_block_text");
@@ -108,18 +110,18 @@
                 if (post) self._order.push(post);
                 return;
             }
-            let p = post || self._order.shift();
+            const p = post || self._order.shift();
             if (!p) return;
             self._working = true;
 
-            let img = new Image();
+            const img = new Image();
             img.onload = function() {
                 let height = img.naturalHeight || img.offsetHeight || img.height,
                     width = img.naturalWidth || img.offsetWidth || img.width;
                 p.imgDim = `${width}x${height}`;
                 if (p.status == TEXT.reading) p.status = TEXT.pending;
 
-                let canvas = p.getEl("canvas"),
+                const canvas = p.getEl("canvas"),
                     context = canvas.getContext && canvas.getContext("2d");
                 [width, height] = width >= height ? [300, height/width * 300] : [width/height * 300, 300];
 
@@ -141,8 +143,6 @@
 
                 p.color = rgb;
 
-                canvas = context = data = null;
-
                 self._working = false;
                 self.run();
             };
@@ -162,7 +162,7 @@
                 if (post) self._order.push(post);
                 return;
             }
-            let p = post || self._order.shift();
+            const p = post || self._order.shift();
             if (!p) return;
             self._working = true;
 
@@ -180,27 +180,25 @@
                 return;
             }
 
-            let xhr = new XMLHttpRequest();
+            const xhr = new XMLHttpRequest();
             xhr.upload.addEventListener("progress", function(e) {
                 p.progress = (e.loaded / e.total * 100);
                 if (e.loaded == e.total) p.status = TEXT.processing;
             }, false);
             xhr.onload = function(e) {
                 if (xhr.status == 200) {
-                    let cont = document.createRange().createContextualFragment(xhr.responseText).querySelector(".post_content");
+                    const cont = document.createRange().createContextualFragment(xhr.responseText).querySelector(".post_content");
                     p.url = cont.querySelector("a").href;
                     if (cont.querySelector(".body span[style='color: red;']")) {
                         p.error = TEXT.dublicate;
                     } else if (cont.querySelector("form span[style='color: red;']")) {
                         p.error = TEXT.noSlots;
                         self._freeSlots = 0;
-                        document.getElementById("usedSlots").innerText = self._totalSlots - self._freeSlots;
-                        document.getElementById("freeSlots").innerText = self._freeSlots;
+                        document.getElementById("slot_status").innerText = TEXT.slots(self._totalSlots - self._freeSlots, self._freeSlots);
                     } else {
                         p.status = cont.querySelector(".img_block_text").lastChild.textContent;
                         self._freeSlots--;
-                        document.getElementById("usedSlots").innerText = self._totalSlots - self._freeSlots;
-                        document.getElementById("freeSlots").innerText = self._freeSlots;
+                        document.getElementById("slot_status").innerText = TEXT.slots(self._totalSlots - self._freeSlots, self._freeSlots);
                     }
                 } else {
                     p.error = TEXT.netError;
@@ -212,7 +210,7 @@
                 }, 200);
             };
             xhr.open("POST", "/pictures/view_add_wall", true);
-            let form = new FormData();
+            const form = new FormData();
             form.append("file0", p.file);
             xhr.send(form);
             p.status = TEXT.uploading;
@@ -220,24 +218,25 @@
     }
 
     // replace "You have # unproven pictures you can still upload #." with editable version.
-    let b = document.querySelector(".post_content .body");
+    const b = document.querySelector(".post_content .body");
     b.removeChild(b.firstChild);
-    let s = document.createElement("span");
+    const s = document.createElement("span");
+    s.id = "slot_status";
     s.innerHTML = TEXT.slots(uploader._totalSlots - uploader._freeSlots, uploader._freeSlots);
     b.insertBefore(s, b.firstChild);
 
     // replace old form with new one
-    let posts = document.createElement("div");
+    const posts = document.createElement("div");
     posts.id = "posts";
     posts.className = "posts_block";
-    let fileField = document.createElement("input");
+    const fileField = document.createElement("input");
     fileField.id = "mfiles";
     fileField.type = "file";
     fileField.multiple = true;
     fileField.accept = "image/*";
-    fileField.addEventListener("change", function () { Array.from(this.files).forEach(file => new Post(file)); });
+    fileField.addEventListener("change", function () { Array.from(this.files).forEach(file => new Post(file, posts)); });
     fileField.style.display = "none";
-    let ffLabel = document.createElement("label");
+    const ffLabel = document.createElement("label");
     ffLabel.setAttribute("for", "mfiles");
     ffLabel.style.cursor = "pointer";
     ffLabel.style.textDecoration = "underline";
@@ -249,7 +248,7 @@
     document.getElementById("cont").appendChild(posts);
 
     // drag'n'drop
-    let dnd = document.createElement("div");
+    const dnd = document.createElement("div");
     dnd.id = "dragndrop";
     Object.assign(dnd.style, {
         position: "fixed",
@@ -275,12 +274,12 @@
         dnd.style.top = Math.max(0, 46 - window.scrollY) + "px";
         dnd.style.bottom = Math.max(0, window.scrollY + window.innerHeight - document.body.scrollHeight + 120) + "px";
     }, false);
-    let cont = document.getElementById("content");
+    const cont = document.getElementById("content");
     cont.style.minHeight = document.getElementById("body_wrapper").offsetHeight - 10 + "px";
     ["dragenter", "dragover", "dragleave", "drop"].forEach(eventName => cont.addEventListener(eventName, (e) => e.preventDefault() & e.stopPropagation(), false));
     ["dragenter", "dragover"].forEach(eventName => cont.addEventListener(eventName, () => (dnd.style.opacity = 1), false));
     ["dragleave", "drop"].forEach(eventName => cont.addEventListener(eventName, () => (dnd.style.opacity = 0), false));
-    cont.addEventListener('drop', (e) => Array.from(e.dataTransfer.files).forEach(file => { if (file.type.startsWith("image/")) new Post(file); }), false);
+    cont.addEventListener('drop', (e) => Array.from(e.dataTransfer.files).forEach(file => { if (file.type.startsWith("image/")) new Post(file, posts); }), false);
 
     // warn about leaving the page during uploading
     window.onbeforeunload = () => uploader._working ? true : null;
