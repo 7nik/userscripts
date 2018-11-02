@@ -268,9 +268,14 @@
         const ul = document.getElementsByClassName("tags")[0];
         let curElem = document.querySelector("#post_tags span");
         let curType = categories[curElem.innerText];
-        curElem = curElem.nextElementSibling;
-        let tag;
+        if (ord[ptags[0].type] < ord[curType]) {
+            ul.insertBefore(makeCategory(ptags[0].type), curElem);
+            curType = ptags[0].type;
+        } else {
+            curElem = curElem.nextElementSibling;
+        }
 
+        let tag;
         loop: while (ptags.length || tag) {
             tag = tag || ptags.shift();
             while (curElem) {
