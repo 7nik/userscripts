@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VK poster
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.0
+// @version      1.0.1
 // @description  Make a post with a picture in vk.com/mjvart
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*
@@ -17,7 +17,7 @@ const SETTIGNS = {
 
     // ========== USER SETTINGS ==========
 
-    mainMessage: (post) => (post.artists.length > 1 ? "Художники " : "Художник ")
+    mainMessage: (post) => (post.artists.length == 1 ? "Художник " : post.artists.length > 1 ? "Художник " : "")
                 + post.artists.join(", ") + " 「хорошее качество ↓\n"
                 + post.postUrl,
     bonusMessages: [
