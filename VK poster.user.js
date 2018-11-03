@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VK poster
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.2
+// @version      1.0.3
 // @description  Make a post with a picture in vk.com/mjvart
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*
@@ -42,13 +42,14 @@ const SETTIGNS = {
     stepTimeDeviation: 15, // minutes; max deviaion of stepTime; 0 - no randomization
     dayStarts: 5, // "day" starts at 05:00
     dayEnds: 1, // "day" ends at 01:00
-    hotkey: "À", // `
+    hotkey: "À", // key "`" a.k.a. ё
 
     // ========== SYSTEM SETTINGS ==========
 
     APP_ID: "6733020",
-    gid: 15035509,
+    gid: "15035509",
     vkApiVersion: "5.87",
+    maxScheduleOffset: 365*24*60*60*1000, // miliseconds; 1 year
 };
 
 const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
@@ -60,7 +61,7 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
         minutes: ["minute", "minutes"],
         today: "today",
         tomorrow: "tomorrow",
-        beforeLastPost: "before the last post",
+        at: "at",
         afterLastPost: "after the last post",
         after: "",
         postMakerTitle: "Making a post for VK",
@@ -79,7 +80,7 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
         minutes: ["минуту", "минуты", "минут"],
         today: "сегодня",
         tomorrow: "завтра",
-        beforeLastPost: "перед посл. постом",
+        at: "в",
         afterLastPost: " после посл. поста",
         after: "через",
         postMakerTitle: "Создание поста для Вконтакте",
@@ -243,27 +244,10 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
                     #publish_date input {
                         color: black;
                     }
-                    .contorls {
-                        display: inline-block;
-                        height: 22px;
-                        padding: 1px 0;
-                        margin: 2px 0;
-                        vertical-align: top;
-                    }
-                    .contorls svg {
+                    .datatimeContorls svg {
                         width: ${unsafeWindow.site_theme == "second" ? "12px" : "10px"};
                         height: ${unsafeWindow.site_theme == "second" ? "12px" : "10px"};
-                        opacity: 0.75;
-                        display: block;
-                    }
-                    .contorls .inc {
-                        ${unsafeWindow.site_theme == "second" ? "" : "top:2px;position:relative;"};
-                    }
-                    .contorls .dec {
-                        margin-top: 4px;
-                    }
-                    .contorls svg:hover {
-                        opacity: 1;
+                        fill: ${unsafeWindow.site_theme == "second" ? "white" : "black"};
                     }
                     #post_maker input[type="button"] {
                         position: absolute;
@@ -284,11 +268,9 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
                             ${TEXT.schedulePost}
                         </label>
                         <br>
-                        <input id="publish_date_input" type="datetime" readonly>
-                        <a class="contorls" href="#">
-                            <svg class="inc" viewBox="0 0 500 500"><polygon points="250,0 0,430 500,430" fill="${unsafeWindow.site_theme == "second" ? "white" : "black"}"/></svg>
-                            <svg class="dec" viewBox="0 0 500 500"><polygon points="250,430 0,0 500,0" fill="${unsafeWindow.site_theme == "second" ? "white" : "black"}"/></svg>
-                        </a>
+                        <input id="publish_date_input" type="datetime"
+                            min="${new Date().getTime() + 45*60*1000}"
+                            max="${new Date().getTime() + SETTIGNS.maxScheduleOffset}">
                         <br>
                         <span id="offset_date"></span>
                     </div>
@@ -298,6 +280,7 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
         postMaker.id = "post_maker";
         postMaker.onclick = (event) => { if (event.target == postMaker) document.body.removeChild(postMaker); };
         document.body.appendChild(postMaker);
+        postMaker.querySelector("#post_message").focus();
         log("form created")
 
         // get date of the last scheduled post or now date
@@ -311,31 +294,34 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
         const dateInput = postMaker.querySelector("#publish_date_input");
         dateInput.addEventListener("change", function (event) {
             let diff = dateInput.getAttribute("timestamp") - lastPostDate;
-            if (diff < 60000) {
-                document.getElementById("offset_date").innerText = TEXT.beforeLastPost;
-            } else {
-                let str = [" ", TEXT.afterLastPost];
-                let n;
-                diff = Math.round(diff/60000); // to minutes
-                n = diff%60;
-                if (n && diff) {
-                    str = [" ", n, " ", TEXT.plural(n, TEXT.minutes), ...str];
-                }
-                diff = Math.floor(diff/60); // hours
-                n = diff%24;
-                if (n) {
-                    str = [" ", n, " ", TEXT.plural(n, TEXT.hours), ...str];
-                }
-                diff = Math.floor(diff/24); // days
-                if (diff) {
-                    str = [diff, " ", TEXT.plural(diff, TEXT.days), ...str];
-                }
-                if (TEXT.after) {
-                    str = [TEXT.after, " ", ...str];
-                }
-                document.getElementById("offset_date").innerText = str.join("");
+            let str = [" ", TEXT.afterLastPost];
+            let n;
+            diff = Math.round(diff/60000); // to minutes
+            n = diff%60;
+            if (n && diff) {
+                str = [" ", n, " ", TEXT.plural(n, TEXT.minutes), ...str];
             }
+            diff = Math.floor(diff/60); // hours
+            n = diff%24;
+            if (n) {
+                str = [" ", n, " ", TEXT.plural(n, TEXT.hours), ...str];
+            }
+            diff = Math.floor(diff/24); // days
+            if (diff) {
+                str = [diff, " ", TEXT.plural(diff, TEXT.days), ...str];
+            }
+            if (TEXT.after) {
+                str = [TEXT.after, " ", ...str];
+            }
+            document.getElementById("offset_date").innerText = str.join("");
         }, true);
+        dateInput.addEventListener("keydown", function (event) {
+            if (event.key == "Enter") {
+                document.querySelector("#post_maker input[type='button']").click();
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        });
         let date = lastPostDate;
         // add randomized stepTime
         date += (SETTIGNS.stepTime + SETTIGNS.stepTimeDeviation*(Math.random()-Math.random()))*60*1000;
@@ -353,7 +339,7 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
             date.setMinutes(SETTIGNS.stepTimeDeviation*Math.pow(Math.random(),1.5));
         }
         dateInput.setAttribute("timestamp", date.getTime());
-        datatimeInput(dateInput);
+        datatimeInput(dateInput, TEXT);
         log("datetime inited");
 
         // get preview picture
@@ -401,7 +387,8 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
                     message: postMaker.querySelector("#post_message").value,
                     signed: SETTIGNS.signedPost,
                     attachments: "photo"+pics[0].owner_id+"_"+pics[0].id,
-                    publish_date: postMaker.querySelector("input[type='checkbox']").checked ? dateInput.getAttribute("timestamp")/1000 : 0,
+                    publish_date: postMaker.querySelector("input[type='checkbox']").checked ?
+                        dateInput.getAttribute("timestamp")/1000 : 0,
                 });
             } catch (error) {
                 log(error);
@@ -413,11 +400,15 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
         log("ready to post");
     }
 
-    function datatimeInput(input) {
+    function datatimeInput(input, TEXT = {at: "at", today: "today", tomorrow: "tomorrow", monthes: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]}) {
+        const hideCurrentYear = true;
         let timestamp = new Date().getTime();
         let section = "Hours";
+        let min = null, max = null;
 
         function setValue(stamp) {
+            if (min !== null) stamp = Math.max(stamp, min);
+            if (max !== null) stamp = Math.min(stamp, max);
             const date = new Date(stamp);
             const now = new Date();
             const tomorrow = new Date(now.getTime() + 24*60*60*1000);
@@ -425,14 +416,18 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
 
             timestamp = stamp;
             input.setAttribute("timestamp", stamp);
-            let str = [" at ", dd(date.getHours()), ":", dd(date.getMinutes())];
-            if (date.getMonth() == now.getMonth() && date.getDate() == now.getDate()) {
+            let str = [" ", TEXT.at, " ", dd(date.getHours()), ":", dd(date.getMinutes())];
+            if (date.getFullYear() === now.getFullYear() &&
+                    date.getMonth() == now.getMonth() &&
+                    date.getDate() == now.getDate()) {
                 str.unshift(TEXT.today);
-            } else if (date.getMonth() == tomorrow.getMonth() && date.getDate() == tomorrow.getDate()) {
+            } else if (date.getFullYear() === tomorrow.getFullYear() &&
+                    date.getMonth() == tomorrow.getMonth() &&
+                    date.getDate() == tomorrow.getDate()) {
                 str.unshift(TEXT.tomorrow);
             } else {
-                if (date.getYear() !== now.getYear()) {
-                    str = [" ", date.getYear()+1900, ...str];
+                if (!hideCurrentYear || date.getFullYear() !== now.getFullYear()) {
+                    str = [" ", date.getFullYear(), ...str];
                 }
                 str = [dd(date.getDate()), " ", TEXT.monthes[date.getMonth()], ...str];
             }
@@ -445,7 +440,7 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
             }
         }
         function selSection(sec = section) {
-            const atPos = input.value.indexOf(" at ");
+            const atPos = input.value.indexOf(" "+TEXT.at+" ");
             const spacePos = input.value.indexOf(" ");
             switch(sec) {
                 case "Date":
@@ -462,28 +457,44 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
                         input.selectionEnd = spacePos;
                     }
                     break;
+                case "FullYear":
+                    const yearPos = input.value.indexOf(new Date(timestamp).getFullYear());
+                    if (yearPos >= 0) {
+                        input.selectionStart = yearPos;
+                        input.selectionEnd = yearPos+4;
+                    } else {
+                        sec = "Date";
+                        input.selectionStart = 0;
+                        input.selectionEnd = spacePos;
+                    }
+                    break;
                 default:
                     sec = "Hours";
                 case "Hours":
-                    input.selectionStart = atPos + 4;
-                    input.selectionEnd = atPos + 6;
+                    input.selectionStart = atPos + 2 + TEXT.at.length;
+                    input.selectionEnd = atPos + 4 + TEXT.at.length;
                     break;
                 case "Minutes":
-                    input.selectionStart = atPos + 7;
-                    input.selectionEnd = atPos + 9;
+                    input.selectionStart = atPos + 5 + TEXT.at.length;
+                    input.selectionEnd = atPos + 7 + TEXT.at.length;
                     break;
             }
             section = sec;
         }
         function checkSection() {
             const cursorPos = input.selectionEnd;
-            const atPos = input.value.indexOf(" at ");
-            const spacePos = input.value.indexOf(" ");
+            const atPos = input.value.indexOf(" "+TEXT.at+" ");
+            const space1Pos = input.value.indexOf(" ");
+            const space2Pos = input.value.indexOf(" ", space1Pos+1);
 
-            if (cursorPos <= spacePos) {
+            if (cursorPos <= space1Pos) {
                 selSection("Date");
             } else if (cursorPos <= atPos) {
-                selSection("Month");
+                if (cursorPos > space2Pos) {
+                    selSection("FullYear");
+                } else {
+                    selSection("Month");
+                }
             } else if (cursorPos <= input.value.indexOf(":")) {
                 selSection("Hours");
             } else {
@@ -497,14 +508,9 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
             setValue(date.getTime());
             input.focus();
         }
+
+        input.setAttribute("readonly", true);
         input.onclick = checkSection;
-        input.nextElementSibling.addEventListener("click", function (event) {
-            if(event.target.nodeName == "polygon") {
-                add(event.target.parentNode.classList[0] == "inc" ? 1 : -1);
-            }
-            event.preventDefault();
-            event.stopPropagation();
-        }, true);
         input.addEventListener("keydown", function (event) {
             if (event.key == "ArrowUp") {
                 add(1);
@@ -513,37 +519,114 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
             } else if (event.key == "ArrowLeft") {
                 switch(section) {
                     case "Minutes": section = "Hours"; break;
-                    case "Hours": section = "Month"; break;
+                    case "Hours":
+                        if (input.value.indexOf(new Date(timestamp).getFullYear()) >= 0) {
+                            section = "FullYear";
+                        } else {
+                            section = "Month";
+                        }
+                        break;
+                    case "FullYear": section = "Month"; break;
                     case "Month": section = "Date"; break;
                 }
                 selSection();
             } else if (event.key == "ArrowRight") {
                 switch(section) {
                     case "Date":
-                        if (input.value.indexOf(" ") == input.value.indexOf(" at ")) {
+                        if (input.value.indexOf(" ") == input.value.indexOf(" "+TEXT.at+" ")) {
                             section = "Hours";
                         } else {
                             section = "Month";
                         }
                         break;
-                    case "Month": section = "Hours"; break;
+                    case "Month":
+                        if (input.value.indexOf(new Date(timestamp).getFullYear()) >= 0) {
+                            section = "FullYear";
+                        } else {
+                            section = "Hours";
+                        }
+                        break;
+                    case "FullYear": section = "Hours"; break;
                     case "Hours": section = "Minutes"; break;
                 }
                 selSection();
-            } else if (event.key == "Enter") {
-                document.querySelector("#post_maker input[type='button']").click();
             } else {
                 return;
             }
             event.preventDefault();
             event.stopPropagation();
         }, true);
+        input.addEventListener("focus", () => selSection(), true);
+
+        const a = document.createElement("a");
+        a.className = "datatimeContorls";
+        a.href = "#";
+        a.innerHTML =
+            `<svg class="inc" viewBox="0 0 10 10"><polygon points="5,0 0,9 10,9"/></svg>
+             <svg class="dec" viewBox="0 0 10 10"><polygon points="5,9 0,0 10,0"/></svg>`;
+        a.addEventListener("click", function (event) {
+            let elem = event.target;
+            while (elem.nodeName !== "svg") elem = elem.parentNode;
+            if (elem.classList[0] == "inc") add(1);
+            if (elem.classList[0] == "dec") add(-1);
+            event.preventDefault();
+            event.stopPropagation();
+            input.focus();
+        }, true);
+        input.parentNode.insertBefore(a, input.nextElementSibling);
+        const style = document.createElement("style");
+        style.innerHTML =
+            `.datatimeContorls {
+                display: inline-block;
+                height: 22px;
+                padding: 1px 0;
+                margin: 2px 0;
+                vertical-align: top;
+            }
+            .datatimeContorls svg {
+                width: 10px;
+                height: 10px;
+                fill: black;
+                opacity: 0.75;
+                display: block;
+            }
+            .datatimeContorls .inc {
+                top:2px;
+                position:relative;;
+            }
+            .datatimeContorls .dec {
+                margin-top: 4px;
+            }
+            .datatimeContorls svg:hover {
+                opacity: 1;
+            }`;
+        document.head.appendChild(style);
 
         new MutationObserver(function (muts) {
-            if (input.getAttribute("timestamp") == timestamp) return;
-            setValue(+input.getAttribute("timestamp"));
+            muts.forEach(mutation => {
+                switch (mutation.attributeName) {
+                    case "timestamp":
+                        if (input.getAttribute("timestamp") == timestamp) break;
+                        setValue(+input.getAttribute("timestamp"));
+                        break;
+                    case "min":
+                        min = input.getAttribute("min");
+                        if (min !== null) min = +min || null;
+                        setValue(timestamp);
+                        break;
+                    case "max":
+                        max = input.getAttribute("max");
+                        if (max !== null) max = +max || null;
+                        setValue(timestamp);
+                        break;
+                }
+            });
         }).observe(input, {attributes: true});
 
+        min = input.getAttribute("min");
+        if (min !== null) min = +min || null;
+        max = input.getAttribute("max");
+        if (max !== null) max = +max || null;
         setValue(+input.getAttribute("timestamp") || timestamp);
     }
 
