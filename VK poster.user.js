@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VK poster
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.1
+// @version      1.0.2
 // @description  Make a post with a picture in vk.com/mjvart
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*
@@ -17,7 +17,7 @@ const SETTIGNS = {
 
     // ========== USER SETTINGS ==========
 
-    mainMessage: (post) => (post.artists.length == 1 ? "Художник " : post.artists.length > 1 ? "Художник " : "")
+    mainMessage: (post) => (post.artists.length == 1 ? "Художник " : post.artists.length > 1 ? "Художники " : "")
                 + post.artists.join(", ") + " 「хорошее качество ↓\n"
                 + post.postUrl,
     bonusMessages: [
@@ -138,9 +138,11 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
         });
         VK.Auth.getLoginStatus(function(response) {
             if (response.session) {
+                SETTIGNS.uid = response.session.mid;
                 log("logined");
             } else {
                 VK.Auth.login(function(response) {
+                    SETTIGNS.uid = response.session.mid;
                     log("new login");
                 }, 4+8192); // photo + wall
             }
@@ -149,8 +151,8 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
         a.href = "#";
         a.alt = SETTIGNS.alt;
         a.innerHTML =
-            `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 192 192">
-                <path fill="${unsafeWindow.site_theme == "second" ? "white" : "black"}" d="M66.56,0 C120.32,0 71.68,0 125.44,0 C179.2,0 192,12.8 192,66.56 C192,120.32 192,71.68 192,125.44 C192,179.2 179.2,192 125.44,192 C71.68,192 120.32,192 66.56,192 C12.8,192 0,179.2 0,125.44 C0,71.68 0,96.580329 0,66.56 C0,12.8 12.8,0 66.56,0 M157.233993,66.1462211 C158.123557,63.1797719 157.233994,61 153.000244,61 L139.000244,61 C135.440505,61 133.799415,62.8830035 132.909356,64.9593945 C132.909356,64.9593945 125.789878,82.3129373 115.704198,93.5851974 C112.441227,96.8481681 110.957879,97.8863636 109.178009,97.8863636 C108.288198,97.8863636 107,96.8481681 107,93.8819658 L107,66.1462211 C107,62.586482 105.96694,61 103.000244,61 L81.0002441,61 C78.7757158,61 77.4378669,62.6521562 77.4378669,64.2179674 C77.4378669,67.5925348 82.4804603,68.3707494 83.0002441,77.8633869 L83.0002441,98.4799003 C83.0002441,103 82.1839388,103.819509 80.4040693,103.819509 C75.6579974,103.819509 64.1131647,86.388441 57.2660122,66.4427426 C55.9241353,62.5659897 54.5782535,61 51.0002441,61 L37.0002441,61 C33.0002441,61 32.2001953,62.8830035 32.2001953,64.9593945 C32.2001953,68.6675178 36.9465141,87.059256 54.2998099,111.383646 C65.8685915,127.995268 82.1682449,137 97.0002441,137 C105.899345,137 107.000244,135 107.000244,131.555007 L107.000244,119 C107.000244,115 107.843292,114.201711 110.661357,114.201711 C112.737749,114.201711 116.297488,115.239906 124.603545,123.249196 C134.095936,132.741586 135.660882,137 141.000244,137 L155.000244,137 C159.000244,137 161.000244,135 159.846475,131.053112 C158.583906,127.119411 154.051802,121.412135 148.038124,114.646617 C144.774906,110.790356 139.88045,106.637574 138.397102,104.560689 C136.320711,101.891255 136.914001,100.704429 138.397102,98.3315162 C138.397102,98.3315162 155.454123,74.3036478 157.233993,66.1462211 M66.56,0 Z"/>
+            `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+                <path fill="${unsafeWindow.site_theme == "second" ? "white" : "black"}" d="M11.1,0 C20.1,0 11.9,0 20.9,0 C29.9,0 32,2.1 32,11.1 C32,20.1 32,11.9 32,20.9 C32,29.9 29.9,32 20.9,32 C11.9,32 20.1,32 11.1,32 C2.1,32 0,29.9 0,20.9 C0,11.9 0,16.1 0,11.1 C0,2.1 2.1,0 11.1,0 M26.2,11 C26.4,10.5 26.2,10.2 25.5,10.2 L23.2,10.2 C22.6,10.2 22.3,10.5 22.2,10.8 C22.2,10.8 21,13.7 19.3,15.6 C18.7,16.1 18.5,16.3 18.2,16.3 C18,16.3 17.8,16.1 17.8,15.6 L17.8,11 C17.8,10.4 17.7,10.2 17.2,10.2 L13.5,10.2 C13.1,10.2 12.9,10.4 12.9,10.7 C12.9,11.3 13.7,11.4 13.8,13 L13.8,16.4 C13.8,17.2 13.7,17.3 13.4,17.3 C12.6,17.3 10.7,14.4 9.5,11.1 C9.3,10.4 9.1,10.2 8.5,10.2 L6.2,10.2 C5.5,10.2 5.4,10.5 5.4,10.8 C5.4,11.4 6.2,14.5 9,18.6 C11,21.3 13.7,22.8 16.2,22.8 C17.6,22.8 17.8,22.5 17.8,21.9 L17.8,19.8 C17.8,19.2 18,19 18.4,19 C18.8,19 19.4,19.2 20.8,20.5 C22.3,22.1 22.6,22.8 23.5,22.8 L25.8,22.8 C26.5,22.8 26.8,22.5 26.6,21.8 C26.4,21.2 25.7,20.2 24.7,19.1 C24.1,18.5 23.3,17.8 23.1,17.4 C22.7,17 22.8,16.8 23.1,16.4 C23.1,16.4 25.9,12.4 26.2,11 M11.1,0 Z"/>
             </svg>`;
         a.style.margin = "0 10px";
         a.onclick = function (event) {
@@ -158,6 +160,7 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
             event.preventDefault();
             event.stopPropagation();
         };
+
         const ya_share2 = document.getElementById("ya_share2");
         ya_share2.parentNode.insertBefore(a, ya_share2);
         ya_share2.style.minWidth = "0";
@@ -177,7 +180,7 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
         log("inited");
     };
 
-    // Open API is incompatible with strict mode
+    // All userscripts are run in strict mode, but Open API is incompatible with it
     const script = document.createElement("script");
     script.src = "https://vk.com/js/api/openapi.js";
     script.type = "text/javascript";
@@ -187,8 +190,10 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
         log("start");
         // gather info for post
         const post = {
-            artists: Array.from(document.querySelectorAll(".tags li.orange a")).map(a => a.innerText),
-            postUrl: window.location.href,
+            artists: Array.from(document.querySelectorAll(".tags li.orange a"))
+                .map(a => a.innerText)
+                .filter(t => t !== "tagme (artist)"),
+            postUrl: (loc => loc.host + loc.pathname + loc.search)(window.location),
             previewUrl: document.getElementById("big_preview").src,
         };
         post.message = SETTIGNS.mainMessage(post);
@@ -378,6 +383,7 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
             server: photo.server,
             photo: photo.photo,
             hash: photo.hash,
+            caption: post.postUrl,
         });
         log("preview saved", pics);
 
