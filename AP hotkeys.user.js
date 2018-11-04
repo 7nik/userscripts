@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP hotkeys
 // @namespace    7nik@anime-pictures.net
-// @version      1.2.0
+// @version      1.2.1
 // @description  Adds support of hotkeys
 // @author       7nik
 // @match        https://anime-pictures.net/*
@@ -25,11 +25,10 @@
         if (!text) text = getSelText();
 
         if (askParam) {
-            param = prompt(askParam, param) || param;
+            param = prompt(askParam, param);
+            if (param === null) return;
         }
-        if (param) {
-            param = "=" + param;
-        }
+        param = param ? "="+param : "";
 
         // set the cursor after the bbtag if any text was selected, otherwise - inside the bbtag
         let cursorPos = textarea.selectionStart + (text ? 2*bbtag.length + param.length + text.length + 5 : bbtag.length + param.length + 2);
