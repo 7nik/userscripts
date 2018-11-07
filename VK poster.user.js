@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VK poster
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.4
+// @version      1.0.5
 // @description  Make a post with a picture in vk.com/mjvart
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*
@@ -98,7 +98,7 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
 
 (function() {
 
-    const log = (...args) => console.log(...args);
+    const log = ()=>{};//(...args) => console.log(...args);
     // promise version of VK.api
     function VKapi(method, options) {
         options.v = SETTIGNS.vkApiVersion;
@@ -395,11 +395,11 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
         const postButton = postMaker.querySelector("input[type='button']");
         postButton.removeAttribute("disabled");
         postButton.value = TEXT.publishPost;
-        postButton.addEventListener("click", function () {
+        postButton.addEventListener("click", async function () {
             // post the message and the picture to vk
             log("posting");
             try {
-                VKapi("wall.post",{
+                await VKapi("wall.post",{
                     owner_id: -SETTIGNS.gid,
                     from_group: 1,
                     message: postMaker.querySelector("#post_message").value,
