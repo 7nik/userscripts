@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VK poster
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.5
+// @version      1.0.6
 // @description  Make a post with a picture in vk.com/mjvart
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*
@@ -302,6 +302,7 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
         const lastPostDate = (await VKapi("wall.get", {
             owner_id: -SETTIGNS.gid,
             filter: "postponed",
+            count: 100,
         })).items.reduce((date, post) => Math.max(date, post.date), new Date().getTime()/1000)*1000;
         log("got last date", new Date(lastPostDate));
 
