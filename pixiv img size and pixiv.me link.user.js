@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         pixiv img size and pixiv.me link
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.0.1
 // @description  Add size of the illustrations and direct links to them.
 // @author       7nik
 // @match        https://www.pixiv.net/member_illust.php*
@@ -31,7 +31,8 @@
         const has = (parent, childSel) => !!parent.querySelector(childSel);
         let cont, a, div;
 
-        cont = document.querySelector("figure > div:nth-child(2) > div");
+        // https://www.pixiv.net/member_illust.php?mode=medium&illust_id=
+        cont = document.querySelector("figure section");
         if (cont && !has(cont, "div > a:not([class])")) {
             div = document.createElement("div");
             div.style.position = "absolute";
@@ -39,10 +40,14 @@
             div.style.margin = "15px";
             div.style.fontWeight = "500";
             div.style.color = "black";
-            div.innerHTML = `<a href="${data[0].urls.original}">${data[0].width}x${data[0].height}</a>${ data.length > 1 ? ", ..." : ""}`;
+            div.innerHTML =
+                `<a href="${data[0].urls.original}">${data[0].width}x${data[0].height}</a>` +
+                (data.length > 1 ? `, <a href="${window.location.href.replace("medium", "manga")}">...</a>` : "");
             cont.appendChild(div);
         }
 
+        // https://www.pixiv.net/member_illust.php?mode=manga&illust_id=
+        // side links
         cont = document.getElementsByClassName("item-container");
         if (cont.length && !has(cont[0], "a[style]")) {
             for (let i = 0; i < cont.length; i++) {
@@ -58,7 +63,9 @@
                 cont[i].insertBefore(a, cont[i].firstElementChild);
             }
         }
-
+        
+        // https://www.pixiv.net/member_illust.php?mode=manga&illust_id=
+        // links under thumbnails
         cont = document.querySelectorAll(".thumbnail-item:not(.footer-item)");
         if (cont.length && !has(cont[0], "a")) {
             for (let i = 0; i < cont.length; i++) {
