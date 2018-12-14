@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VK poster
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.6
+// @version      1.0.7
 // @description  Make a post with a picture in vk.com/mjvart
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*
@@ -98,7 +98,9 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
 
 (function() {
 
-    const log = ()=>{};//(...args) => console.log(...args);
+    const log = ()=>{};
+    // const log = (...args) => console.log(...args);
+
     // promise version of VK.api
     function VKapi(method, options) {
         options.v = SETTIGNS.vkApiVersion;
@@ -131,7 +133,9 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
             try {
                 await postPic();
             } catch (resp) {
-                if (resp.error.error_code == 15) {
+                if (!resp.error) {
+                    alert(TEXT.error + resp);
+                } else if (resp.error.error_code == 15) {
                     alert(TEXT.err15);
                 } else if (resp.error.error_code == 17) {
                     const a = document.createElement("a");
@@ -207,7 +211,7 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
                 .filter(t => t !== "tagme (artist)"),
             postSimpleUrl: (loc => loc.host + loc.pathname + loc.search)(window.location),
             postFullUrl: window.location.href,
-            previewUrl: document.getElementById("big_preview").src,
+            previewUrl: document.querySelector("link[rel='image_src']").href,
         };
         post.message = SETTIGNS.mainMessage(post);
         if (Math.random() < SETTIGNS.bonusMessageOdds) {
@@ -380,6 +384,9 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
             url: (await VKapi("photos.getWallUploadServer", {group_id: SETTIGNS.gid})).upload_url,
             data: form,
         })).responseText);
+        if (photo.photo == "null" || photo.photo == "[]") {
+            throw "Image uploading error";
+        }
         log("preview uploaded", photo);
 
         // save the picture
