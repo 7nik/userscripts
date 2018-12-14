@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP moderate tags
 // @namespace    7nik@anime-pictures.net
-// @version      1.1.2
+// @version      1.1.5
 // @description  Allow moderate recommended tags the way as regular one
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*moderation=1
@@ -71,7 +71,10 @@
 
     async function deletePreTag(preTagId) {
         const {success, msg} = await (await ajax("/pictures/del_pre_tag/"+preTagId)).json();
-        if (!success) log("error of pretag removing: ", msg);
+        if (!success) {
+            log("error of pretag removing: ", msg);
+            throw msg;
+        }
         const editTag = document.querySelector(`span[data-pretag-id="${preTagId}"]`);
         if (!editTag) return; // no pretag on the page
         const li = editTag.parentNode.parentNode;
@@ -84,14 +87,16 @@
     async function acceptPreTag(preTagId) {
         const {success, msg} = await (await ajax1("/pictures/accept_pre_tag/"+preTagId)).json();
         if (!success) {
-            log("error of pretag accepting: ", msg);
+            log("error of accepting of pretag #" + preTagId + ": ", msg);
             const editTag = document.querySelector(`span[data-pretag-id="${preTagId}"]`);
-            if (!editTag) return; // no pretag on the page
-            const li = editTag.parentNode.parentNode;
-            if (li.previousElementSibling.nodeName == "SPAN" && (li.nextElementSibling == null || li.nextElementSibling.nodeName == "SPAN")) {
-                li.parentNode.removeChild(li.previousElementSibling);
+            if (editTag) { // the pretag presented on the page
+                const li = editTag.parentNode.parentNode;
+                if (li.previousElementSibling.nodeName == "SPAN" && (li.nextElementSibling == null || li.nextElementSibling.nodeName == "SPAN")) {
+                    li.parentNode.removeChild(li.previousElementSibling);
+                }
+                li.parentNode.removeChild(li);
             }
-            li.parentNode.removeChild(li);
+            throw msg;
         }
         const editTag = document.querySelector(`span[data-pretag-id="${preTagId}"]`);
         if (!editTag) return; // no pretag on the page
@@ -135,17 +140,22 @@
     const ord = {3:0, 5:1, 6:2, 1:3, 4:4, 2:5, 7:6, 0:7};
     async function getTagInfo(tagName) {
         const tag = {name: tagName};
-        const dom = new DOMParser().parseFromString(await (await ajax("https://anime-pictures.net/pictures/view_all_tags/0", {search_text: tagName, lang: lang}, "GET")).text(), "text/html");
-        const names = Array.from(dom.querySelectorAll(".all_tags td:nth-child(2) a, .all_tags td:nth-child(3) a, .all_tags td:nth-child(4) a"))
-            .filter(a => a.innerText === tagName);
-        if (names.length) {
-            const tr = names[0].parentElement.parentElement;
+        let dom, a, i = 0;
+        do {
+            dom = new DOMParser().parseFromString(await (await ajax("https://anime-pictures.net/pictures/view_all_tags/"+i, {search_text: tagName, lang: lang}, "GET")).text(), "text/html");
+            a = Array.from(dom.querySelectorAll(".all_tags td:nth-child(2) a, .all_tags td:nth-child(3) a, .all_tags td:nth-child(4) a"))
+                .find(a => a.innerText === tagName);
+                i++;
+        } while (!a && dom.querySelector(`.numeric_pages a[href^='/pictures/view_all_tags/${i}']`));
+
+        if (a) {
+            const tr = a.parentElement.parentElement;
             tag.id = tr.children[0].innerText;
             tag.type = categories[tr.children[4].innerText];
             tag.count = +tr.children[5].innerText + 1;
         } else {
             log("failed to get info about " + tagName);
-            tag.name += "<no info>";
+            tag.name += " <no info>";
             tag.id = 0;
             tag.type = 0;
             tag.count = 0;
@@ -167,7 +177,9 @@
         }
         const tag = await getTagInfo(tagName);
         tag.date = new Date().getTime();
-        cache[tagName] = tag;
+        if (tag.type == 2 || tag.type == 7) { // it's reference or object
+            cache[tagName] = tag;
+        }
         return Object.assign({}, tag); // return a copy
     }
 
@@ -241,15 +253,20 @@
 
         const presentedTags = Array.from(document.querySelectorAll(".tags a")).map(a => a.innerText);
         pretags[post_id] = pretags[post_id].filter((tag, i, tags) => {
-            // accepted presented tags
-            if (presentedTags.indexOf(tag.name) >= 0) {
-                log(tag.name + " %cautoaccepted", "color: green;");
-                acceptPreTag(tag.preId);
-                return false;
-            // decline double tags
-            } else if (tags.findIndex(t => t.name === tag.name) < i) {
-                log(tag.name + " %cautodeclined", "color: red");
-                deletePreTag(tag.preId);
+            try {
+                // accepted presented tags
+                if (presentedTags.indexOf(tag.name) >= 0) {
+                    log(tag.name + " %cautoaccepted", "color: green;");
+                    acceptPreTag(tag.preId);
+                    return false;
+                // decline double tags
+                } else if (tags.findIndex(t => t.name === tag.name) < i) {
+                    log(tag.name + " %cautodeclined", "color: red");
+                    deletePreTag(tag.preId);
+                    return false;
+                }
+            } catch (msg) {
+                log(tag.name + "%c" + msg);
                 return false;
             }
             return true;
@@ -328,20 +345,26 @@
 
         document.getElementById("post_tags").addEventListener("click", async function(event){
             const preTagId = event.target.parentNode.getAttribute("data-pretag-id");
-            if (event.target.getAttribute("class") == "accept") {
-                log(event.target.parentNode.parentNode.previousElementSibling.innerText + " %caccepted", "color: green;");
-                event.target.nextElementSibling.remove();
-                event.target.remove();
-                await acceptPreTag(preTagId);
-                scrollTop = document.getElementById("post_tags").scrollTop;
-                AnimePictures.post.refresh_tags();
-            } else if (event.target.getAttribute("class") == "decline") {
-                log(event.target.parentNode.parentNode.previousElementSibling.innerText + " %cdeclined", "color: red;");
-                event.target.previousElementSibling.remove();
-                event.target.remove();
-                await deletePreTag(preTagId);
-            } else {
-                return;
+            const a = event.target.parentNode.parentNode.previousElementSibling;
+            try {
+                if (event.target.getAttribute("class") == "accept") {
+                    event.target.nextElementSibling.remove();
+                    event.target.remove();
+                    await acceptPreTag(preTagId);
+                    log(a.innerText.trim() + " %caccepted", "color: green;");
+                    scrollTop = document.getElementById("post_tags").scrollTop;
+                    AnimePictures.post.refresh_tags();
+                } else if (event.target.getAttribute("class") == "decline") {
+                    event.target.previousElementSibling.remove();
+                    event.target.remove();
+                    await deletePreTag(preTagId);
+                    log(a.innerText.trim() + " %cdeclined", "color: red;");
+                } else {
+                    return;
+                }
+            } catch (msg) {
+                alert(msg);
+                log(a.innerText.trim() + " %c" + msg, "color: red;");
             }
             const tags = pretags[post_id];
             tags.splice(tags.findIndex(t => t.preId == preTagId), 1);
