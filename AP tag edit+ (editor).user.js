@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP tag edit+ (editor)
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.1
+// @version      1.0.2
 // @description  Replace tag id with tag name in tag edit window, autoset tag type, unsave exit protection, convert links to a tag to the tag name
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_edit_tag/*
@@ -80,6 +80,7 @@
         if (source.value.trim() !== "") {
             value = source.value.trim().toLowerCase();
         }
+        let i = 0;
         let request = function(req) {
             if (req.readyState != 4) return;
             progress_gif.style.visibility = "hidden";
@@ -89,25 +90,36 @@
             }
             let tag = {name: value};
             let dom = document.createRange().createContextualFragment(req.responseText);
-            let tr = Array.from(dom.querySelectorAll(".all_tags td:nth-child(2) a, .all_tags td:nth-child(3) a, .all_tags td:nth-child(4) a"))
-                .filter(a => a.innerText === value)[0].parentElement.parentElement;
-            tag.id = tr.children[0].innerText;
-            tag.type = categories[tr.children[4].innerText];
-            tag.count = +tr.children[5].innerText + 1;
+            let a = Array.from(dom.querySelectorAll(".all_tags td:nth-child(2) a, .all_tags td:nth-child(3) a, .all_tags td:nth-child(4) a"))
+                .filter(a => a.innerText === value)[0]
+            if (a) {
+                let tr = a.parentElement.parentElement;
+                tag.id = tr.children[0].innerText;
+                tag.type = categories[tr.children[4].innerText];
 
-            target.value = tag.id;
-            source.style.background = "";
+                target.value = tag.id;
+                source.style.background = "";
 
-            if (source.id == "parent_name") {
-                let tagtype = get_by_id("tag_type");
-                if (tagtype.value == "0" && [3,5,6].indexOf(tag.type) >=0) tagtype.value = 1; // set character type;
-            }
-            if (source.id == "alias_name") {
-                get_by_id("tag_type").value = tag.type;
+                if (source.id == "parent_name") {
+                    let tagtype = get_by_id("tag_type");
+                    if (tagtype.value == "0" && [3,5,6].indexOf(tag.type) >=0) tagtype.value = 1; // set character type;
+                }
+                if (source.id == "alias_name") {
+                    get_by_id("tag_type").value = tag.type;
+                }
+            } else {
+                i++;
+                if (dom.querySelector(`.numeric_pages a[href^='/pictures/view_all_tags/${i}']`)) {
+                    ajax_request2(
+                        `https://anime-pictures.net/pictures/view_all_tags/${i}?search_text=${value}&lang=ru`,
+                        {},
+                        request,
+                        "GET");
+                }
             }
         };
         ajax_request2(
-            `https://anime-pictures.net/pictures/view_all_tags/0?search_text=${value}&lang=ru`,
+            `https://anime-pictures.net/pictures/view_all_tags/${i}?search_text=${value}&lang=ru`,
             {},
             request,
             "GET");
