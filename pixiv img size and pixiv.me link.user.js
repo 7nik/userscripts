@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         pixiv img size and pixiv.me link
 // @namespace    http://tampermonkey.net/
-// @version      1.0.2
+// @version      1.1
 // @description  Add size of the illustrations and direct links to them.
 // @author       7nik
 // @match        https://www.pixiv.net/member_illust.php*
@@ -14,17 +14,26 @@
     'use strict';
 
     function addStacc() {
-        const pic = document.querySelector("a[href^='/member_illust.php?mode=medium&illust_id=']");
-        if (!pic) return;
-        const postId = pic.href.match(/\d+/)[0];
-        if (addStacc.postId == postId) return;
-        addStacc.postId = postId;
-        fetch("/ajax/illust/" + postId)
-            .then(resp => resp.json()
-                  .then(({body:{userAccount: stacc}}) => {
-                      const userName = document.getElementsByClassName("_2VLnXNk")[0];
-                      userName.innerHTML = `<a href="https://pixiv.me/${stacc}" style="color:black">${userName.innerText}</a>`;
-        }));
+        const userId = new URL(window.location).searchParams.get("id");
+        if (!userId) return;
+        fetch("https://sketch.pixiv.net/api/pixiv/user/posts/latest?user_id=" + userId)
+            .then(resp => resp.json())
+            .then(({data:{user:{url:url}}}) => {
+                const stacc = url.match(/[a-z0-9_-]+$/);
+                const userName = document.getElementsByClassName("VyO6wL2")[0];
+                userName.innerHTML = `<a href="https://pixiv.me/${stacc}" style="color:black">${userName.innerText}</a>`;
+            })
+            .catch(() => {
+                const pic = document.querySelector("a[href^='/member_illust.php?mode=medium&illust_id=']");
+                if (!pic) return;
+                const postId = pic.href.match(/\d+/)[0];
+                fetch("/ajax/illust/" + postId)
+                    .then(resp => resp.json())
+                    .then(({body:{userAccount: stacc}}) => {
+                        const userName = document.getElementsByClassName("VyO6wL2")[0];
+                        userName.innerHTML = `<a href="https://pixiv.me/${stacc}" style="color:black">${userName.innerText}</a>`;
+                });
+            });
     }
 
     function addSize(data) {
@@ -32,6 +41,7 @@
         let cont, a, div;
 
         // https://www.pixiv.net/member_illust.php?mode=medium&illust_id=
+        // add link into post description
         cont = document.querySelector("figure section");
         if (cont && !has(cont, "div > a:not([class])")) {
             div = document.createElement("div");
@@ -45,6 +55,23 @@
                 `<a href="${data[0].urls.original}">${data[0].width}x${data[0].height}</a>` +
                 (data.length > 1 ? `, <a href="${window.location.href.replace("medium", "manga")}">...</a>` : "");
             cont.appendChild(div);
+        }
+
+        // https://www.pixiv.net/member_illust.php?mode=medium&illust_id=
+        // add links below image for mutli-page posts
+        cont = document.querySelectorAll("figure div > div[role]");
+        if (cont.length && cont.length>1 && !has(cont[0], "a:not([class])")) {
+            for (var i = 0; i < cont.length; i++) {
+                a = document.createElement("a");
+                a.style.marginTop = "5px";
+                a.href = data[i].urls.original;
+                a.innerText = data[i].width + "x" + data[i].height;
+                cont[i].appendChild(a);
+                cont[i].style.flexDirection = "column";
+            }
+            console.log("filled div[role]")
+        } else {
+            console.log("no div[role]")
         }
 
         // https://www.pixiv.net/member_illust.php?mode=manga&illust_id=
@@ -82,7 +109,7 @@
     }
 
     function putSize() {
-        const postId = (window.location.href.match(/&illust_id=(\d+$)/) || [])[1];
+        const postId = new URL(window.location).searchParams.get("illust_id");
         if (!postId) return;
         if (putSize.data && putSize.data.postId === postId) {
             if (putSize.data.length) {
@@ -93,44 +120,31 @@
 
         putSize.data = {postId: postId};
         fetch("/ajax/illust/" + postId + "/pages")
-            .then(resp => resp.json()
-                  .then(data => {
-                      putSize.data = data.body;
-                      putSize.data.postId = postId;
-                      addSize(putSize.data);
-        }));
+            .then(resp => resp.json())
+            .then(data => {
+                putSize.data = data.body;
+                putSize.data.postId = postId;
+                addSize(putSize.data);
+        });
     }
 
-    function onAddedElem(parent, func) {
-        if (!parent) return;
+    function onAddedElem(query, func) {
+        let [, tagName, id, className] = query.match(/(\w+)?(?:#(\w+))?(?:\.(\w+))?/);
         new MutationObserver(function (mutations) {
-            mutations.forEach( mutation => mutation.addedNodes.forEach(elem => func(elem)));
-        }).observe(parent, {childList: true});
-    };
+            mutations.forEach(mutation => mutation.addedNodes.forEach(elem => {
+                if (tagName && (tagName!=elem.nodeName.toLowerCase()) ||
+                    id && (id!=elem.id) ||
+                    className && (elem.className.indexOf(className)>=0)) {
+                    return;
+                }
+                func(elem);
+            }));
+        }).observe(document.body, {childList: true, subtree: true});
+    }
 
-    onAddedElem(document.getElementById("root"), (elem) => {
-        if (elem.nodeName == "DIV" && elem.className) {
-            onAddedElem(elem, (elem) => {
-                // if (window.location.pathname.startsWith("/member_illust.php?mode=medium&illust_id=")) {
-                    onAddedElem(elem.querySelector("article"), putSize);
-                // }
-                // if (window.location.pathname.startsWith("/member.php?id=") ||
-                //     window.location.pathname.startsWith("/member_illust.php?id=") ||
-                //     window.location.pathname.startsWith("/bookmark.php?id=")) {
-                    addStacc.postId = null;
-                    onAddedElem(elem, (elem) => {
-                        if (elem.className) {
-                            addStacc();
-                            onAddedElem(elem.querySelector("ul.KvF6Ntf"), addStacc);
-                        }
-                    });
-                // }
-            });
-        }
-    });
-
-    onAddedElem(document.getElementsByClassName("thumbnail-items")[0], putSize);
-
-    putSize();
+    onAddedElem("div.VyO6wL2", addStacc);
+    onAddedElem(".thumbnail-items", putSize);
+    onAddedElem("div.dCQVle", putSize);
+    onAddedElem("section._2PSiU82", putSize);
 
 })();
