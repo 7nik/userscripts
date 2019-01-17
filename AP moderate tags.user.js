@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP moderate tags
 // @namespace    7nik@anime-pictures.net
-// @version      1.1.5
+// @version      1.1.6
 // @description  Allow moderate recommended tags the way as regular one
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*moderation=1
@@ -115,6 +115,7 @@
             "game copyright": 5,
             "other copyright": 6,
             "object": 7,
+            "meta tags": -1,
         },
         "ru": {
             "неизвестно": 0,
@@ -125,6 +126,7 @@
             "игровой копирайт": 5,
             "иной копирайт": 6,
             "объект": 7,
+            "meta tags": -1,
         },
         "jp": {
             "不明": 0,
@@ -135,9 +137,10 @@
             "作品名（ゲーム）": 5,
             "other copyright": 6,
             "物質": 7,
+            "meta tags": -1,
         },
     }, lang, "en");
-    const ord = {3:0, 5:1, 6:2, 1:3, 4:4, 2:5, 7:6, 0:7};
+    const ord = {3:0, 5:1, 6:2, 1:3, 4:4, "-1":5, 2:6, 7:7, 0:8};
     async function getTagInfo(tagName) {
         const tag = {name: tagName};
         let dom, a, i = 0;
