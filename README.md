@@ -49,7 +49,9 @@ New upload page supports drag'n'drop and you can choose multiple files at once.
 Adds "Remove tag" button to remove tags from multiple posts at once.
 
 #### AP moderate tags
-Display recommended tags directly on the post page
+Displays recommended tags directly on the post page
+
+![image](https://user-images.githubusercontent.com/29704098/51800404-e6f67280-2236-11e9-9b33-83bb6a1a59ab.png)
 
 #### AP tag edit+
 * Opens tag editing window for just added tags
