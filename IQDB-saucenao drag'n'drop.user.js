@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         IQDB-saucenao drag'n'drop
+// @name         IQDB-SauceNAO drag'n'drop
 // @namespace    7nik@anime-pictures.net
-// @version      1.0
-// @description  try to take over the world!
+// @version      1.1
+// @description  Drag'n'drop support
 // @author       7nik
 // @match        http://iqdb.org/*
 // @match        http://saucenao.com/*
@@ -10,6 +10,9 @@
 // ==/UserScript==
 
 (function () {
+
+    const isIQDB = window.location.hostname == "iqdb.org";
+    const isSauceNAO = window.location.hostname == "saucenao.com"
 
     function say(text) {
         let dialog = document.getElementById("dialog");
@@ -38,6 +41,56 @@
         }
     }
 
+    // for IQDB if pic is WebP then redirect to supported format
+    if (isIQDB && window.location.href.endsWith(".webp")) {
+        window.location.href = window.location.href
+            .replace(/(\.jpg|\.jpeg|\.gif|\.png)?\.webp/i, (_,ext)=>ext||".jpg");
+    }
+    // funcs for SauceNAO
+    if (isIQDB) {
+        window.showHidden = function () {
+            document.querySelectorAll("div.hidden img[data-dly='1']").forEach(el => {
+                el.setAttribute("src", el.getAttribute("data-src"));
+                el.removeAttribute("data-dly");
+                el.removeAttribute("data-src");
+            });
+            document.querySelectorAll("div.hidden")
+                .forEach(el => (el.className = el.className.replace("hidden","")));
+            document.getElementById("result-hidden-notification").className += " hidden";
+        }
+        window.togglenao = function () {
+            const toggle = (id, css = document.getElementById(id).style) =>
+                css.display = (css.display === "none") ? "block" : "none";
+            toggle("advanced");
+            toggle("nonadvanced");
+        }
+    }
+
+    // saving and restoring results in history
+    function savePage() {
+        window.history.pushState(
+            JSON.stringify(document.body.innerHTML),
+            document.title,
+            "#localFile");
+    }
+    window.onpopstate = function (ev) {
+        document.body.innerHTML = "";
+        const frag = document.createRange().createContextualFragment(JSON.parse(ev.state));
+        document.body.appendChild(frag);
+        if (isSauceNAO && !window.$) {
+            downloadJSAtOnload();
+        }
+    }
+    if (window.history.state) {
+        document.body.innerHTML = JSON.parse(window.history.state);
+        if (isSauceNAO && !window.$ && window.downloadJSAtOnload) {
+            downloadJSAtOnload();
+        }
+    } else {
+        window.history.replaceState(JSON.stringify(document.body.innerHTML), document.title);
+    }
+
+    // drag'n'drop
     const dnd = document.createElement("div");
     dnd.id = "dragndrop";
     Object.assign(dnd.style, {
@@ -63,24 +116,38 @@
     dnd.innerText = "Drag'n'drop files";
     document.body.appendChild(dnd);
     const cont = document.body;
-    ["dragenter", "dragover", "dragleave", "drop"].forEach(eventName => cont.addEventListener(eventName, (e) => e.preventDefault() & e.stopPropagation(), false));
-    ["dragenter", "dragover"].forEach(eventName => cont.addEventListener(eventName, () => (dnd.style.opacity = 1), false));
-    ["dragleave", "drop"].forEach(eventName => cont.addEventListener(eventName, () => (dnd.style.opacity = 0), false));
-    cont.addEventListener("drop", function (e) {
-        const file = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"))[0];
+    ["dragenter", "dragover", "dragleave", "drop"].forEach(eventName => cont.addEventListener(
+        eventName,
+        (ev) => ev.preventDefault() & ev.stopPropagation(),
+        false));
+    ["dragenter", "dragover"].forEach(eventName => cont.addEventListener(
+        eventName,
+        () => (document.getElementById("dragndrop").style.opacity = 1),
+        false));
+    ["dragleave", "drop"].forEach(eventName => cont.addEventListener(
+        eventName,
+        () => (document.getElementById("dragndrop").style.opacity = 0),
+        false));
+    cont.addEventListener("drop", function (ev) {
+        const file = Array.from(ev.dataTransfer.files).filter(f => f.type.startsWith("image/"))[0];
         if (!file) return;
-        if (file.size >= 8388608) {
+
+        if (isIQDB && file.size >= 8388608) {
+            alert("Filesize is too big");
+            return;
+        } else if (isSauceNAO && file.size >= 15728640) {
             alert("Filesize is too big");
             return;
         }
 
         const form = new FormData();
-        if (window.location.hostname == "iqdb.org") {
+        if (isIQDB) {
             form.append("file", file);
             if (document.getElementsByName("forcegray")[0].checked) {
                 form.append("forcegray", "1");
             }
-            document.getElementsByName("service[]").forEach((el) => form.append("service[]", el.value));
+            document.getElementsByName("service[]")
+                .forEach((el) => form.append("service[]", el.value));
         } else {
             form.append("file", file);
             form.append("frame", document.getElementsByName("frame").value);
@@ -91,14 +158,13 @@
         say("uploading");
         const xhr = new XMLHttpRequest();
         xhr.open("POST", window.location.hostname == "iqdb.org" ? "/" : "/search.php", true);
-        xhr.upload.addEventListener("progress", function(e) {
-            let done = Math.round(e.loaded / e.total * 100);
+        xhr.upload.addEventListener("progress", function(ev) {
+            const done = Math.round(ev.loaded / ev.total * 100);
             say(done == 100 ? "processing" : `uploaded ${done}%`);
         }, false);
         xhr.onload = function() {
-            console.log(xhr);
             if (xhr.status == 200) {
-                if (window.location.hostname == "iqdb.org") {
+                if (isIQDB) {
                     const dom = new DOMParser().parseFromString(xhr.responseText, "text/html");
                     const h1 = dom.querySelector("body > h1");
                     const form = document.querySelector("body > form");
@@ -114,9 +180,9 @@
                     document.body.appendChild(frag);
                     if (!window.$) downloadJSAtOnload();
                 }
-
             }
             say("");
+            savePage();
         };
         xhr.send(form);
     }, false);
