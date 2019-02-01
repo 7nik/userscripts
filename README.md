@@ -39,6 +39,9 @@ Adds section with meta tags:
 
 ![image](https://user-images.githubusercontent.com/29704098/51788619-bfe16780-2188-11e9-9c2a-521a9b3bc4ef.png)
 
+#### AP no page reload
+Now moderators actions don't cause page reload. 
+
 #### AP uploader
 New upload page supports drag'n'drop and you can choose multiple files at once.
 ![image](https://user-images.githubusercontent.com/29704098/51789351-a47a5a80-2190-11e9-9bda-3806e58677d2.png)
