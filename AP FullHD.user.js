@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP FullHD
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.1
+// @version      1.0.2
 // @description  Makes almost everything visible in a brower window when it is maximazed
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*
@@ -18,26 +18,23 @@
     margin: 0;
     width: calc(100% - 300px);
 }
-#content > div.post_content /*ban message block*/ {
-    margin: 8px auto 0 auto;
-}
 #cont {
     position: relative;
     margin: 0 auto;
     padding: 0;
     overflow: inherit;
 }
-#comment_text /*textarea*/ {
+#comment_text {
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
 }
 .comment_block td:nth-child(2) {
-    border-right: none; /*I think this border is excess*/
+    border-right: none; /* I think this border is excess */
 }
 
 @media screen and (min-width: 1000px) and (max-width: 1630px) {
-    #cont > div[itemscope] > div:last-child /*comment block*/ {
+    #cont > div:last-child /* comment blocks */ {
         width: 98% !important;
     }
 }
@@ -49,7 +46,7 @@
     }
     #cont.cont_view_post {
         width: calc(100% - 300px);
-        margin: 9px auto; /*override second.css?v=54:1080*/
+        margin: 9px auto; /* override second.css?v=54:1080 */
     }
     #content > .post_content {
         margin: 9px auto;
@@ -59,9 +56,9 @@
 }
 
 @media screen and (orientation: landscape) and (min-width: 1900px) {
-    #content > div.post_content /*ban message block*/ {
+    #cont > div.post_content /* ban message block */ {
         width: 1289px;
-        margin: 8px 0 0 0;
+        margin: -1px 0 9px 0;
         text-align: center;
     }
     #cont.cont_view_post {
@@ -72,14 +69,26 @@
         width: 640px;
     }
     #cont .moderator {
-        font-size: 95%;
+        font-size: 97%;
+        word-spacing: -1.5px;
     }
     #img_cont {
         position: absolute;
         left: 649px;
-        top: 0/*74px*/;
+        top: 0;
         display: flex;
         flex-direction: column;
+    }
+    /* if ban message presented */
+    #cont > [style='color: red; text-align: center;'] + div > #img_cont {
+        top: 31px;
+    }
+    /* if new image message presented */
+    #cont > [style='color: red;'] + div > #img_cont  {
+        top: 73px;
+    }
+    #cont > [style='color: red;'] .body {
+        width: 1290px !important;
     }
     #img_cont > div {
     	width: 640px;
@@ -96,10 +105,10 @@
     #big_preview_cont {
     	width: auto;
 	}
-    #cont > div > div:last-child /*comment block wripper*/ {
+    #cont > div:last-child /* comment block wripper */ {
     	width: 640px !important;
     }
-    .comment_block iframe {
+    .comment_block iframe /* youtube video */ {
         width: 520px;
         height: 292.5px;
     }
@@ -117,41 +126,36 @@
         #tags_sidebar > div:last-child {
             display: flex;
             flex-direction: column;
-            height: calc(100vh - 108px);
-            padding: 0 !important;
+            height: calc(100vh - 110px);
+            padding: 4px 0 !important;
+        }
+        #tags_sidebar > div:last-child br {
+            display: none;
         }
     }
 }
 `;
-    let style = document.createElement("style");
+    const style = document.createElement("style");
     style.innerHTML = css;
     document.body.appendChild(style);
 
-    let container = document.createElement("div");
+    const container = document.createElement("div");
     container.setAttribute("id", "img_cont");
-    let div = document.querySelector("#cont div.moderator");
-    if (!div) div = document.querySelector(".post_vote_block").previousElementSibling;
-    document.querySelector("#cont > div[itemscope]").insertBefore(container, div);
-    document.querySelector("#cont > div[itemscope]").appendChild(document.querySelector("#cont > div:last-child"));
-    if (div.className.endsWith("moderator")) container.appendChild((div = div.nextElementSibling).previousElementSibling); // moderator block
-    container.appendChild((div = div.nextElementSibling).previousElementSibling); // linked images
-    container.appendChild((div = div.nextElementSibling).previousElementSibling); // vote block
-    container.appendChild((div = div.nextElementSibling).previousElementSibling); // the picture block
-    container.appendChild(div); // favourites block
+    const div = document.querySelector("#cont > div[itemscope] > div:first-child");
+    // move blocks starting from second upto "Similar to" block
+    do {
+        container.appendChild(div.nextElementSibling);
+    } while (div.nextElementSibling.lastElementChild.className != "image_body");
+    div.parentElement.insertBefore(container, div.nextElementSibling);
 
-    if (document.querySelector("#cont > div:first-child") != document.querySelector("#cont > div[itemscope]")) {
-        let cont = document.getElementById("cont");
-        cont.parentNode.insertBefore(cont.firstElementChild, cont);
-    }
-
-    let anim_img = document.querySelector("#big_preview_cont video");
+    const anim_img = document.querySelector("#big_preview_cont video");
     if (anim_img) { // video stops after moving it in the DOM so start it play
          anim_img.play();
     }
 
     // hide ban message block
     if (window.is_moderator) {
-        let msg = document.querySelector("#content > div.post_content > div.body");
+        const msg = document.querySelector("#content > div.post_content > div.body");
         if (msg) msg.style.display = "none";
     }
 })();
