@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQDB-SauceNAO drag'n'drop
 // @namespace    7nik@anime-pictures.net
-// @version      1.1
+// @version      1.1.2
 // @description  Drag'n'drop support
 // @author       7nik
 // @match        http://iqdb.org/*
@@ -47,7 +47,7 @@
             .replace(/(\.jpg|\.jpeg|\.gif|\.png)?\.webp/i, (_,ext)=>ext||".jpg");
     }
     // funcs for SauceNAO
-    if (isIQDB) {
+    if (isSauceNAO) {
         window.showHidden = function () {
             document.querySelectorAll("div.hidden img[data-dly='1']").forEach(el => {
                 el.setAttribute("src", el.getAttribute("data-src"));
@@ -64,6 +64,19 @@
             toggle("advanced");
             toggle("nonadvanced");
         }
+    }
+
+    // css fix and cetner content
+    if (isIQDB) {
+        const css = "body{text-align:center;} body>*,form>*{margin-left:auto;margin-right:auto;}ul{display:inline-block}";
+        const style = document.createElement("style");
+        style.innerHTML = css;
+        document.head.appendChild(style);
+    } else {
+        const css = "#yourimage { margin: 0; } body > div { margin: 0 auto; }";
+        const style = document.createElement("style");
+        style.innerHTML = css;
+        document.head.appendChild(style);
     }
 
     // saving and restoring results in history
@@ -140,20 +153,8 @@
             return;
         }
 
-        const form = new FormData();
-        if (isIQDB) {
-            form.append("file", file);
-            if (document.getElementsByName("forcegray")[0].checked) {
-                form.append("forcegray", "1");
-            }
-            document.getElementsByName("service[]")
-                .forEach((el) => form.append("service[]", el.value));
-        } else {
-            form.append("file", file);
-            form.append("frame", document.getElementsByName("frame").value);
-            form.append("hide", document.getElementsByName("hide").value);
-            form.append("database", document.getElementsByName("database").value);
-        }
+        const form = new FormData(document.forms[0]);
+        form.set("file", file);
 
         say("uploading");
         const xhr = new XMLHttpRequest();
