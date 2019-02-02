@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         IQDB-SauceNAO drag'n'drop
 // @namespace    7nik@anime-pictures.net
-// @version      1.1.2
+// @version      1.1.3
 // @description  Drag'n'drop support
 // @author       7nik
 // @match        http://iqdb.org/*
 // @match        http://saucenao.com/*
 // @grant        none
+// @run-at       document-start
 // ==/UserScript==
 
 (function () {
@@ -180,6 +181,7 @@
                     document.body.innerHTML = "";
                     document.body.appendChild(frag);
                     if (!window.$) downloadJSAtOnload();
+                    document.body.appendChild(dnd);
                 }
             }
             say("");
