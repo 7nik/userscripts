@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP moderate tags
 // @namespace    7nik@anime-pictures.net
-// @version      1.1.6
+// @version      1.1.7
 // @description  Allow moderate recommended tags the way as regular one
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*moderation=1
@@ -50,23 +50,13 @@
         });
     }
 
-    // query via ajax1 can be execute successively only
-    const order = [];
+    // queries via ajax1 can be execute successively only
+    const queue = Promise.resolve();
     function ajax1() {
         const args = arguments;
-        const query = new Promise(async function(resolve, reject){
-            if (order.length) {
-                await order[order.length-1];
-            }
-            try {
-                resolve(await ajax(...args));
-            } catch (e) {
-                reject(e);
-            }
-            order.shift();
-        });
-        order.push(query);
-        return query;
+        return new Promise(function (resolve, reject) {
+            queue.then(() => ajax(...args).then(resolve, reject));
+        })
     }
 
     async function deletePreTag(preTagId) {
