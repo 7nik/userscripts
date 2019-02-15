@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         pixiv img size and pixiv.me link
 // @namespace    http://tampermonkey.net/
-// @version      1.2
+// @version      1.2.1
 // @description  Add size of the illustrations and direct links to them.
 // @author       7nik
 // @match        https://www.pixiv.net/member_illust.php*
@@ -155,7 +155,7 @@
         });
     }
 
-    onElementsAdded("div.VyO6wL2", addPixivme);
+    onElementsAdded("h1.VyO6wL2", addPixivme);
     onElementsAdded(".thumbnail-item", addSize);
     onElementsAdded("div.dCQVle", addSize);
     onElementsAdded("section", addSize);
