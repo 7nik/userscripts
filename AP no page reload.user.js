@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP no page reload
 // @namespace    7nik@anime-pictures.net
-// @version      1.0
+// @version      1.0.1
 // @description  Now mod actions on a post don't cause page reloading
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*
@@ -81,6 +81,7 @@
         updateElement(dom, "#cont > div > .post_content:first-child");
         updateElement(dom, ".post_content.moderator > div > div");
         updateStars(dom);
+        updateElement(dom, "#big_preview_cont + .post_content")
     });
     // on copy tags
     overrideSubmit("form[action^='/pictures/add_tag_from_post/']", function (dom) {
@@ -129,10 +130,15 @@
                 updateElement(dom, "#cont > div > .post_content:first-child");
                 // linked pictures
                 updateElement(dom, "#cont .post_content .body + .body");
+                // status
+                updateElement(dom, "#cont .post_content.moderator > div > form");
+                setNumType(document.getElementsByName("redirect_id")[0])
                 // erotic level, presence of spoilers
                 updateElement(dom, "#cont .post_content.moderator > div > div");
                 // stars
                 updateStars(dom);
+                // favorited by
+                updateElement(dom, "#big_preview_cont + .post_content")
                 // about artist
                 updateElement(dom, "meta[itemprop='author'] + div");
                 // comments
@@ -143,7 +149,7 @@
             .catch(onerror),
     });
     // fix field type
-    const setNumType = (el) => {
+    function setNumType(el) {
         if (!el) return;
         el.setAttribute("type", "number");
         el.setAttribute("pattern", "\\d+");
