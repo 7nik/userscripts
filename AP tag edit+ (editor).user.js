@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP tag edit+ (editor)
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.2
+// @version      1.1
 // @description  Replace tag id with tag name in tag edit window, autoset tag type, unsave exit protection, convert links to a tag to the tag name
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_edit_tag/*
@@ -154,13 +154,11 @@
         function update_tag_id() {
             if (replacer.value == old_value && old_value !== undefined) return;
             old_value = replacer.value;
-            // if the replacer has any text then make its background red until the original field gets a tag id
+
             if (replacer.value.trim()) {
-                replacer.style.background = "#F88";
                 clearTimeout(get_name_timeout);
                 get_name_timeout = setTimeout(() => get_tag_id(replacer, original), 300);
             } else {
-                replacer.style.background = "";
                 original.value = "";
                 clearTimeout(get_name_timeout);
             }
@@ -222,6 +220,12 @@
     replace_field(get_by_id("parent"), HTMLToDOM('<input style="width:180px;" type="text" name="parent_name" id="parent_name" value="">'));
     replace_field(get_by_id("to_tag"), HTMLToDOM('<input style="width:133px;" type="text" name="to_tag_name" id="to_tag_name" value="">'));
 
+    // highlight field with name when one has a value and another - not
+    document.querySelectorAll("#to_tag, #to_tag_name, #alias, #alias_name, #parent, #parent_name")
+        .forEach(el => el.setAttribute("required", ""));
+    document.head.appendChild(document.createElement("style")).innerHTML =
+        "input:valid + input:invalid, input:invalid + input:valid { background: #F88; }";
+
     // protection from closing the window with unsaved changes
     let changed = false;
     document.querySelectorAll("#tag_type, #alias_name, #parent_name, #name_en, #name_ru, #name_jp, #description_en, #description_ru, #description_jp")
@@ -230,12 +234,21 @@
     get_by_id("save_tag").removeEventListener("click", edit_tag);
     get_by_id("save_tag").addEventListener("click", edit_tag2);
 
+    // support of droping links to tag to the field
     document.querySelectorAll("#name_en, #name_ru, #name_jp")
         .forEach(e => e.addEventListener("drop", link2tag));
 
+    // autosetting tag type
     let tagtype = get_by_id("tag_type");
     get_by_id("description_en").addEventListener("input", (e) => {
         if (tagtype.value != "0") return;
         if (e.target.value.startsWith("http")) tagtype.value = 4;
     });
+
+    // prediction of parent tag
+    const parentTag = get_by_id("name_en").value.match(/\(([^\)]+)\)/);
+    if (parentTag && !get_by_id("parent").value) {
+        get_by_id("parent_name").value = parentTag[1];
+        get_tag_id(get_by_id("parent_name"), get_by_id("parent"));
+    }
 })();
