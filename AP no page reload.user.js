@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         AP no page reload
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.1
+// @version      1.0.2
 // @description  Now mod actions on a post don't cause page reloading
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*
+// @match        https://anime-pictures.net/pictures/view_posts/*
 // @run-at       document-end
 // @grant        none
 // ==/UserScript==
@@ -13,6 +14,7 @@
 
     function onerror(err) {
         console.error(err);
+        alert("Error: " + err);
     }
 
     function overrideSubmit(query, callback) {
@@ -75,6 +77,31 @@
         }
     }
 
+    // multiaction on search page
+    if (document.getElementById("multi_add_tags")) {
+        const oldBtn = document.getElementById("multi_add_tags");
+        const newBtn = document.createElement("input");
+        newBtn.type = "button";
+        newBtn.value = oldBtn.value;
+        newBtn.id = oldBtn.id;
+        oldBtn.parentElement.insertBefore(newBtn, oldBtn);
+        oldBtn.parentElement.removeChild(oldBtn);
+
+        newBtn.addEventListener("click", function (ev) {
+            let data = new FormData();
+            data.append("action", "add_tags");
+            data.append("text", document.getElementById("multi_tags").value);
+            if (!data.get("text")) return;
+            Array.from(document.querySelectorAll("#posts input"))
+                .filter(checkbox => checkbox.checked)
+                .forEach(checkbox => data.append(checkbox.name, checkbox.value));
+            fetch("/pictures/multi_action", {body: data, method: "POST"})
+                .then(() => AnimePictures.post_list.refresh(window.location, false, false))
+                .catch(onerror);
+        }, true)
+    }
+
+
     // on set picture status
     overrideSubmit("form[action^='/pictures/set_post_status/']", function (dom) {
         updateMessage(dom);
@@ -105,6 +132,7 @@
             return;
         }
         ev.preventDefault();
+        ev.stopPropagation();
         fetch(ev.target.href)
             .then(resp => resp.text())
             .then(html => {
@@ -139,20 +167,30 @@
                 updateStars(dom);
                 // favorited by
                 updateElement(dom, "#big_preview_cont + .post_content")
+                let el = document.getElementById("favorite_folder_select");
+                if (el) el.addEventListener("change", AnimePictures.post.set_favorites);
                 // about artist
                 updateElement(dom, "meta[itemprop='author'] + div");
                 // comments
                 updateElement(dom, "#comments");
                 // tags
                 updateElement(dom, ".tags");
+
+                // post list
+                updateElement(dom, "#posts");
             })
             .catch(onerror),
     });
     // fix field type
+    document.head.appendChild(document.createElement("style")).innerHTML =
+        "input[type='number']::-webkit-inner-spin-button { display: none; }";
     function setNumType(el) {
         if (!el) return;
         el.setAttribute("type", "number");
         el.setAttribute("pattern", "\\d+");
+        if (!el.hasAttribute("placeholder")) {
+            el.setAttribute("placeholder", "Source");
+        }
         el.style.color = "black";
     };
     setNumType(document.getElementsByName("redirect_id")[0])
