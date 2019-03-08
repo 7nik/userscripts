@@ -27,9 +27,8 @@
     window.addEventListener("unload", () => cache && (localStorage["mt_cache"] = JSON.stringify(cache)));
     window.addEventListener("unload", () => pretags && (localStorage["mt_pretags"] = JSON.stringify(pretags)));
 
-    let style = document.createElement("style");
-    style.innerHTML = "body.wait * {cursor: wait;} body.wait a, body.wait a * { cursor: progress; }";
-    document.body.appendChild(style);
+    document.body.appendChild(document.createElement("style")).innerHTML =
+        "body.wait * {cursor: wait;} body.wait a, body.wait a * { cursor: progress; }";
 
     function ajax(url, params, method = "POST") {
         // if params is skipped
@@ -62,7 +61,7 @@
     async function deletePreTag(preTagId) {
         const {success, msg} = await (await ajax("/pictures/del_pre_tag/"+preTagId)).json();
         if (!success) {
-            log("error of pretag removing: ", msg);
+            log("error of removing of pretag #" + preTagId + ": ", msg);
             throw msg;
         }
         const editTag = document.querySelector(`span[data-pretag-id="${preTagId}"]`);
@@ -217,7 +216,7 @@
         li.className = [3,5,6].indexOf(tag.type) >=0 ? "green" : tag.type == 1 ? "blue" : tag.type == 4 ? "orange" : "";
         li.title = "by " + tag.by;
         li.innerHTML = `
-<a href="/pictures/view_posts/0?search_tag=${tag.name}&amp;lang=ru"
+<a href="/pictures/view_posts/0?search_tag=${encodeURIComponent(tag.name)}"
    title="Аниме картинки с тегом ${tag.name}"
    class="${[1,3,4,5,6].indexOf(tag.type) >= 0 ? "big_tag" : ""} ${(tag.by !== uploaderName) ? "not_my_tag_border" : ""}"
 >
@@ -249,17 +248,17 @@
             try {
                 // accepted presented tags
                 if (presentedTags.indexOf(tag.name) >= 0) {
-                    log(tag.name + " %cautoaccepted", "color: green;");
+                    log(tag.name + " (#" + tag.preId + ") %cautoaccepted", "color: green;");
                     acceptPreTag(tag.preId);
                     return false;
                 // decline double tags
                 } else if (tags.findIndex(t => t.name === tag.name) < i) {
-                    log(tag.name + " %cautodeclined", "color: red");
+                    log(tag.name + " (#" + tag.preId + ") %cautodeclined", "color: red");
                     deletePreTag(tag.preId);
                     return false;
                 }
             } catch (msg) {
-                log(tag.name + "%c" + msg);
+                log(tag.name + " (#" + tag.preId + "), %cerror:" + msg);
                 return false;
             }
             return true;
@@ -344,20 +343,20 @@
                     event.target.nextElementSibling.remove();
                     event.target.remove();
                     await acceptPreTag(preTagId);
-                    log(a.innerText.trim() + " %caccepted", "color: green;");
+                    log(a.innerText.trim() + " (#" + preTagId + ") %caccepted", "color: green;");
                     scrollTop = document.getElementById("post_tags").scrollTop;
                     AnimePictures.post.refresh_tags();
                 } else if (event.target.getAttribute("class") == "decline") {
                     event.target.previousElementSibling.remove();
                     event.target.remove();
                     await deletePreTag(preTagId);
-                    log(a.innerText.trim() + " %cdeclined", "color: red;");
+                    log(a.innerText.trim() + " (#" + preTagId + ") %cdeclined", "color: red;");
                 } else {
                     return;
                 }
             } catch (msg) {
                 alert(msg);
-                log(a.innerText.trim() + " %c" + msg, "color: red;");
+                log(a.innerText.trim() + " (#" + preTagId + "), %cerror" + msg, "color: red;");
             }
             const tags = pretags[post_id];
             tags.splice(tags.findIndex(t => t.preId == preTagId), 1);
