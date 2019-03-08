@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP meta-tags
 // @namespace    7nik@anime-pictures.net
-// @version      1.0
+// @version      1.0.1
 // @description  moves some tags and cosplay tags into separate section
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*
@@ -17,7 +17,9 @@
         639,    // game cg
         6283,   // official art
         10934,  // cropped
+        11309,  // dual persona
         11590,  // spoiler
+        18166,  // multiple persona
         20373,  // collaboration
         123331, // revision
         137612, // borrowed character
