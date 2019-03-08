@@ -13,10 +13,13 @@
 (function() {
     'use strict';
 
+    document.head.appendChild(document.createElement("style")).innerHTML =
+        "body.waiting * {cursor: wait;} body.wait a, body.wait a * { cursor: progress; }";
+
     let timer = null;
     ajax_request2 = function(url, params, handler, type_r) {
         if (timer) clearTimeout(timer);
-        timer = setTimeout(() => (document.body.style.cursor = "progress"), 500);
+        timer = setTimeout(() => document.body.classList.add("waiting"), 500);
         if (type_r == null) {
             type_r = "POST";
         }
@@ -28,7 +31,7 @@
         request.open(type_r, url);
         request.onreadystatechange = function() {
             if (timer) clearTimeout(timer);
-            document.body.style.cursor = null;
+            document.body.classList.remove("waiting");
             handler(request);
         };
         request.send(form_data);
