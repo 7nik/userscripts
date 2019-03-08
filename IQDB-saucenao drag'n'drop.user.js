@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IQDB-SauceNAO drag'n'drop
 // @namespace    7nik@anime-pictures.net
-// @version      1.1.3
+// @version      1.1.3.1
 // @description  Drag'n'drop support
 // @author       7nik
 // @match        http://iqdb.org/*
@@ -56,8 +56,8 @@
                 el.removeAttribute("data-src");
             });
             document.querySelectorAll("div.hidden")
-                .forEach(el => (el.className = el.className.replace("hidden","")));
-            document.getElementById("result-hidden-notification").className += " hidden";
+                .forEach(el => (el.classList.remove("hidden")));
+            document.getElementById("result-hidden-notification").classList.add("hidden");
         }
         window.togglenao = function () {
             const toggle = (id, css = document.getElementById(id).style) =>
@@ -69,15 +69,12 @@
 
     // css fix and cetner content
     if (isIQDB) {
-        const css = "body{text-align:center;} body>*,form>*{margin-left:auto;margin-right:auto;}ul{display:inline-block}";
-        const style = document.createElement("style");
-        style.innerHTML = css;
-        document.head.appendChild(style);
+        document.head.appendChild(document.createElement("style")).innerHTML =
+            "body{text-align:center;} body>*,form>*{margin-left:auto;margin-right:auto;} ul{display:inline-block}";
     } else {
-        const css = "#yourimage { margin: 0; } body > div { margin: 0 auto; }";
-        const style = document.createElement("style");
-        style.innerHTML = css;
-        document.head.appendChild(style);
+        document.querySelector("link").href = "/css/saucenao-new.css";
+        document.head.appendChild(document.createElement("style")).innerHTML =
+            "body{text-align:center;} body>div{margin: 0 auto;}";
     }
 
     // saving and restoring results in history
@@ -89,8 +86,11 @@
     }
     window.onpopstate = function (ev) {
         document.body.innerHTML = "";
-        const frag = document.createRange().createContextualFragment(JSON.parse(ev.state));
-        document.body.appendChild(frag);
+        document.body.appendChild(
+            document.createRange().createContextualFragment(
+                JSON.parse(ev.state)
+            )
+        );
         if (isSauceNAO && !window.$) {
             downloadJSAtOnload();
         }
@@ -146,10 +146,7 @@
         const file = Array.from(ev.dataTransfer.files).filter(f => f.type.startsWith("image/"))[0];
         if (!file) return;
 
-        if (isIQDB && file.size >= 8388608) {
-            alert("Filesize is too big");
-            return;
-        } else if (isSauceNAO && file.size >= 15728640) {
+        if (isIQDB && file.size >= 8388608 || isSauceNAO && file.size >= 15728640) {
             alert("Filesize is too big");
             return;
         }
@@ -176,15 +173,18 @@
                     while (h1.nextElementSibling.nodeName != "FORM") {
                         document.body.insertBefore(h1.nextElementSibling, form);
                     }
-                } else {
-                    const frag = document.createRange().createContextualFragment(xhr.responseText);
-                    document.body.innerHTML = "";
-                    document.body.appendChild(frag);
+                } else {;
+                    document.body.innerHTML = null;
+                    document.body.appendChild(
+                        document.createRange().createContextualFragment(
+                            xhr.responseText
+                        )
+                    );
                     if (!window.$) downloadJSAtOnload();
                     document.body.appendChild(dnd);
                 }
             }
-            say("");
+            say(null);
             savePage();
         };
         xhr.send(form);
