@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP tag edit+ (editor)
 // @namespace    7nik@anime-pictures.net
-// @version      1.1
+// @version      1.1.1
 // @description  Replace tag id with tag name in tag edit window, autoset tag type, unsave exit protection, convert links to a tag to the tag name
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_edit_tag/*
@@ -152,15 +152,13 @@
 
         let old_value, get_name_timeout;
         function update_tag_id() {
-            if (replacer.value == old_value && old_value !== undefined) return;
+            if (replacer.value === old_value) return;
             old_value = replacer.value;
+            original.value = "";
 
+            clearTimeout(get_name_timeout);
             if (replacer.value.trim()) {
-                clearTimeout(get_name_timeout);
-                get_name_timeout = setTimeout(() => get_tag_id(replacer, original), 300);
-            } else {
-                original.value = "";
-                clearTimeout(get_name_timeout);
+                get_name_timeout = setTimeout(() => get_tag_id(replacer, original), 350);
             }
         }
         replacer.addEventListener("keydown", update_tag_id);
@@ -247,7 +245,7 @@
 
     // prediction of parent tag
     const parentTag = get_by_id("name_en").value.match(/\(([^\)]+)\)/);
-    if (parentTag && !get_by_id("parent").value) {
+    if (get_by_id("tag_type").value == 0 && parentTag && !get_by_id("parent").value) {
         get_by_id("parent_name").value = parentTag[1];
         get_tag_id(get_by_id("parent_name"), get_by_id("parent"));
     }
