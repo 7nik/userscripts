@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP loading cursor
 // @namespace    7nik@anime-pictures.net
-// @version      0.1.1
+// @version      0.1.2
 // @description  Set "progress" cursor during executing long queries to the server
 // @author       7nik
 // @match        https://anime-pictures.net/*
@@ -14,7 +14,7 @@
     'use strict';
 
     document.head.appendChild(document.createElement("style")).innerHTML =
-        "body.waiting * {cursor: wait;} body.wait a, body.wait a * { cursor: progress; }";
+        "body.waiting * {cursor: wait;} body.waiting a, body.waiting a * { cursor: progress; }";
 
     let timer = null;
     ajax_request2 = function(url, params, handler, type_r) {
