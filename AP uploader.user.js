@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP uploader
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.2
+// @version      1.1
 // @description  Uploading without reloading the page + drag'n'drop.
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_add_wall*
@@ -10,6 +10,34 @@
 
 (function() {
     'use strict';
+
+    document.head.appendChild(document.createElement("style")).innerHTML =
+`
+#posts .img_block_big {
+    box-sizing: border-box;
+}
+#posts .img_block_big .img_sp {
+    max-height: 100%;
+    max-width: 100%;
+}
+#posts .img_block_big .img_block_text {
+    background:rgba(128,128,128,0.7);
+    color:white;
+}
+#posts .img_block_big .img_block_text div {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    bottom: 0;
+    z-index: -1;
+}
+#posts .img_block_big.error {
+    border: red 2px solid;
+}
+#posts .img_block_big.error span {
+    color: red;
+}
+`;
 
     const TEXT = (window.lang == "ru") ?
         {
@@ -23,8 +51,26 @@
             uploading: "Загрузка",
             dragndrop: "Перетащите файлы",
             fileLabel: "Выберите или перещати файлы сюда",
-            plural: (n, plurals) => n>=11&&n<20||(n%10)>4||(n%10)==0 ? plurals[2] : (n%10)==1 ? plurals[0] : plurals[1],
-            slots: (used, free) => `У вас ${used} ${TEXT.plural(used, ["непроверенное изображние", "непроверенных изображния", "непроверенных изображний"])}, вы можете загрузить ещё ${free}.`,
+            statuses: {"-2": "ПРЕ", 0: "НОВАЯ", 1: "", 2: "ЗАБАНЕНА"},
+            interrupted: "Прервано",
+            plural: function (n, plurals) {
+                if (n>=11&&n<20||(n%10)>4||(n%10)==0) {
+                    return plurals[2];
+                } else if ((n%10)==1) {
+                    return plurals[0];
+                } else {
+                    return plurals[1];
+                }
+            },
+            slots: function (used, free) {
+                const npics = TEXT.plural(
+                    used,
+                    ["непроверенное изображние",
+                     "непроверенных изображния",
+                     "непроверенных изображний"]
+                 );
+                return `У вас ${used} ${npics}, вы можете загрузить ещё ${free}.`;
+            },
         } : {
             reading: "Reading",
             pending: "Pending",
@@ -36,67 +82,139 @@
             uploading: "Uploading",
             fileLabel: "Choose files or drag'n'drop them",
             dragndrop: "Drag'n'drop files",
-            plural: (n, plurals) => n == 1 ? plurals[0] : plurals[1],
-            slots: (used, free) => `You have ${used} unproven ${TEXT.plural(used, ["picture", "pictures"])} you can still upload ${free}.`,
+            statuses: {"-2": "PRE", 0: "NEW", 1: "", 2: "BAN"},
+            interrupted: "Interrupted",
+            plural: function (n, plurals) {
+                return  n == 1 ? plurals[0] : plurals[1];
+            },
+            slots: function (used, free) {
+                const npics = TEXT.plural(used, ["picture", "pictures"]);
+                return `You have ${used} unproven ${npics} you can still upload ${free}.`;
+            },
         };
+
+    const toRGBA = ({r, g, b, a:_a = 1}, a = _a) => `rgba(${r},${g},${b},${a})`;
+    const toContrastColor = ({r, g, b}) => (r+g+b) > 128*3 ? "black" : "white";
 
     class Post {
         constructor(file, postContainer) {
+            this.id = Post.maxID = (Post.maxID || 0) + 1;
+            this._filename = file.name;
+            this._color = {r: 128, g: 128, b: 128};
+            this._status = TEXT.reading;
+
             this.file = file;
             this.post = document.createElement("span");
             this.post.className = "img_block_big";
-            this.post.style.boxSizing = "border-box";
             this.post.innerHTML =
                 `<a target="_blank">
-                  <canvas class='img_sp' style='max-height:100%;max-width:100%;' />
+                  <canvas class="img_sp" title="${this._filename}" alt="${this._filename}"/>
                 </a>
-                <div class='img_block_text' style='background:rgba(128,128,128,0.7);color:white;visibility:1'>
+                <div class="img_block_text">
                   <strong></strong>
                   <br>
-                  <span>${TEXT.reading}</span>
-                  <div style='width:100%;height:100%;position:absolute;bottom:0;z-index:-1;'></div>
+                  <span>${this._status}</span>
+                  <div></div>
                 </div>`;
             postContainer.appendChild(this.post);
-            this._color = {r: 128, g: 128, b: 128};
-            this._status = this.getEl("span");
+            this._statSpan = this.getEl("span");
             this._prog1 = this.getEl(".img_block_text");
             this._prog2 = this.getEl("div > div");
             previewer.run(this);
             uploader.run(this);
+            this.save();
+        }
+
+        save() {
+            const post = {};
+            ["id", "_filename", "_color", "_status", "_error", "_link", "_imgDim", "_preview"]
+                .forEach(k => this[k] ? post[k] = this[k] : false);
+            const state = (history.state || []);
+            const pos = state.findIndex(p => p.id === post.id);
+            if (pos < 0) {
+                state.push(post);
+            } else {
+                state.splice(pos, 1, post);
+            }
+            history.replaceState(state, null);
         }
 
         getEl(sel) {
             return this.post.querySelector(sel);
         }
 
+        get color() {return this._color;}
         set color(c) {
             this._color = c;
-            this.getEl("canvas").style.borderColor = `rgb(${c.r},${c.g},${c.b})`;
-            this.getEl("canvas").style.boxShadow = `0 0 20px rgb(${c.r},${c.g},${c.b})`;
-            this._prog1.style.background = `rgba(${c.r},${c.g},${c.b},0.7)`;
-            this._prog1.style.color = (c.r + c.g + c.b) > 128*3 ? "black" : "white";
+            this.getEl("canvas").style.borderColor = toRGBA(c, 1);
+            this.getEl("canvas").style.boxShadow = "0 0 20px " + toRGBA(c, 1);
+            this._prog1.style.background = toRGBA(c, 0.7);
+            this._prog1.style.color = toContrastColor(c);
+            this.save();
+        }
+        get preview() {return this._preview;}
+        set preview(pr) {
+            this._preview = pr;
+            this.save();
         }
         get status() {
-            return this._status.innerText;
+            return this._status;
         }
+        get error() {return this._error;}
         set error(str) {
-            this.status = str;
-            this._status.style.color = "red";
-            this.post.style.border = "red 2px solid";
+            this._error = true;
+            this._status = str;
+            this.post.classList.add("error");
+            this.save();
         }
         set status(str) {
-            this._status.innerText = str;
+            this._statSpan.innerText = this._status = str;
         }
+        get imgDim() {return this._imgDim;}
         set imgDim(str) {
-            this.getEl("strong").innerText = str;
+            this.getEl("strong").innerText = this._imgDim = str;
+            this.save();
         }
+        get url() {return this._link;}
         set url(url) {
+            this._link = url;
             this.getEl("a").setAttribute("href", url);
+        }
+        get progress() {
+            return +(this._prog1.style.background.match(/\d+/) || ["0"])[0];
         }
         set progress(num) {
             num = Math.floor(Math.min(100, Math.max(0, num)));
-            this._prog1.style.background = `linear-gradient(to right, transparent ${num}%, rgba(${this._color.r},${this._color.g},${this._color.b}, 0.7) ${num}%)`;
+            this._prog1.style.background = `linear-gradient(to right, transparent ${num}%, ${toRGBA(this._color, 0.7)} ${num}%)`;
 			this._prog2.style.background = `linear-gradient(to right, rgba(0,150,0,0.7) ${num}%, transparent ${num}%)`;
+        }
+
+        static async restore(p, postContainer) {
+            Post.maxID = Math.max(Post.maxID||0, p.id);
+            const postInfo = !p._link ? null
+                : await fetch(p._link + "&type=json").then(resp => resp.json());
+            if (!p._error) {
+                p._status = postInfo ? TEXT.statuses[postInfo.status] : TEXT.interrupted;
+            }
+
+            const bgcolor = toRGBA(this._color,0.7);
+            const color = toContrastColor(this._color);
+            const post = document.createElement("span");
+            post.className = p._error ? "img_block_big error" : "img_block_big";
+            post.innerHTML =
+                `<a target="_blank" href="${p._link || ""}">
+                  <img class="img_sp"
+                       src=${postInfo ? postInfo.medium_preview : p._preview || ""}
+                       title="${p._filename}"
+                       alt="${p._filename}"
+                   />
+                </a>
+                <div class="img_block_text"
+                     style="background:${bgcolor}; color:${color}">
+                  <strong>${p._imgDim || ""}</strong>
+                  ${p._status ? `<br><span>${this._status}</span>` : ""}
+                </div>`;
+            postContainer.appendChild(post);
         }
     }
 
@@ -142,13 +260,14 @@
                 rgb.b = Math.floor(rgb.b/count);
 
                 p.color = rgb;
+                p.preview = canvas.toDataURL("image/jpeg", 0.8);
 
                 self._working = false;
                 self.run();
             };
             img.src = URL.createObjectURL(p.file);
         },
-    }
+    };
 
     const uploader = {
         _order: [],
@@ -181,24 +300,29 @@
             }
 
             const xhr = new XMLHttpRequest();
-            xhr.upload.addEventListener("progress", function(e) {
-                p.progress = (e.loaded / e.total * 100);
-                if (e.loaded == e.total) p.status = TEXT.processing;
+            xhr.upload.addEventListener("progress", function(ev) {
+                p.progress = (ev.loaded / ev.total * 100);
+                if (ev.loaded == ev.total) p.status = TEXT.processing;
             }, false);
-            xhr.onload = function(e) {
+            xhr.onload = function(ev) {
                 if (xhr.status == 200) {
-                    const cont = document.createRange().createContextualFragment(xhr.responseText).querySelector(".post_content");
+                    const cont = document.createRange()
+                        .createContextualFragment(xhr.responseText)
+                        .querySelector(".post_content");
                     p.url = cont.querySelector("a").href;
+                    p.preview = cont.querySelector("img").src;
                     if (cont.querySelector(".body span[style='color: red;']")) {
                         p.error = TEXT.dublicate;
                     } else if (cont.querySelector("form span[style='color: red;']")) {
                         p.error = TEXT.noSlots;
                         self._freeSlots = 0;
-                        document.getElementById("slot_status").innerText = TEXT.slots(self._totalSlots - self._freeSlots, self._freeSlots);
+                        document.getElementById("slot_status").innerText =
+                            TEXT.slots(self._totalSlots - self._freeSlots, self._freeSlots);
                     } else {
                         p.status = cont.querySelector(".img_block_text").lastChild.textContent;
                         self._freeSlots--;
-                        document.getElementById("slot_status").innerText = TEXT.slots(self._totalSlots - self._freeSlots, self._freeSlots);
+                        document.getElementById("slot_status").innerText =
+                            TEXT.slots(self._totalSlots - self._freeSlots, self._freeSlots);
                     }
                 } else {
                     p.error = TEXT.netError;
@@ -215,7 +339,7 @@
             xhr.send(form);
             p.status = TEXT.uploading;
         },
-    }
+    };
 
     // replace "You have # unproven pictures you can still upload #." with editable version.
     const b = document.querySelector(".post_content .body");
@@ -234,7 +358,9 @@
     fileField.type = "file";
     fileField.multiple = true;
     fileField.accept = "image/*";
-    fileField.addEventListener("change", function () { Array.from(this.files).forEach(file => new Post(file, posts)); });
+    fileField.addEventListener("change", function () {
+        Array.from(this.files).forEach(file => new Post(file, posts));
+    });
     fileField.style.display = "none";
     const ffLabel = document.createElement("label");
     ffLabel.setAttribute("for", "mfiles");
@@ -270,18 +396,51 @@
     });
     dnd.innerText = TEXT.dragndrop;
     document.body.appendChild(dnd);
-    document.addEventListener("scroll", function (e) {
+    document.addEventListener("scroll", function (ev) {
         dnd.style.top = Math.max(0, 46 - window.scrollY) + "px";
         dnd.style.bottom = Math.max(0, window.scrollY + window.innerHeight - document.body.scrollHeight + 120) + "px";
     }, false);
     const cont = document.getElementById("content");
     cont.style.minHeight = document.getElementById("body_wrapper").offsetHeight - 10 + "px";
-    ["dragenter", "dragover", "dragleave", "drop"].forEach(eventName => cont.addEventListener(eventName, (e) => e.preventDefault() & e.stopPropagation(), false));
-    ["dragenter", "dragover"].forEach(eventName => cont.addEventListener(eventName, () => (dnd.style.opacity = 1), false));
-    ["dragleave", "drop"].forEach(eventName => cont.addEventListener(eventName, () => (dnd.style.opacity = 0), false));
-    cont.addEventListener('drop', (e) => Array.from(e.dataTransfer.files).forEach(file => { if (file.type.startsWith("image/")) new Post(file, posts); }), false);
+    ["dragenter", "dragover", "dragleave", "drop"].forEach(eventName => cont.addEventListener(
+        eventName,
+        (ev) => {ev.preventDefault(); ev.stopPropagation();},
+        false
+    ));
+    ["dragenter", "dragover"].forEach(eventName => cont.addEventListener(
+        eventName,
+        (ev) => {dnd.style.opacity = 1;},
+        false
+    ));
+    ["dragleave", "drop"].forEach(eventName => cont.addEventListener(
+        eventName,
+        (ev) => {dnd.style.opacity = 0;},
+        false
+    ));
+    cont.addEventListener(
+        "drop",
+        (ev) => Array.from(ev.dataTransfer.files).forEach(file => {
+            if (file.type.startsWith("image/")) new Post(file, posts);
+        }),
+        false
+    );
 
     // warn about leaving the page during uploading
     window.onbeforeunload = () => uploader._working ? true : null;
+
+    // restore posts
+    window.addEventListener("popstate", async function (ev) {
+        if (!ev.state) return;
+        for (let post of history.state) {
+            await Post.restore(post, posts);
+        }
+    });
+    if (history.state) {
+        (async () => {
+            for (let post of history.state) {
+                await Post.restore(post, posts);
+            }
+        })();
+    }
 
 })();
