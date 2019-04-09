@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP uploader
 // @namespace    7nik@anime-pictures.net
-// @version      1.1
+// @version      1.1.1
 // @description  Uploading without reloading the page + drag'n'drop.
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_add_wall*
@@ -197,8 +197,8 @@
                 p._status = postInfo ? TEXT.statuses[postInfo.status] : TEXT.interrupted;
             }
 
-            const bgcolor = toRGBA(this._color,0.7);
-            const color = toContrastColor(this._color);
+            const bgcolor = toRGBA(p._color,0.7);
+            const color = toContrastColor(p._color);
             const post = document.createElement("span");
             post.className = p._error ? "img_block_big error" : "img_block_big";
             post.innerHTML =
@@ -212,7 +212,7 @@
                 <div class="img_block_text"
                      style="background:${bgcolor}; color:${color}">
                   <strong>${p._imgDim || ""}</strong>
-                  ${p._status ? `<br><span>${this._status}</span>` : ""}
+                  ${p._status ? `<br><span>${p._status}</span>` : ""}
                 </div>`;
             postContainer.appendChild(post);
         }
