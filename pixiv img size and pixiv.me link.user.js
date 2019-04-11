@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         pixiv img size and pixiv.me link
 // @namespace    http://tampermonkey.net/
-// @version      1.2.1
+// @version      1.2.2
 // @description  Add size of the illustrations and direct links to them.
 // @author       7nik
 // @match        https://www.pixiv.net/member_illust.php*
@@ -23,7 +23,7 @@
 
         async function viaSketch() {
             const userId = new URL(window.location).searchParams.get("id");
-            const resp = await fetch("https://sketch.pixiv.net/api/pixiv/user/posts/latest?user_id=" + userId)
+            const resp = await fetch("https://sketch.pixiv.net/api/pixiv/user/posts/latest?user_id=" + userId);
             if (!resp.ok) return false;
             return (await resp.json()).data.user.url.match(/[a-z0-9_-]+$/);
         }
@@ -80,11 +80,12 @@
 
             // https://www.pixiv.net/member_illust.php?mode=medium&illust_id=
             // add links below image for mutli-page posts
-            cont = document.querySelectorAll("figure div > div[role]");
+            cont = document.querySelectorAll("figure > div[role] > div.hSFWCP > div[role]");
             if (cont.length && data.length>1 && !has(cont[0], "a:not([class])")) {
                 for (var i = 0; i < cont.length; i++) {
                     a = document.createElement("a");
                     a.style.marginTop = "5px";
+                    a.style.zIndex = 2;
                     a.href = data[i].urls.original;
                     a.innerText = data[i].width + "x" + data[i].height;
                     cont[i].appendChild(a);
@@ -145,7 +146,7 @@
                     datas[postId] = data.body;
                     putSize(datas[postId]);
             });
-        }
+        };
     })();
 
     function onElementsAdded(selector, callback) {
@@ -157,7 +158,8 @@
 
     onElementsAdded("h1.VyO6wL2", addPixivme);
     onElementsAdded(".thumbnail-item", addSize);
-    onElementsAdded("div.dCQVle", addSize);
+    onElementsAdded("div.dCQVle", addSize); // ???
+    onElementsAdded("div.gtm-medium-work-expanded-view", addSize);
     onElementsAdded("section", addSize);
 
     addSize();
