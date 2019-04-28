@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         pixiv img size and pixiv.me link
 // @namespace    http://tampermonkey.net/
-// @version      1.2.2
+// @version      1.2.3
 // @description  Add size of the illustrations and direct links to them.
 // @author       7nik
 // @match        https://www.pixiv.net/member_illust.php*
