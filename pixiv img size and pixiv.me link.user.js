@@ -86,6 +86,7 @@
                     a = document.createElement("a");
                     a.style.marginTop = "5px";
                     a.style.zIndex = 2;
+                    a.style.position = "relative";
                     a.href = data[i].urls.original;
                     a.innerText = data[i].width + "x" + data[i].height;
                     cont[i].appendChild(a);
