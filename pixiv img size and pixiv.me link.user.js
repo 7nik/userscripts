@@ -82,15 +82,31 @@
             // add links below image for mutli-page posts
             cont = document.querySelectorAll("figure > div[role] > div.hSFWCP > div[role]");
             if (cont.length && data.length>1 && !has(cont[0], "a:not([class])")) {
-                for (var i = 0; i < cont.length; i++) {
+                for (let i = 0; i < cont.length; i++) {
                     a = document.createElement("a");
                     a.style.marginTop = "5px";
                     a.style.zIndex = 2;
                     a.style.position = "relative";
+                    a.style.display = "block";
+                    a.style.textAlign = "center";
                     a.href = data[i].urls.original;
                     a.innerText = data[i].width + "x" + data[i].height;
                     cont[i].appendChild(a);
                     cont[i].style.flexDirection = "column";
+                }
+            }
+
+            cont = document.querySelectorAll("body > div[role] img, body > div[role] figure");
+            if (cont.length && !has(cont[0].parentElement, "a")) {
+                for (let i = 0; i < cont.length; i++) {
+                    a = document.createElement("a");
+                    a.style.height = "0";
+                    a.style.order = 2;
+                    a.href = data[i].urls.original;
+                    a.innerText = data[i].width + "x" + data[i].height;
+                    cont[i].parentElement.appendChild(a);
+                    cont[i].parentElement.style.flexDirection = "column";
+                    cont[i].parentElement.parentElement.style.marginBottom = "20px";
                 }
             }
 
@@ -162,6 +178,7 @@
     onElementsAdded("div.dCQVle", addSize); // ???
     onElementsAdded("div.gtm-medium-work-expanded-view", addSize);
     onElementsAdded("section", addSize);
+    onElementsAdded("div[role]", aadSize);
 
     addSize();
 
