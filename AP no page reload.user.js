@@ -155,10 +155,8 @@
     }, true);
     // on general page reload
     registerHotkey(
-        "refresh page info",
         "Ctrl+R",
-        null,
-        null,
+        "refresh page info",
         () => fetch(window.location.href)
             .then(resp => resp.text())
             .then(html => {

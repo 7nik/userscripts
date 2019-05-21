@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         VK poster
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.7
+// @version      1.0.7.2
 // @description  Make a post with a picture in vk.com/mjvart
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*
 // @grant        GM_xmlhttpRequest
+// @grant        GM_addStyle
 // @connect      ip1.anime-pictures.net
 // @connect      cdn.anime-pictures.net
 // @connect      pu.vk.com
@@ -112,7 +113,7 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
                 } else {
                     resolve(response.response);
                 }
-            })
+            });
         });
     }
     // promise version of GM_xmlhttpRequest
@@ -121,7 +122,7 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
             options.onload = (xhr) => resolve(xhr);
             options.onerror = (xhr) => reject(xhr);
             GM_xmlhttpRequest(options);
-        })
+        });
     }
     // initialization
     unsafeWindow.vkAsyncInit = function() {
@@ -180,19 +181,10 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
         const ya_share2 = document.getElementById("ya_share2");
         ya_share2.parentNode.insertBefore(a, ya_share2);
         ya_share2.style.minWidth = "0";
-        AnimePictures&&AnimePictures.hotkeys&&AnimePictures.hotkeys.push({
-            descr: "make post to vk",
-            hotkey: SETTIGNS.hotkey,
-            pages: ["/pictures/view_post"],
-            selectors: [],
-            action: onclick,
-        }, {
-            descr: "decline making of VK post",
-            hotkey: "Escape",
-            pages: ["/"], // all pages
-            selectors: ["#post_maker"],
-            action: (element) => document.body.removeChild(element),
-        });
+        if (registerHotkey) {
+            registerHotkey(SETTIGNS.hotkey, "make post to vk", onclick);
+            registerHotkey("Escape", "decline making of VK post", ["#post_maker"], (el) => el.remove());
+        }
         log("inited");
     };
 
@@ -300,7 +292,7 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
         postMaker.onclick = (event) => { if (event.target == postMaker) document.body.removeChild(postMaker); };
         document.body.appendChild(postMaker);
         postMaker.querySelector("#post_message").focus();
-        log("form created")
+        log("form created");
 
         // get date of the last scheduled post or now date
         const lastPostDate = (await VKapi("wall.get", {
@@ -600,8 +592,7 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
             input.focus();
         }, true);
         input.parentNode.insertBefore(a, input.nextElementSibling);
-        const style = document.createElement("style");
-        style.innerHTML =
+        GM_addStyle(
             `.datatimeContorls {
                 display: inline-block;
                 height: 22px;
@@ -625,8 +616,8 @@ const TEXT = ((langs, lang, def) => langs[lang] || langs[def])({
             }
             .datatimeContorls svg:hover {
                 opacity: 1;
-            }`;
-        document.head.appendChild(style);
+            }`
+        );
 
         new MutationObserver(function (muts) {
             muts.forEach(mutation => {

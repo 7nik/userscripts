@@ -96,10 +96,8 @@
     get_by_id("replace_tag").onclick = start;
 
     registerHotkey(
-        `replace tag ${remove_tag_name} with ${add_tag_name}`,
         "R",
-        null,
-        null,
+        `replace tag ${remove_tag_name} with ${add_tag_name}`,
         start,
     );
 
