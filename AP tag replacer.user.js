@@ -14,9 +14,9 @@
 (function() {
     'use strict';
 
-    let add_tag_name = "", add_tag_id = 160396;
-    let remove_tag_name = "hair up", remove_tag_id = 13828;
-    let close_window = 0, go_next_pic = -1; // 1 = right, -1 = left
+    let add_tag_name = "", add_tag_id = 73131;
+    let remove_tag_name = "", remove_tag_id = 73131;
+    let close_window = 1, go_next_pic = -1; // 1 = right, -1 = left
 
     function finish() {
         get_by_id("replace_tag").style.display = "none";
@@ -31,7 +31,7 @@
 
     function remove_tag(tag_id, post_id, callback) {
         if (!tag_id) {
-            callback && callback();
+            if (callback) callback();
             return;
         }
         var request = function(req) {
@@ -39,7 +39,7 @@
             let {post_tags, success, errormsg} = JSON.parse(req.responseText);
             if (success) {
                 get_by_id("post_tags").innerHTML = post_tags;
-                callback && callback();
+                if (callback) setTimeout(callback, 100);
             } else {
                 get_by_id("add_tag_status").innerHTML = errormsg;
                 console.log("Error: ", errormsg);
@@ -54,14 +54,14 @@
 
     function add_tag(tag_name, post_id, callback) {
         if (!tag_name) {
-            callback && callback();
+            if (callback) callback();
             return;
         }
         var request = function(req) {
             if ((req.readyState != 4) || (req.status != 200)) return;
             let {success, errormsg} = JSON.parse(req.responseText);
             if (success) {
-                callback && callback();
+                if (callback) setTimeout(callback, 100);
             } else {
                 get_by_id("add_tag_status").innerHTML = errormsg;
                 console.log("Error: ", errormsg);
@@ -86,15 +86,21 @@
     }
     if (!add_tag_name && !remove_tag_name) return; // nothing to add or remove
 
-    get_by_id("add_tag_form").insertBefore(new DOMParser().parseFromString(`<input type="button" id="replace_tag" style="margin:3px 0;" value="${remove_tag_name} → ${add_tag_name}" />`, 'text/html').body.firstChild, get_by_id("add_tag_input"));
+    get_by_id("add_tag_s").insertAdjacentHTML(
+        "beforeBegin",
+        `<input type="button"
+                id="replace_tag"
+                style="margin:3px 0;"
+                value="${remove_tag_name} → ${add_tag_name}"
+        />`);
     get_by_id("replace_tag").onclick = start;
 
-    AnimePictures.hotkeys.push({
-        descr: `replace tag ${remove_tag_name} with ${add_tag_name}`,
-        hotkey: "R",
-        pages: ["/pictures/view_post"],
-        selectors: [],
-        action: start,
-    });
+    registerHotkey(
+        `replace tag ${remove_tag_name} with ${add_tag_name}`,
+        "R",
+        null,
+        null,
+        start,
+    );
 
 })();
