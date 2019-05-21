@@ -6,14 +6,14 @@
 // @author       7nik
 // @match        http://iqdb.org/*
 // @match        http://saucenao.com/*
-// @grant        none
+// @grant        GM_addStyle
 // @run-at       document-start
 // ==/UserScript==
 
 (function () {
 
     const isIQDB = window.location.hostname == "iqdb.org";
-    const isSauceNAO = window.location.hostname == "saucenao.com"
+    const isSauceNAO = window.location.hostname == "saucenao.com";
 
     function say(text) {
         let dialog = document.getElementById("dialog");
@@ -58,23 +58,20 @@
             document.querySelectorAll("div.hidden")
                 .forEach(el => (el.classList.remove("hidden")));
             document.getElementById("result-hidden-notification").classList.add("hidden");
-        }
+        };
         window.togglenao = function () {
             const toggle = (id, css = document.getElementById(id).style) =>
                 css.display = (css.display === "none") ? "block" : "none";
             toggle("advanced");
             toggle("nonadvanced");
-        }
+        };
     }
 
     // css fix and cetner content
     if (isIQDB) {
-        document.head.appendChild(document.createElement("style")).innerHTML =
-            "body{text-align:center;} body>*,form>*{margin-left:auto;margin-right:auto;} ul{display:inline-block}";
+        GM_addStyle("body{text-align:center;} body>*,form>*{margin-left:auto;margin-right:auto;} ul{display:inline-block}");
     } else {
-        document.querySelector("link").href = "/css/saucenao-new.css";
-        document.head.appendChild(document.createElement("style")).innerHTML =
-            "body{text-align:center;} body>div{margin: 0 auto;}";
+        GM_addStyle("body{text-align:center;} body>div{margin: 0 auto;}");
     }
 
     // saving and restoring results in history
@@ -84,7 +81,7 @@
             document.title,
             "#localFile");
     }
-    window.onpopstate = function (ev) {
+    window.addEventListener("popstate", function (ev) {
         document.body.innerHTML = "";
         document.body.appendChild(
             document.createRange().createContextualFragment(
@@ -94,99 +91,107 @@
         if (isSauceNAO && !window.$) {
             downloadJSAtOnload();
         }
-    }
-    if (window.history.state) {
-        document.body.innerHTML = JSON.parse(window.history.state);
-        if (isSauceNAO && !window.$ && window.downloadJSAtOnload) {
-            downloadJSAtOnload();
-        }
-    } else {
-        window.history.replaceState(JSON.stringify(document.body.innerHTML), document.title);
-    }
-
-    // drag'n'drop
-    const dnd = document.createElement("div");
-    dnd.id = "dragndrop";
-    Object.assign(dnd.style, {
-        position: "fixed",
-        width: "calc(100% - 60px)",
-        margin: "30px",
-        bottom: "0",
-        top: "0",
-        left: "0",
-        boxSizing: "border-box",
-        display: "flex",
-        background: "rgba(128,128,128,0.5)",
-        border: "rgba(128,128,128,0.8) 5px solid",
-        fontSize: "5em",
-        justifyContent: "center",
-        textAlign: "center",
-        flexDirection: "column",
-        opacity: 0,
-        transition: "opacity 0.5s",
-        pointerEvents: "none",
-        zIndex: 11,
     });
-    dnd.innerText = "Drag'n'drop files";
-    document.body.appendChild(dnd);
-    const cont = document.body;
-    ["dragenter", "dragover", "dragleave", "drop"].forEach(eventName => cont.addEventListener(
-        eventName,
-        (ev) => ev.preventDefault() & ev.stopPropagation(),
-        false));
-    ["dragenter", "dragover"].forEach(eventName => cont.addEventListener(
-        eventName,
-        () => (document.getElementById("dragndrop").style.opacity = 1),
-        false));
-    ["dragleave", "drop"].forEach(eventName => cont.addEventListener(
-        eventName,
-        () => (document.getElementById("dragndrop").style.opacity = 0),
-        false));
-    cont.addEventListener("drop", function (ev) {
-        const file = Array.from(ev.dataTransfer.files).filter(f => f.type.startsWith("image/"))[0];
-        if (!file) return;
 
-        if (isIQDB && file.size >= 8388608 || isSauceNAO && file.size >= 15728640) {
-            alert("Filesize is too big");
-            return;
+    document.addEventListener("DOMContentLoaded", function () {
+        if (isSauceNAO) {
+            document.querySelector("link").href = "/css/saucenao-new.css";
         }
 
-        const form = new FormData(document.forms[0]);
-        form.set("file", file);
-
-        say("uploading");
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", window.location.hostname == "iqdb.org" ? "/" : "/search.php", true);
-        xhr.upload.addEventListener("progress", function(ev) {
-            const done = Math.round(ev.loaded / ev.total * 100);
-            say(done == 100 ? "processing" : `uploaded ${done}%`);
-        }, false);
-        xhr.onload = function() {
-            if (xhr.status == 200) {
-                if (isIQDB) {
-                    const dom = new DOMParser().parseFromString(xhr.responseText, "text/html");
-                    const h1 = dom.querySelector("body > h1");
-                    const form = document.querySelector("body > form");
-                    while (form.previousElementSibling.nodeName != "H1") {
-                        document.body.removeChild(form.previousElementSibling);
-                    }
-                    while (h1.nextElementSibling.nodeName != "FORM") {
-                        document.body.insertBefore(h1.nextElementSibling, form);
-                    }
-                } else {;
-                    document.body.innerHTML = null;
-                    document.body.appendChild(
-                        document.createRange().createContextualFragment(
-                            xhr.responseText
-                        )
-                    );
-                    if (!window.$) downloadJSAtOnload();
-                    document.body.appendChild(dnd);
-                }
+        if (window.history.state) {
+            document.body.innerHTML = JSON.parse(window.history.state);
+            if (isSauceNAO && !window.$ && window.downloadJSAtOnload) {
+                downloadJSAtOnload();
             }
-            say(null);
-            savePage();
-        };
-        xhr.send(form);
-    }, false);
-})()
+        } else {
+            window.history.replaceState(JSON.stringify(document.body.innerHTML), document.title);
+        }
+
+        // drag'n'drop
+        const dnd = document.createElement("div");
+        dnd.id = "dragndrop";
+        Object.assign(dnd.style, {
+            position: "fixed",
+            width: "calc(100% - 60px)",
+            margin: "30px",
+            bottom: "0",
+            top: "0",
+            left: "0",
+            boxSizing: "border-box",
+            display: "flex",
+            background: "rgba(128,128,128,0.5)",
+            border: "rgba(128,128,128,0.8) 5px solid",
+            fontSize: "5em",
+            justifyContent: "center",
+            textAlign: "center",
+            flexDirection: "column",
+            opacity: 0,
+            transition: "opacity 0.5s",
+            pointerEvents: "none",
+            zIndex: 11,
+        });
+        dnd.innerText = "Drag'n'drop files";
+        document.body.appendChild(dnd);
+        const cont = document.body;
+        ["dragenter", "dragover", "dragleave", "drop"].forEach(eventName => cont.addEventListener(
+            eventName,
+            (ev) => ev.preventDefault() & ev.stopPropagation(),
+            false));
+        ["dragenter", "dragover"].forEach(eventName => cont.addEventListener(
+            eventName,
+            () => (document.getElementById("dragndrop").style.opacity = 1),
+            false));
+        ["dragleave", "drop"].forEach(eventName => cont.addEventListener(
+            eventName,
+            () => (document.getElementById("dragndrop").style.opacity = 0),
+            false));
+        cont.addEventListener("drop", function (ev) {
+            const file = Array.from(ev.dataTransfer.files).filter(f => f.type.startsWith("image/"))[0];
+            if (!file) return;
+
+            if (isIQDB && file.size >= 8388608 || isSauceNAO && file.size >= 15728640) {
+                alert("Filesize is too big");
+                return;
+            }
+
+            const form = new FormData(document.forms[0]);
+            form.set("file", file);
+
+            say("uploading");
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", window.location.hostname == "iqdb.org" ? "/" : "/search.php", true);
+            xhr.upload.addEventListener("progress", function(ev) {
+                const done = Math.round(ev.loaded / ev.total * 100);
+                say(done == 100 ? "processing" : `uploaded ${done}%`);
+            }, false);
+            xhr.onload = function() {
+                if (xhr.status == 200) {
+                    if (isIQDB) {
+                        const dom = new DOMParser().parseFromString(xhr.responseText, "text/html");
+                        const h1 = dom.querySelector("body > h1");
+                        const form = document.querySelector("body > form");
+                        while (form.previousElementSibling.nodeName != "H1") {
+                            document.body.removeChild(form.previousElementSibling);
+                        }
+                        while (h1.nextElementSibling.nodeName != "FORM") {
+                            document.body.insertBefore(h1.nextElementSibling, form);
+                        }
+                    } else {
+                        document.body.innerHTML = null;
+                        document.body.appendChild(
+                            document.createRange().createContextualFragment(
+                                xhr.responseText
+                            )
+                        );
+                        if (!window.$) downloadJSAtOnload();
+                        document.body.appendChild(dnd);
+                    }
+                }
+                say(null);
+                savePage();
+            };
+            xhr.send(form);
+        }, true);
+    });
+
+})();
