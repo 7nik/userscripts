@@ -1,15 +1,16 @@
 // ==UserScript==
 // @name         AP moderate tags
 // @namespace    7nik@anime-pictures.net
-// @version      1.1.7
+// @version      1.2
 // @description  Allow moderate recommended tags the way as regular one
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*moderation=1
 // @match        https://anime-pictures.net/pictures/moderating_pre_tags/*
-// @grant        none
+// @grant        GM_addStyle
 // ==/UserScript==
 
 /* global AnimePictures:false lang:false post_id:false get_by_id:false */
+/* jshint -W069 */
 
 (function() {
     'use strict';
@@ -18,17 +19,36 @@
     // const log = () => {};
 
     if (window.location.pathname.startsWith("/pictures/moderating_pre_tags/")) {
-        document.querySelectorAll(".messages td:nth-child(3) a").forEach(a => (a.href += "&moderation=1"));
+        document.querySelectorAll(".messages td:nth-child(3) a").forEach(a => {
+            a.href += "&moderation=1";
+            a.addEventListener("auxclick", function (event) {
+                if (event.button != 1) return;
+                event.preventDefault();
+                window.open(a.href);
+            },true);
+            a.addEventListener("click", function (event) {
+                event.preventDefault();
+                window.open(a.href);
+            },true);
+        });
+        window.addEventListener("message", function ({data:{cmd, preTagId}}) {
+            if (cmd == "resolve_pretag") {
+                const elem = document.getElementById("pre_tag_"+preTagId);
+                if (elem) elem.remove();
+            }
+        });
         return;
     }
     if (window.location.search.indexOf("moderation=1") < 0) return;
 
     let cache, pretags, scrollTop = 0;
-    window.addEventListener("unload", () => cache && (localStorage["mt_cache"] = JSON.stringify(cache)));
-    window.addEventListener("unload", () => pretags && (localStorage["mt_pretags"] = JSON.stringify(pretags)));
-
-    document.body.appendChild(document.createElement("style")).innerHTML =
-        "body.wait * {cursor: wait;} body.wait a, body.wait a * { cursor: progress; }";
+    window.addEventListener("unload", () => {
+        if (cache) localStorage["mt_cache"] = JSON.stringify(cache);
+    });
+    window.addEventListener("unload", () => {
+        if (pretags) localStorage["mt_pretags"] = JSON.stringify(pretags);
+    });
+    GM_addStyle("body.wait * {cursor: wait;} body.wait a, body.wait a * { cursor: progress; }");
 
     function ajax(url, params, method = "POST") {
         // if params is skipped
@@ -36,30 +56,47 @@
             [params, method] = [null, params];
         }
         if (params && method === "GET") {
-            url += (url.indexOf("?") >= 0 ? "&" : "?") + Object.keys(params).map(k => k + "=" + params[k]).join("&");
+            url += (url.includes("?") ? "&" : "?") +
+                Object.keys(params).map(k => k + "=" + params[k]).join("&");
             params = null;
         }
-        params = {
-            method: method,
-            body: params && Object.keys(params).reduce((form, key) => {form.append(key, params[key]); return form;}, new FormData()),
-        };
+        if (params) {
+            params = {
+                method: method,
+                body: Object.keys(params)
+                  .reduce((fd,k) => (fd.append(k, params[k]), fd), new FormData()),
+            };
+        } else {
+            params = {
+                method: method,
+            };
+        }
         return fetch(url, params).then(resp => {
-            if (!resp.ok) throw {query: method+" "+url, status: resp.status, statusText: resp.statusText};
+            if (!resp.ok) throw resp;
             return resp;
         });
     }
 
+    function json(...args) {
+        return ajax(...args).then(resp => resp.json());
+    }
+
+    function html(...args) {
+        return ajax(...args)
+            .then(resp => resp.text())
+            .then(text => new DOMParser().parseFromString(text, "text/html"));
+    }
+
     // queries via ajax1 can be execute successively only
-    const queue = Promise.resolve();
-    function ajax1() {
-        const args = arguments;
-        return new Promise(function (resolve, reject) {
-            queue.then(() => ajax(...args).then(resolve, reject));
-        })
+    let lastAjax1 = Promise.resolve();
+    function ajax1(...args) {
+        lastAjax1 = lastAjax1.then(() => ajax(...args));
+        return lastAjax1;
     }
 
     async function deletePreTag(preTagId) {
-        const {success, msg} = await (await ajax("/pictures/del_pre_tag/"+preTagId)).json();
+        const {success, msg} =
+            await ajax1("/pictures/del_pre_tag/"+preTagId).then(r => r.json());
         if (!success) {
             log("error of removing of pretag #" + preTagId + ": ", msg);
             throw msg;
@@ -67,20 +104,25 @@
         const editTag = document.querySelector(`span[data-pretag-id="${preTagId}"]`);
         if (!editTag) return; // no pretag on the page
         const li = editTag.parentNode.parentNode;
-        if (li.previousElementSibling.nodeName == "SPAN" && (li.nextElementSibling == null || li.nextElementSibling.nodeName == "SPAN")) {
+        if (li.previousElementSibling.nodeName == "SPAN" &&
+                (li.nextElementSibling == null ||
+                 li.nextElementSibling.nodeName == "SPAN")) {
             li.parentNode.removeChild(li.previousElementSibling);
         }
         li.parentNode.removeChild(li);
     }
 
     async function acceptPreTag(preTagId) {
-        const {success, msg} = await (await ajax1("/pictures/accept_pre_tag/"+preTagId)).json();
+        const {success, msg} =
+            await ajax1("/pictures/accept_pre_tag/"+preTagId).then(r => r.json());
         if (!success) {
             log("error of accepting of pretag #" + preTagId + ": ", msg);
             const editTag = document.querySelector(`span[data-pretag-id="${preTagId}"]`);
             if (editTag) { // the pretag presented on the page
                 const li = editTag.parentNode.parentNode;
-                if (li.previousElementSibling.nodeName == "SPAN" && (li.nextElementSibling == null || li.nextElementSibling.nodeName == "SPAN")) {
+                if (li.previousElementSibling.nodeName == "SPAN" &&
+                        (li.nextElementSibling == null ||
+                         li.nextElementSibling.nodeName == "SPAN")) {
                     li.parentNode.removeChild(li.previousElementSibling);
                 }
                 li.parentNode.removeChild(li);
@@ -91,7 +133,11 @@
         if (!editTag) return; // no pretag on the page
         const tagId = editTag.getAttribute("data-tag-id");
         editTag.parentNode.previousElementSibling.style.backgroundImage = null;
-        editTag.innerHTML = `${editTag.innerText}<span id="delete_span_tag_${tagId}" class="icon_delete"></span><span id="set_span_tag_${tagId}" class="icon_frame"></span><span id="edit_span_tag_${tagId}" class="icon_edit"></span>`;
+        editTag.innerHTML =
+            `${editTag.innerText}
+            <span id="delete_span_tag_${tagId}" class="icon_delete"></span>
+            <span id="set_span_tag_${tagId}" class="icon_frame"></span>
+            <span id="edit_span_tag_${tagId}" class="icon_edit"></span>`;
     }
 
     const categories = ((langs, lang, def) => langs[lang] || langs[def])({
@@ -104,7 +150,7 @@
             "game copyright": 5,
             "other copyright": 6,
             "object": 7,
-            "meta tags": -1,
+            "meta tags": 8,
         },
         "ru": {
             "неизвестно": 0,
@@ -115,7 +161,7 @@
             "игровой копирайт": 5,
             "иной копирайт": 6,
             "объект": 7,
-            "meta tags": -1,
+            "meta tags": 8,
         },
         "jp": {
             "不明": 0,
@@ -126,18 +172,22 @@
             "作品名（ゲーム）": 5,
             "other copyright": 6,
             "物質": 7,
-            "meta tags": -1,
+            "meta tags": 8,
         },
     }, lang, "en");
-    const ord = {3:0, 5:1, 6:2, 1:3, 4:4, "-1":5, 2:6, 7:7, 0:8};
+    const ord = {3:0, 5:1, 6:2, 1:3, 4:4, 8:5, 2:6, 7:7, 0:8};
+    const comparator = (a,b) => (a.type==b.type) ? b.count-a.count : ord[a.type]-ord[b.type];
     async function getTagInfo(tagName) {
         const tag = {name: tagName};
         let dom, a, i = 0;
         do {
-            dom = new DOMParser().parseFromString(await (await ajax("https://anime-pictures.net/pictures/view_all_tags/"+i, {search_text: tagName, lang: lang}, "GET")).text(), "text/html");
-            a = Array.from(dom.querySelectorAll(".all_tags td:nth-child(2) a, .all_tags td:nth-child(3) a, .all_tags td:nth-child(4) a"))
-                .find(a => a.innerText === tagName);
-                i++;
+            dom = await html(
+                "/pictures/view_all_tags/"+i,
+                {search_text: tagName, lang: lang},
+                "GET");
+            a = Array.from(dom.querySelectorAll(".all_tags td:not(:last-child) a"))
+                .find(a => a.innerText === tag.name);
+            i++;
         } while (!a && dom.querySelector(`.numeric_pages a[href^='/pictures/view_all_tags/${i}']`));
 
         if (a) {
@@ -158,20 +208,22 @@
     async function getCachedTagInfo(tagName) {
         if (!cache) {
             cache = JSON.parse(localStorage["mt_cache"] || "{}");
-            // remove unused items
-            const now = new Date().getTime();
-            Object.keys(cache).forEach(key => {if (cache[key].date + 7*24*3600*1000 < now) delete cache[key];});
+            // remove old items
+            const now = Date.now();
+            Object.keys(cache).forEach(key => {
+                if (cache[key].date + 7*24*3600*1000 < now) delete cache[key];
+            });
         }
         if (cache[tagName]) {
             const tag = cache[tagName];
-            tag.date = new Date().getTime();
             return Object.assign({}, tag); // return a copy
         }
         const tag = await getTagInfo(tagName);
-        tag.date = new Date().getTime();
-        if (tag.type == 2 || tag.type == 7) { // it's reference or object
-            cache[tagName] = tag;
+        tag.date = Date.now();
+        if (tag.type != 2 && tag.type != 7) { // it's neither a reference nor an object
+            tag.date += 1000*3600*24*6.75; // keep only 6 hours
         }
+        cache[tagName] = tag;
         return Object.assign({}, tag); // return a copy
     }
 
@@ -181,7 +233,7 @@
         let i = 0;
         let dom;
         do {
-            dom = new DOMParser().parseFromString(await (await ajax("https://anime-pictures.net/pictures/moderating_pre_tags/"+i+"?lang="+lang, "GET")).text(), "text/html");
+            dom = await html("/pictures/moderating_pre_tags/"+i+"?lang="+lang, "GET");
             for (const tr of dom.querySelectorAll(".messages tr")) {
                 const children = tr.children;
                 const tag = await getCachedTagInfo(children[1].querySelector("a").innerText);
@@ -197,7 +249,7 @@
             i++;
         } while (dom.querySelector(`p.numeric_pages a[href*='${i}']`));
 
-        Object.keys(pics).forEach(k => (pics[k] = pics[k].sort((a,b) => (a.type == b.type) ? b.count - a.count : ord[a.type] - ord[b.type])));
+        Object.keys(pics).forEach(k => (pics[k] = pics[k].sort(comparator)));
         localStorage["mt_pretags"] = JSON.stringify(pics);
         localStorage["mt_lastUpdate"] = new Date().getTime();
 
@@ -206,6 +258,10 @@
 
     function getCount (li) {
         if (!li || li.nodeName == "SPAN") return 0;
+        if (!li.lastElementChild) {
+            console.log(li);
+            console.log(li.outerHTML);
+        }
         const n = li.lastElementChild.firstElementChild.textContent.trim();
         return (n.indexOf("K") >= 0) ? parseInt(n)*1000 : +n;
     }
@@ -213,25 +269,30 @@
     function makeLi(tag, uploaderName) {
         const li = document.createElement("li");
         li.id = "tag_li_" + tag.id;
-        li.className = [3,5,6].indexOf(tag.type) >=0 ? "green" : tag.type == 1 ? "blue" : tag.type == 4 ? "orange" : "";
+        li.className = ["","blue","","green","orange","green","green","","purple"][tag.type];
         li.title = "by " + tag.by;
-        li.innerHTML = `
-<a href="/pictures/view_posts/0?search_tag=${encodeURIComponent(tag.name)}"
-   title="Аниме картинки с тегом ${tag.name}"
-   class="${[1,3,4,5,6].indexOf(tag.type) >= 0 ? "big_tag" : ""} ${(tag.by !== uploaderName) ? "not_my_tag_border" : ""}"
->
-  ${tag.name}
-</a>
-<span>
-  <span class="edit_tag" data-pretag-id="${tag.preId}" data-tag-id="${tag.id}">
-    ${tag.count >= 1000 ? Math.floor(tag.count/1000) + "K" : tag.count}
-    <span class="accept" title="Accept"> ✓ </span>
-    <span class="decline" title="Decline"> ✗ </span>
-    <span id="edit_span_tag_${tag.id}" class="icon_edit"></span>
-  </span>
-</span>`;
-        li.firstElementChild.style.backgroundImage = "linear-gradient(to right, transparent 90%, aqua)";
-        li.firstElementChild.style.color = [3,5,6].indexOf(tag.type) >=0 ? "green" : tag.type == 1 ? "#006699" : tag.type == 4 ? "orange" : null;
+        li.innerHTML =
+            `<a href="/pictures/view_posts/0?search_tag=${encodeURIComponent(tag.name)}"
+                title="Аниме картинки с тегом ${tag.name}"
+                class="
+                    ${[1,3,4,5,6].indexOf(tag.type) >= 0 ? "big_tag" : ""}
+                    ${(tag.by !== uploaderName) ? "not_my_tag_border" : ""}
+                    "
+            >
+                ${tag.name}
+            </a>
+            <span>
+                <span class="edit_tag" data-pretag-id="${tag.preId}" data-tag-id="${tag.id}">
+                    ${tag.count >= 1000 ? Math.floor(tag.count/1000) + "K" : tag.count}
+                    <span class="accept" title="Accept"> ✓ </span>
+                    <span class="decline" title="Decline"> ✗ </span>
+                    <span id="edit_span_tag_${tag.id}" class="icon_edit"></span>
+                </span>
+            </span>`;
+        li.firstElementChild.style.backgroundImage =
+            "linear-gradient(to right, transparent 90%, aqua)";
+        li.firstElementChild.style.color =
+            ["","#006699","","green","orange","green","green","",""][tag.type];
         return li;
     }
     function makeCategory(type, elem) {
@@ -243,22 +304,30 @@
     function addPreTags() {
         if (!pretags || document.querySelector(".tags li span.accept")) return;
 
-        const presentedTags = Array.from(document.querySelectorAll(".tags a")).map(a => a.innerText);
+        const presentedTags = Array
+            .from(document.querySelectorAll(".tags a"))
+            .map(a => a.innerText);
         pretags[post_id] = pretags[post_id].filter((tag, i, tags) => {
             try {
                 // accepted presented tags
                 if (presentedTags.indexOf(tag.name) >= 0) {
-                    log(tag.name + " (#" + tag.preId + ") %cautoaccepted", "color: green;");
+                    log(tag.name + " (#" + tag.preId + ") %cautoaccepted", "color: mediumspringgreen;");
                     acceptPreTag(tag.preId);
+                    if (window.opener) {
+                        window.opener.postMessage({cmd: "resolve_pretag", preTagId: tag.preId});
+                    }
                     return false;
                 // decline double tags
                 } else if (tags.findIndex(t => t.name === tag.name) < i) {
-                    log(tag.name + " (#" + tag.preId + ") %cautodeclined", "color: red");
+                    log(tag.name + " (#" + tag.preId + ") %cautodeclined", "color: brown;");
                     deletePreTag(tag.preId);
+                    if (window.opener) {
+                        window.opener.postMessage({cmd: "resolve_pretag", preTagId: tag.preId});
+                    }
                     return false;
                 }
             } catch (msg) {
-                log(tag.name + " (#" + tag.preId + "), %cerror:" + msg);
+                log(tag.name + " (#" + tag.preId + "), %cerror: " + msg, "color: red;");
                 return false;
             }
             return true;
@@ -324,7 +393,9 @@
     }
 
     async function loadModeratingTags() {
-        if (+localStorage["mt_lastUpdate"] + 3600*1000 < new Date().getTime()) await readModeratingTags();
+        if (+localStorage["mt_lastUpdate"] + 3600*1000 < Date.now()) {
+            await readModeratingTags();
+        }
 
         pretags = JSON.parse(localStorage["mt_pretags"] || "{}");
         if (!pretags[post_id]) {
@@ -338,25 +409,28 @@
         document.getElementById("post_tags").addEventListener("click", async function(event){
             const preTagId = event.target.parentNode.getAttribute("data-pretag-id");
             const a = event.target.parentNode.parentNode.previousElementSibling;
-            try {
-                if (event.target.getAttribute("class") == "accept") {
-                    event.target.nextElementSibling.remove();
-                    event.target.remove();
-                    await acceptPreTag(preTagId);
+            if (event.target.getAttribute("class") == "accept") {
+                event.target.nextElementSibling.remove();
+                event.target.remove();
+                acceptPreTag(preTagId).then(() => {
                     log(a.innerText.trim() + " (#" + preTagId + ") %caccepted", "color: green;");
                     scrollTop = document.getElementById("post_tags").scrollTop;
                     AnimePictures.post.refresh_tags();
-                } else if (event.target.getAttribute("class") == "decline") {
-                    event.target.previousElementSibling.remove();
-                    event.target.remove();
-                    await deletePreTag(preTagId);
-                    log(a.innerText.trim() + " (#" + preTagId + ") %cdeclined", "color: red;");
-                } else {
-                    return;
-                }
-            } catch (msg) {
-                alert(msg);
-                log(a.innerText.trim() + " (#" + preTagId + "), %cerror" + msg, "color: red;");
+                }).catch((msg) => {
+                    alert(msg);
+                    log(a.innerText.trim() + " (#" + preTagId + "), %cerror: " + msg, "color: red;");
+                });
+            } else if (event.target.getAttribute("class") == "decline") {
+                event.target.previousElementSibling.remove();
+                event.target.remove();
+                deletePreTag(preTagId).then(() => {
+                    log(a.innerText.trim() + " (#" + preTagId + ") %cdeclined", "color: orange;");
+                }).catch((msg) => {
+                    alert(msg);
+                    log(a.innerText.trim() + " (#" + preTagId + "), %cerror: " + msg, "color: red;");
+                });
+            } else {
+                return;
             }
             const tags = pretags[post_id];
             tags.splice(tags.findIndex(t => t.preId == preTagId), 1);
@@ -364,6 +438,9 @@
                 delete pretags[post_id];
                 localStorage["mt_pretags"] = JSON.stringify(pretags);
                 pretags = null;
+            }
+            if (window.opener) {
+                window.opener.postMessage({cmd: "resolve_pretag", preTagId: preTagId});
             }
         });
 
