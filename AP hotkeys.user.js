@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP hotkeys
 // @namespace    7nik@anime-pictures.net
-// @version      1.3
+// @version      1.3.1
 // @description  Adds support of hotkeys
 // @author       7nik
 // @match        https://anime-pictures.net/*
@@ -363,7 +363,7 @@
     window.registerHotkey = function (hotkey, descr, pages, selectors, action) {
         if (typeof pages == "function") [pages, action] = [null, pages];
         if (typeof selectors == "function") [selectors, action] = [null, selectors];
-        if (pages[0] && pages[0] !== "/") [pages, selectors] = [selectors, pages];
+        if (pages && pages[0] && pages[0] !== "/") [pages, selectors] = [selectors, pages];
         hotkeys.push({
             descr: descr,
             hotkey: hotkey,
