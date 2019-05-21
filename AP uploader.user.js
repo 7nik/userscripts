@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP uploader
 // @namespace    7nik@anime-pictures.net
-// @version      1.1.1
+// @version      1.1.2
 // @description  Uploading without reloading the page + drag'n'drop.
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_add_wall*
@@ -157,18 +157,16 @@
             this._preview = pr;
             this.save();
         }
-        get status() {
-            return this._status;
+        get status() {return this._status;}
+        set status(str) {
+            this._statSpan.innerText = this._status = str;
+            this.save();
         }
         get error() {return this._error;}
         set error(str) {
             this._error = true;
-            this._status = str;
             this.post.classList.add("error");
-            this.save();
-        }
-        set status(str) {
-            this._statSpan.innerText = this._status = str;
+            this.status = str;
         }
         get imgDim() {return this._imgDim;}
         set imgDim(str) {
