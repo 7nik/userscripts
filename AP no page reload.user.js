@@ -25,21 +25,18 @@
             let data = new FormData(form);
             let url = form.action;
             if (method.toUpperCase() === "GET") {
-                for (let pair of data.entries()) {
-                    if (url.indexOf("?") >= 0) {
-                        url += "&" + pair[0] + "=" + pair[1];
-                    } else {
-                        url += "?" + pair[0] + "=" + pair[1];
-                    }
-                }
+                url += (url.includes("?") ? "&" : "?") +
+                    Array.from(data.entries())
+                         .map(pair => pair.join("="))
+                         .join("&");
                 data = null;
             }
             ev.preventDefault();
             fetch(url, { method: method, body: data })
-                .then(resp => resp.text())
+                .then(resp => { if (resp.ok) return resp.text(); else throw resp.status; })
                 .then(html => callback(new DOMParser().parseFromString(html, "text/html")))
                 .catch(onerror);
-        }, true)
+        }, true);
     }
 
     function updateElement(document2, query) {
@@ -73,7 +70,21 @@
                 } else {
                     AnimePictures.post.voting(0);
                 }
-            }, true)
+            }, true);
+        }
+    }
+
+    function updateArtist(dom) {
+        const elem1 = document.querySelector("meta[itemprop='author'] + div");
+        if (!elem1) return;
+        const isArtist1 = !elem1.lastElementChild.id;
+        const elem2 = dom.querySelector("meta[itemprop='author'] + div");
+        const isArtist2 = !elem2.lastElementChild.id;
+        if (elem2 && isArtist2) {
+            elem1.parentElement.insertBefore(elem2, elem1);
+        }
+        if (isArtist1) {
+            elem1.parentElement.removeChild(elem1);
         }
     }
 
@@ -98,22 +109,21 @@
             fetch("/pictures/multi_action", {body: data, method: "POST"})
                 .then(() => AnimePictures.post_list.refresh(window.location, false, false))
                 .catch(onerror);
-        }, true)
+        }, true);
     }
-
 
     // on set picture status
     overrideSubmit("form[action^='/pictures/set_post_status/']", function (dom) {
         updateMessage(dom);
-        updateElement(dom, "#cont > div > .post_content:first-child");
-        updateElement(dom, ".post_content.moderator > div > div");
+        updateElement(dom, "#cont > div > .post_content:first-child"); // post info
+        updateElement(dom, ".post_content.moderator > div > div"); // erotic/spoiler/position
         updateStars(dom);
-        updateElement(dom, "#big_preview_cont + .post_content")
+        updateElement(dom, "#big_preview_cont + .post_content"); // favorities
     });
     // on copy tags
     overrideSubmit("form[action^='/pictures/add_tag_from_post/']", function (dom) {
         document.getElementsByName("from_post")[0].value = "";
-        updateElement(dom, "meta[itemprop='author'] + div");
+        updateArtist(dom);
         updateElement(dom, ".tags");
     });
     // on move comments and stars
@@ -124,11 +134,13 @@
     });
     // on link picture
     overrideSubmit("form[action^='/pictures/add_rel_to_post/']", function (dom) {
-        updateElement(dom, "#cont .post_content .body + .body");
+        document.getElementsByName("rel_post")[0].value = "";
+        updateElement(dom, "#cont .post_content .body + .body"); // linked pictures
     });
     // on unlink picture
     document.addEventListener("click", function (ev) {
-        if (ev.target.tagName !== "A" || !ev.target.href.startsWith("https://anime-pictures.net/pictures/del_rel_to_post/")) {
+        if (ev.target.tagName !== "A" ||
+            !ev.target.href.startsWith("https://anime-pictures.net/pictures/del_rel_to_post/")) {
             return;
         }
         ev.preventDefault();
@@ -137,18 +149,17 @@
             .then(resp => resp.text())
             .then(html => {
                 const dom = new DOMParser().parseFromString(html, "text/html");
-                updateElement(dom, "#cont .post_content .body + .body");
+                updateElement(dom, "#cont .post_content .body + .body"); // linked pictures
             })
             .catch(onerror);
     }, true);
     // on general page reload
-    if (!AnimePictures.hotkeys) return;
-    AnimePictures.hotkeys.push({
-        descr: "refresh page info",
-        hotkey: "Ctrl+R",
-        pages: ["/pictures/view_post"],
-        selectors: [],
-        action: () => fetch(window.location.href)
+    registerHotkey(
+        "refresh page info",
+        "Ctrl+R",
+        null,
+        null,
+        () => fetch(window.location.href)
             .then(resp => resp.text())
             .then(html => {
                 const dom = new DOMParser().parseFromString(html, "text/html");
@@ -160,27 +171,26 @@
                 updateElement(dom, "#cont .post_content .body + .body");
                 // status
                 updateElement(dom, "#cont .post_content.moderator > div > form");
-                setNumType(document.getElementsByName("redirect_id")[0])
+                setNumType(document.getElementsByName("redirect_id")[0]);
                 // erotic level, presence of spoilers
                 updateElement(dom, "#cont .post_content.moderator > div > div");
                 // stars
                 updateStars(dom);
                 // favorited by
-                updateElement(dom, "#big_preview_cont + .post_content")
+                updateElement(dom, "#big_preview_cont + .post_content");
                 let el = document.getElementById("favorite_folder_select");
                 if (el) el.addEventListener("change", AnimePictures.post.set_favorites);
                 // about artist
-                updateElement(dom, "meta[itemprop='author'] + div");
+                updateArtist(dom);
                 // comments
                 updateElement(dom, "#comments");
                 // tags
                 updateElement(dom, ".tags");
-
                 // post list
                 updateElement(dom, "#posts");
             })
             .catch(onerror),
-    });
+    );
     // fix field type
     document.head.appendChild(document.createElement("style")).innerHTML =
         "input[type='number']::-webkit-inner-spin-button { display: none; }";
@@ -192,8 +202,8 @@
             el.setAttribute("placeholder", "Source");
         }
         el.style.color = "black";
-    };
-    setNumType(document.getElementsByName("redirect_id")[0])
+    }
+    setNumType(document.getElementsByName("redirect_id")[0]);
     Array.from(document.getElementsByName("from_post")).forEach(setNumType);
     setNumType(document.getElementsByName("rel_post")[0]);
 })();
