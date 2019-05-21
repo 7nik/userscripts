@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         AP hotkeys
 // @namespace    7nik@anime-pictures.net
-// @version      1.2.1
+// @version      1.3
 // @description  Adds support of hotkeys
 // @author       7nik
 // @match        https://anime-pictures.net/*
-// @run-at       document-end
+// @run-at       document-start
 // @grant        none
 // ==/UserScript==
 
@@ -38,16 +38,17 @@
 
     function showAvailableHotkeys() {
         const html = [`
-<div style="margin:auto">
-    <div class="title">Avaible on this page hotkeys</div>
-    <div class="post_content body" style="margin:0;">
-        <table>`,
-            ...hotkeys
-                .filter((hk) => hk.pages.some((url) => window.location.pathname.startsWith(url)))
-                .map((hk) => `<tr><td>${hk.hotkey}&nbsp;</td><td>&nbsp;${hk.descr}</td></tr>`),
-       `</table>
-    </div>
-</div>`].join("");
+            <div style="margin:auto">
+                <div class="title">Avaible on this page hotkeys</div>
+                <div class="post_content body" style="margin:0;">
+                    <table>`,
+                        ...hotkeys
+                            .filter((hk) => hk.pages.some((url) => window.location.pathname.startsWith(url)))
+                            .map((hk) => `<tr><td>${hk.hotkey}&nbsp;</td><td>&nbsp;${hk.descr}</td></tr>`),
+                   `</table>
+                </div>
+            </div>`
+        ].join("");
 
         const background = document.createElement("div");
         background.innerHTML = html;
@@ -66,7 +67,7 @@
         document.body.appendChild(background);
     }
 
-    const hotkeys = AnimePictures.hotkeys = [
+    const hotkeys = [
         {
             descr: "close this message or unfocus element",
             hotkey: "Escape",
@@ -230,70 +231,81 @@
         }
     ];
 
-    if (document.querySelector(".numeric_pages")) {
-        hotkeys.push(
-            {
-                descr: "go to previous search page",
-                hotkey: "A",
-                pages: ["/"],
-                selectors: [".numeric_pages a:first-child"],
-                action: (element) => element.click(),
-            },
-            {
-                descr: "go to next search page",
-                hotkey: "D",
-                pages: ["/"],
-                selectors: [".numeric_pages a:last-child"],
-                action: (element) => element.click(),
-            }
-        );
-    }
-
-    if (window.is_moderator) {
-        hotkeys.push(
-            {
-                descr: "choose image status NEW",
-                hotkey: "1",
-                pages: ["/pictures/view_post/"],
-                selectors: ["form[action*='set_post_status']"],
-                action: (e) => {e.querySelector("select").value = 0; e.querySelector("[type=submit]").focus();},
-            },
-            {
-                descr: "choose image status PRE",
-                hotkey: "2",
-                pages: ["/pictures/view_post/"],
-                selectors: ["form[action*='set_post_status']"],
-                action: (e) => {e.querySelector("select").value = -2; e.querySelector("[type=submit]").focus();},
-            },
-            {
-                descr: "choose image status PUBLIC",
-                hotkey: "3",
-                pages: ["/pictures/view_post/"],
-                selectors: ["form[action*='set_post_status']"],
-                action: (e) => {e.querySelector("select").value = 1; e.querySelector("[type=submit]").focus();},
-            },
-            {
-                descr: "choose image status BAN",
-                hotkey: "4",
-                pages: ["/pictures/view_post/"],
-                selectors: ["form[action*='set_post_status']"],
-                action: (e) => {e.querySelector("select").value = 2; e.querySelector("[name=status_type]").focus();},
-            },
-            {
-                descr: "(add) focus on an input field for tag copying",
-                hotkey: "Shift+A",
-                pages: ["/pictures/view_post/"],
-                selectors: ["input[name='from_post']"],
-                action: (e) => e.focus(),
-            },
-            {
-                descr: "(link) focus on an input field for picture linking",
-                hotkey: "L",
-                pages: ["/pictures/view_post/"],
-                selectors: ["input[name='rel_post']"],
-                action: (e) => e.focus(),
-            }
-        );
+    function init() {
+        if (document.querySelector(".numeric_pages")) {
+            hotkeys.push(
+                {
+                    descr: "go to previous search page",
+                    hotkey: "A",
+                    pages: ["/"],
+                    selectors: [".numeric_pages a:first-child"],
+                    action: (element) => element.click(),
+                },
+                {
+                    descr: "go to next search page",
+                    hotkey: "D",
+                    pages: ["/"],
+                    selectors: [".numeric_pages a:last-child"],
+                    action: (element) => element.click(),
+                }
+            );
+        }
+        if (window.is_moderator) {
+            hotkeys.push(
+                {
+                    descr: "choose image status NEW",
+                    hotkey: "1",
+                    pages: ["/pictures/view_post/"],
+                    selectors: ["form[action*='set_post_status']"],
+                    action: (e) => {e.querySelector("select").value = 0; e.querySelector("[type=submit]").focus();},
+                },
+                {
+                    descr: "choose image status PRE",
+                    hotkey: "2",
+                    pages: ["/pictures/view_post/"],
+                    selectors: ["form[action*='set_post_status']"],
+                    action: (e) => {e.querySelector("select").value = -2; e.querySelector("[type=submit]").focus();},
+                },
+                {
+                    descr: "choose image status PUBLIC",
+                    hotkey: "3",
+                    pages: ["/pictures/view_post/"],
+                    selectors: ["form[action*='set_post_status']"],
+                    action: (e) => {e.querySelector("select").value = 1; e.querySelector("[type=submit]").focus();},
+                },
+                {
+                    descr: "choose image status BAN",
+                    hotkey: "4",
+                    pages: ["/pictures/view_post/"],
+                    selectors: ["form[action*='set_post_status']"],
+                    action: (e) => {e.querySelector("select").value = 2; e.querySelector("[name=status_type]").focus();},
+                },
+                {
+                    descr: "(add) focus on an input field for tag copying",
+                    hotkey: "Shift+A",
+                    pages: ["/pictures/view_post/"],
+                    selectors: ["input[name='from_post']"],
+                    action: (e) => e.focus(),
+                },
+                {
+                    descr: "(link) focus on an input field for picture linking",
+                    hotkey: "L",
+                    pages: ["/pictures/view_post/"],
+                    selectors: ["input[name='rel_post']"],
+                    action: (e) => e.focus(),
+                }
+            );
+        }
+        // add a link to show avaible for current page hotkeys
+        if (document.querySelector("#footer span")) {
+            document.querySelector("#footer span").innerHTML += ", <a id='show_hotkeys' href='#' style='color:white;'>shortcuts</a>";
+            document.getElementById("show_hotkeys").onclick = function (event) {
+                this.blur(); // remove focus from #show_hotkeys to avoid double pressing Escape to close the message
+                event.preventDefault();
+                event.stopPropagation();
+                showAvailableHotkeys();
+            };
+        }
     }
 
     document.addEventListener("keydown", function (event) {
@@ -342,14 +354,19 @@
         }
     });
 
-    // add a link to show avaible for current page hotkeys
-    if (document.querySelector("#footer span")) {
-        document.querySelector("#footer span").innerHTML += ", <a id='show_hotkeys' href='#' style='color:white;'>shortcuts</a>";
-        document.getElementById("show_hotkeys").onclick = function (event) {
-            this.blur(); // remove focus from #show_hotkeys to avoid double pressing Escape to close the message
-            event.preventDefault();
-            event.stopPropagation();
-            showAvailableHotkeys();
-        };
+    if (document.readyState == "loading") {
+        document.addEventListener("DOMContentLoaded", init);
+    } else {
+        init();
     }
+
+    window.registerHotkey = function (descr, hotkey, pages, selectors, action) {
+        hotkeys.push({
+            descr: descr,
+            hotkey: hotkey,
+            pages: pages || ["/"],
+            selectors: selectors || [],
+            action: action,
+        });
+    };
 })();
