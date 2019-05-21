@@ -1,11 +1,11 @@
 // ==UserScript==
 // @name         AP meta-tags
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.1
+// @version      1.0.2
 // @description  moves some tags and cosplay tags into separate section
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*
-// @grant        none
+// @grant        GM_addStyle
 // ==/UserScript==
 
 (function () {
@@ -43,24 +43,23 @@
         if (!tags.length) return;
 
         const span = document.querySelector("#post_tags li[class='']").previousElementSibling;
-        span.insertAdjacentHTML("beforeBegin",
-            `<style>
-                .tags li.purple a {
-                    color: #870fff;
-                }
-                .tags li.purple a + span {
-                    border-color: #9c60d7 #9658d5 #8f4bd2;
-                    background-image: linear-gradient(to bottom, #bd95e4, #a36cda);
-                }
-            </style>
-            <span>meta tags</tags>`
-        );
+        span.insertAdjacentHTML("beforeBegin", "<span>meta tags</span>");
         tags.forEach(tag => {
             tag.className = "purple";
             tag.firstElementChild.className += " big_tag";
             span.parentElement.insertBefore(tag, span);
         });
     }
+
+    GM_addStyle(
+        `.tags li.purple a {
+            color: #870fff;
+        }
+        .tags li.purple a + span {
+            border-color: #9c60d7 #9658d5 #8f4bd2;
+            background-image: linear-gradient(to bottom, #bd95e4, #a36cda);
+        }`
+    );
 
     new MutationObserver(function(mutations) {
         makeTagsMeta();
