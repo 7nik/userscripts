@@ -1,29 +1,34 @@
 // ==UserScript==
 // @name         AP FullHD
 // @namespace    7nik@anime-pictures.net
-// @version      1.1
+// @version      1.1.1
 // @description  Makes almost everything visible in a brower window when it is maximazed
 // @author       7nik
 // @match        https://anime-pictures.net/*
 // @run-at       document-start
-// @grant        none
+// @grant        GM_addStyle
 // ==/UserScript==
 
 (function() {
     'use strict';
 
-    document.head.appendChild(document.createElement("style")).innerHTML = `
+    GM_addStyle(`
         #body_wrapper {
             min-height: calc(100vh - 186px);
         }
         div#cont.cont_view_post > div[itemscope]:first-child:not(#part0) {
             grid-area: 1/3 / 3/4;
+            display: flex !important;
+            flex-direction: column;
+        }
+        div#cont.cont_view_post > div[itemscope]:first-child:not(#part0) > :first-child {
+            display: none;
         }
         #part1 {
             display: flex;
             flex-direction: column;
         }
-        #part1 > .post_content:not(.moderator) {
+        div[itemscope] > .post_content:not(.moderator), #part1 > .post_content:not(.moderator) {
             order: 1;
         }
         textarea#comment_text {
@@ -31,7 +36,7 @@
             max-width: 100%;
             box-sizing: border-box;
         }
-        .comment_block td:nth-child(2) {
+        #comments td:nth-child(2) {
             border-right: none; /* I think this border is excess */
         }
         #sidebar > div[style] {
@@ -77,6 +82,7 @@
             div#cont.cont_view_post > div:first-child:not(#part0) {
                 grid-area: 1 / span 3;
                 width: 100%;
+                text-align: center;
             }
             #cont > #part0 {
                 grid-area: 2 / 1;
@@ -87,7 +93,10 @@
             #cont > #part2 {
                 grid-area: 3 / 1;
             }
-            #cont.cont_view_post > * > div {
+            #cont.cont_view_post > div:not(.post_content) {
+                width: 640px !important;
+            }
+            #cont.cont_view_post > * > div:not(.body) {
                 width: 640px !important;
                 margin: 0 0 10px 0;
             }
@@ -148,7 +157,7 @@
                 left: calc((1891px - 100vw) / 3 - 296px);
             }
         }
-    `;
+    `);
 
     document.addEventListener("DOMContentLoaded", function () {
         if (document.querySelector("#cont.cont_view_post")) {
