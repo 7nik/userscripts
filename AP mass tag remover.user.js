@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP mass tag remover
 // @namespace    7nik@anime-pictures.net
-// @version      1.1
+// @version      1.1.1
 // @description  Add button to remove tag from multiple pictures
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_posts/*
@@ -123,7 +123,8 @@
             say(`Done ${doneCounter++} of ${postCount}`);
             await removeTags(tagIds, postId);
         }
-        console.log(`took ${Date.now() - startTime} ms, ${Math.round(time/postCount)} ms per post`);
+        const time = Date.now() - startTime;
+        console.log(`took ${time} ms, ${Math.round(time/postCount)} ms per post`);
         say("Done");
         setTimeout(() => {
             AnimePictures.post_list.refresh(window.location.pathname + window.location.search);
