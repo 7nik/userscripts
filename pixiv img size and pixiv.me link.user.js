@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         pixiv img size and pixiv.me link
 // @namespace    http://tampermonkey.net/
-// @version      1.2.4
+// @version      1.2.5
 // @description  Add size of the illustrations and direct links to them.
 // @author       7nik
 // @match        https://www.pixiv.net/member_illust.php*
@@ -63,7 +63,7 @@
 
             // https://www.pixiv.net/member_illust.php?mode=medium&illust_id=
             // add link into post description
-            cont = document.querySelector("figure section");
+            cont = document.querySelector("figure ~ div section");
             if (cont && !has(cont, "div > a:not([class])")) {
                 div = document.createElement("div");
                 div.style.position = "absolute";
@@ -80,7 +80,7 @@
 
             // https://www.pixiv.net/member_illust.php?mode=medium&illust_id=
             // add links below image for mutli-page posts
-            cont = document.querySelectorAll("figure > div[role] > div.hSFWCP > div[role]");
+            cont = document.querySelectorAll("figure > div[role] > div > div[role]");
             if (cont.length && data.length>1 && !has(cont[0], "a:not([class])")) {
                 for (let i = 0; i < cont.length; i++) {
                     a = document.createElement("a");
@@ -96,6 +96,8 @@
                 }
             }
 
+            // https://www.pixiv.net/member_illust.php?mode=medium&illust_id=
+            // add links under previews on mutli-page posts
             cont = document.querySelectorAll("body > div[role] img, body > div[role] figure");
             if (cont.length && !has(cont[0].parentElement, "a")) {
                 for (let i = 0; i < cont.length; i++) {
@@ -108,39 +110,6 @@
                     cont[i].parentElement.style.flexDirection = "column";
                     cont[i].parentElement.parentElement.style.marginBottom = "20px";
                 }
-            }
-
-            // https://www.pixiv.net/member_illust.php?mode=manga&illust_id=
-            // side links
-            cont = document.getElementsByClassName("item-container");
-            if (cont.length && !has(cont[0], "a[style]")) {
-                for (let i = 0; i < cont.length; i++) {
-                    a = document.createElement("a");
-                    a.style.display = "inline-block";
-                    a.style.verticalAlign = "top";
-                    a.style.margin = "5px 5px 0 0";
-                    a.style.width = 0;
-                    a.style.direction = "rtl";
-                    // a.style.fontSize = "14px";
-                    a.href = data[i].urls.original;
-                    a.innerText = data[i].width + "x" + data[i].height;
-                    cont[i].insertBefore(a, cont[i].firstElementChild);
-                }
-            }
-
-            // https://www.pixiv.net/member_illust.php?mode=manga&illust_id=
-            // links under thumbnails
-            cont = document.querySelectorAll(".thumbnail-item:not(.footer-item)");
-            if (cont.length && !has(cont[0], "a")) {
-                for (let i = 0; i < cont.length; i++) {
-                    a = document.createElement("a");
-                    a.style.display = "block";
-                    a.style.textAlign = "center";
-                    a.href = data[i].urls.original;
-                    a.innerText = data[i].width + "x" + data[i].height;
-                    cont[i].appendChild(a);
-                }
-                cont[0].parentElement.lastElementChild.style.marginBottom = "24px";
             }
         }
 
@@ -174,8 +143,6 @@
     }
 
     onElementsAdded("h1.VyO6wL2", addPixivme);
-    onElementsAdded(".thumbnail-item", addSize);
-    onElementsAdded("div.dCQVle", addSize); // ???
     onElementsAdded("div.gtm-medium-work-expanded-view", addSize);
     onElementsAdded("section", addSize);
     onElementsAdded("div[role]", aadSize);
