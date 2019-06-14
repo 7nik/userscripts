@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP no page reload
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.2
+// @version      1.0.3
 // @description  Now mod actions on a post don't cause page reloading
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_post/*
@@ -88,6 +88,13 @@
         }
     }
 
+    function updateFavorities(dom) {
+        updateElement(dom, "#big_preview_cont + .post_content");
+        // add event listener back
+        let el = document.getElementById("favorite_folder_select");
+        if (el) el.addEventListener("change", AnimePictures.post.set_favorites);
+    }
+
     // multiaction on search page
     if (document.getElementById("multi_add_tags")) {
         const oldBtn = document.getElementById("multi_add_tags");
@@ -130,6 +137,7 @@
     overrideSubmit("form[action^='/pictures/move_comment_favorites_scores/']", function (dom) {
         document.getElementsByName("from_post")[1].value = "";
         updateStars(dom);
+        updateFavorities(dom);
         updateElement(dom, "#comments");
     });
     // on link picture
@@ -175,9 +183,7 @@
                 // stars
                 updateStars(dom);
                 // favorited by
-                updateElement(dom, "#big_preview_cont + .post_content");
-                let el = document.getElementById("favorite_folder_select");
-                if (el) el.addEventListener("change", AnimePictures.post.set_favorites);
+                updateFavorities(dom);
                 // about artist
                 updateArtist(dom);
                 // comments
