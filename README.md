@@ -2,7 +2,7 @@
 
 ## AP FullHD
 
-Resettles elements on the post page so almost all of them are visible without scrolling.  
+Resettles elements on the post page so almost all of them are visible without scrolling.
 
 ![image](https://user-images.githubusercontent.com/29704098/51788400-65470c00-2186-11e9-8a15-36e173ac761f.png)
 
@@ -29,7 +29,7 @@ If a query to the server became too long then cursor type changes to loading typ
 
 ## AP meta-tags
 
-Adds section with meta tags: 
+Adds section with meta tags:
 
 * scan
 * vector
@@ -39,14 +39,14 @@ Adds section with meta tags:
 * spoiler
 * collaboration
 * revision
-* borrowed character 
+* borrowed character
 * cosplay tags
 
 ![image](https://user-images.githubusercontent.com/29704098/51788619-bfe16780-2188-11e9-9c2a-521a9b3bc4ef.png)
 
 ## AP no page reload
 
-Now moderators actions don't cause page reload. 
+Now moderators actions don't cause page reload.
 
 ## AP uploader
 
@@ -82,7 +82,7 @@ Displays recommended tags directly on the post page
 
 Allows you replace one tag with another. Hotkey - R.
 
-## VK poster 
+## VK poster
 
 Allows you make a post in [VK group](https://vk.com/mjvart) if you are it's moderator.
 
@@ -96,6 +96,7 @@ Allows you make a post in [VK group](https://vk.com/mjvart) if you are it's mode
 
 Adds drag'n'drop for IQDB and SauceNAO
 
+Also allows to overcome the file size limit.
 
 
 # NeonMob
@@ -124,7 +125,7 @@ Adds a line with collection progress of both users.
 
 Collection progress is a link to the collection.
 
-Turns series name to a link to it. 
+Turns series name to a link to it.
 
 ![image](https://user-images.githubusercontent.com/29704098/55435803-4eb49b00-55a3-11e9-86dd-c0f84d2e3edc.png)
 
