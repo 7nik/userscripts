@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP uploader
 // @namespace    7nik@anime-pictures.net
-// @version      1.1.2
+// @version      1.1.3
 // @description  Uploading without reloading the page + drag'n'drop.
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_add_wall*
@@ -45,6 +45,7 @@
             pending: "Ожидание",
             noSlots: "Нет свободных слотов",
             bigFile: "Файл слишком большой",
+            smallDimension: "Разрешение слишком маленькое",
             processing: "Обработка",
             dublicate: "Дубликат",
             netError: "Ошибка сети",
@@ -76,6 +77,7 @@
             pending: "Pending",
             noSlots: "No free slots",
             bigFile: "File is too big",
+            smallDimension: "Dimension is too small",
             processing: "Processing",
             dublicate: "Dublicate",
             netError: "Network error",
@@ -121,7 +123,7 @@
             this._prog1 = this.getEl(".img_block_text");
             this._prog2 = this.getEl("div > div");
             previewer.run(this);
-            uploader.run(this);
+            // uploader.run(this);
             this.save();
         }
 
@@ -260,6 +262,8 @@
                 p.color = rgb;
                 p.preview = canvas.toDataURL("image/jpeg", 0.8);
 
+                uploader.run(p);
+
                 self._working = false;
                 self.run();
             };
@@ -297,6 +301,13 @@
                 return;
             }
 
+            if (p.imgDim.match(/\d+/g).some(size => +size < 800)) {
+                p.error = TEXT.smallDimension;
+                self._working = false;
+                self.run();
+                return;
+            }
+
             const xhr = new XMLHttpRequest();
             xhr.upload.addEventListener("progress", function(ev) {
                 p.progress = (ev.loaded / ev.total * 100);
@@ -307,10 +318,10 @@
                     const cont = document.createRange()
                         .createContextualFragment(xhr.responseText)
                         .querySelector(".post_content");
-                    p.url = cont.querySelector("a").href;
-                    p.preview = cont.querySelector("img").src;
-                    if (cont.querySelector(".body span[style='color: red;']")) {
+                    if (cont.querySelector(".body span[style='color: red;'] ~ .img_block2")) {
                         p.error = TEXT.dublicate;
+                        p.url = cont.querySelector("a").href;
+                        p.preview = cont.querySelector("img").src;
                     } else if (cont.querySelector("form span[style='color: red;']")) {
                         p.error = TEXT.noSlots;
                         self._freeSlots = 0;
@@ -318,6 +329,8 @@
                             TEXT.slots(self._totalSlots - self._freeSlots, self._freeSlots);
                     } else {
                         p.status = cont.querySelector(".img_block_text").lastChild.textContent;
+                        p.url = cont.querySelector("a").href;
+                        p.preview = cont.querySelector("img").src;
                         self._freeSlots--;
                         document.getElementById("slot_status").innerText =
                             TEXT.slots(self._totalSlots - self._freeSlots, self._freeSlots);
