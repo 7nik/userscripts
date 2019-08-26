@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP tag replacer
 // @namespace    7nik@anime-pictures.net
-// @version      0.1.1
+// @version      0.1.2
 // @description  Add button and hotkey to add and/or remove a tag
 // @author       You
 // @match        https://anime-pictures.net/pictures/view_post/*
@@ -14,9 +14,9 @@
 (function() {
     'use strict';
 
-    let add_tag_name = "", add_tag_id = 73131;
-    let remove_tag_name = "", remove_tag_id = 73131;
-    let close_window = 1, go_next_pic = -1; // 1 = right, -1 = left
+    let add_tag_name = "", add_tag_id = 159422;
+    let remove_tag_name = "", remove_tag_id = 60811;
+    let close_window = 0, go_next_pic = 1; // 1 = right, -1 = left
 
     function finish() {
         get_by_id("replace_tag").style.display = "none";
@@ -86,11 +86,11 @@
     }
     if (!add_tag_name && !remove_tag_name) return; // nothing to add or remove
 
-    get_by_id("add_tag_s").insertAdjacentHTML(
+    get_by_id("add_tag_submit").insertAdjacentHTML(
         "beforeBegin",
         `<input type="button"
                 id="replace_tag"
-                style="margin:3px 0;"
+                style="margin: 3px 3px 3px 0;"
                 value="${remove_tag_name} → ${add_tag_name}"
         />`);
     get_by_id("replace_tag").onclick = start;
