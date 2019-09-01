@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP uploader
 // @namespace    7nik@anime-pictures.net
-// @version      1.1.3
+// @version      1.1.4
 // @description  Uploading without reloading the page + drag'n'drop.
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_add_wall*
@@ -301,7 +301,7 @@
                 return;
             }
 
-            if (p.imgDim.match(/\d+/g).some(size => +size < 800)) {
+            if (p.imgDim.match(/\d+/g).every(size => +size < 800)) {
                 p.error = TEXT.smallDimension;
                 self._working = false;
                 self.run();
