@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP uploader
 // @namespace    7nik@anime-pictures.net
-// @version      1.1.4
+// @version      1.1.5
 // @description  Uploading without reloading the page + drag'n'drop.
 // @author       7nik
 // @match        https://anime-pictures.net/pictures/view_add_wall*
@@ -274,8 +274,8 @@
     const uploader = {
         _order: [],
         _working: false,
-        _totalSlots: document.querySelector(".post_content .body").firstChild.textContent.match(/\d+/g).reduce((s,n) => +s + +n),
-        _freeSlots: +document.querySelector(".post_content .body").firstChild.textContent.match(/(\d+)\./)[1],
+        _totalSlots: document.querySelector(".post_content .body").firstElementChild.textContent.match(/\d+/g).reduce((s,n) => +s + +n),
+        _freeSlots: +document.querySelector(".post_content .body").firstElementChild.textContent.match(/(\d+)\./)[1],
 
         run: function(post) {
             const self = this;
@@ -354,7 +354,7 @@
 
     // replace "You have # unproven pictures you can still upload #." with editable version.
     const b = document.querySelector(".post_content .body");
-    b.removeChild(b.firstChild);
+    b.removeChild(b.firstElementChild);
     const s = document.createElement("span");
     s.id = "slot_status";
     s.innerHTML = TEXT.slots(uploader._totalSlots - uploader._freeSlots, uploader._freeSlots);
@@ -441,12 +441,12 @@
 
     // restore posts
     window.addEventListener("popstate", async function (ev) {
-        if (!ev.state) return;
+        if (!ev.state || !history.state.length) return;
         for (let post of history.state) {
             await Post.restore(post, posts);
         }
     });
-    if (history.state) {
+    if (history.state && history.state.length) {
         (async () => {
             for (let post of history.state) {
                 await Post.restore(post, posts);
