@@ -2,6 +2,10 @@
 // @version      1.2
 // @description  Adds enhancements to the trading window
 // @author       7nik
+// @homepageURL  https://github.com/7nik/userscripts
+// @supportURL   https://github.com/7nik/userscripts/issues
+// @updateURL    https://github.com/7nik/userscripts/raw/master/NM%20trade%20enhancement.user.js
+// @downloadURL  https://github.com/7nik/userscripts/raw/master/NM%20trade%20enhancement.user.js
 // @match        https://www.neonmob.com/*
 // @grant        GM_addStyle
 // @require      https://github.com/rafaelw/mutation-summary/raw/master/src/mutation-summary.js
