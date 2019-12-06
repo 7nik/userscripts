@@ -1,5 +1,5 @@
 // @namespace    7nik
-// @version      1.2
+// @version      1.2.1
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -409,7 +409,7 @@ async function addCardFilter (side) {
     newSeriesList.insertAdjacentHTML(
         "afterbegin",
         Object.entries(CF_LABELS)
-            .filter((state, label) => label)
+            .filter(([state, label]) => label)
             .map(([state, label]) => `<option value="${state}">${label}</option>`)
             .join(""),
     );
