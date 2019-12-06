@@ -1,5 +1,5 @@
 // @namespace    7nik
-// @version      1.2.1
+// @version      1.2.2
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -427,7 +427,7 @@ async function addCardFilter (side) {
             newSeriesList.value = 0;
         }
         // if selected filter
-        if (CF_LABELS[newSeriesList.value]) {
+        if (newSeriesList.value in CF_LABELS) {
             currentState = newSeriesList.value;
             origSeriesList.value = 0;
 
@@ -441,7 +441,7 @@ async function addCardFilter (side) {
             }
         } else {
             // eslint-disable-next-line prefer-destructuring
-            currentState = CF_STATES[CF_STATES.length - 1];
+            currentState = CF_STATES[newSeriesList.value === "0" ? 0 : CF_STATES.length - 1];
             origSeriesList.value = newSeriesList.value;
         }
         updateHiddenSeriesList();
