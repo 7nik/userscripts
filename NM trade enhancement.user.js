@@ -1,5 +1,5 @@
 // @namespace    7nik
-// @version      1.2.2
+// @version      1.2.3
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -107,8 +107,8 @@ GM_addStyle(`
         to {opacity: 1;}
     }
 
-    .tooltip {
-        max-width: 300px;
+    .tooltip .tooltip-inner {
+        max-width: 250px;
     }
     .tooltip .i {
         width: 18px;
@@ -406,6 +406,13 @@ async function addCardFilter (side) {
 
     // "replace" original <select> with customized one
     const newSeriesList = origSeriesList.cloneNode(true);
+    // sometimes here is no the empty option so add it if needed
+    if (newSeriesList.firstElementChild.value !== "") {
+        newSeriesList.insertAdjacentHTML(
+            "afterbegin",
+            `<option value="" label=""></option>`,
+        );
+    }
     newSeriesList.insertAdjacentHTML(
         "afterbegin",
         Object.entries(CF_LABELS)
@@ -419,8 +426,7 @@ async function addCardFilter (side) {
     Array.from(newSeriesList.classList)
         .filter((name) => name.startsWith("ng-"))
         .forEach((name) => newSeriesList.classList.remove(name));
-    newSeriesList.classList.remove("series");
-    newSeriesList.classList.add("customSeries");
+    newSeriesList.classList.replace("series", "customSeries");
     newSeriesList.addEventListener("change", () => {
         // if selected the empty option, change it to "Choose a Series"
         if (newSeriesList.value === "") {
@@ -440,7 +446,6 @@ async function addCardFilter (side) {
                 side.querySelector("#trade--search--empty").remove();
             }
         } else {
-            // eslint-disable-next-line prefer-destructuring
             currentState = CF_STATES[newSeriesList.value === "0" ? 0 : CF_STATES.length - 1];
             origSeriesList.value = newSeriesList.value;
         }
