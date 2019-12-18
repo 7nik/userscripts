@@ -1,3 +1,5 @@
+// ==UserScript==
+// @name         NM trade enhancement
 // @namespace    7nik
 // @version      1.2.3
 // @description  Adds enhancements to the trading window
