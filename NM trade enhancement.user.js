@@ -1,5 +1,5 @@
 // @namespace    7nik
-// @version      1.2.3
+// @version      1.2.4
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -413,6 +413,9 @@ async function addCardFilter (side) {
             `<option value="" label=""></option>`,
         );
     }
+    // remove trailing spaces in series names
+    newSeriesList.querySelectorAll("[label$=' ']")
+        .forEach((option) => option.setAttribute("label", option.getAttribute("label").trim()));
     newSeriesList.insertAdjacentHTML(
         "afterbegin",
         Object.entries(CF_LABELS)
