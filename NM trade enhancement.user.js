@@ -156,8 +156,8 @@ GM_addStyle(`
 
 /**
  * API call to server
- * @param  {("api"|"napi"|"root")} type Which API scheme use
- * @param  {string} url Relative URL to API
+ * @param  {("api"|"napi"|"root")} type - Which API scheme use
+ * @param  {string} url - Relative URL to API
  * @return {Promise<Object>} Parsed JSON response
  */
 function api (type, url) {
@@ -173,9 +173,9 @@ function api (type, url) {
 
 /**
  * Will call the callback for existing and added elements which match the selector
- * @param  {HTMLElement} rootNode In whose subtree wait for the elements
- * @param  {string} selector Selector of the target elements
- * @param  {Function} callback Callback applied to the elements
+ * @param  {HTMLElement} rootNode - In whose subtree wait for the elements
+ * @param  {string} selector - Selector of the target elements
+ * @param  {function(HTMLElement): undefined} callback - Callback applied to the elements
  */
 function forAllElements (rootNode, selector, callback) {
     rootNode.querySelectorAll(selector).forEach(callback);
@@ -188,9 +188,9 @@ function forAllElements (rootNode, selector, callback) {
 
 /**
  * Returns a promise which will be resolved when the element appears
- * @param  {HTMLElement} rootNode In whose subtree wait for the element
- * @param  {string} selector Selector of the target element
- * @return {Promise<HTMLElement>} Promise that will return the element
+ * @param  {HTMLElement} rootNode - In whose subtree wait for the element
+ * @param  {string} selector - Selector of the target element
+ * @return {Promise<HTMLElement>} The added element
  */
 function waitForElement (rootNode, selector) {
     const element = rootNode.querySelector(selector);
@@ -210,7 +210,7 @@ function waitForElement (rootNode, selector) {
 
 /**
  * Gets and caches info about a series by its id
- * @param  {number|string} settId series id
+ * @param  {(number|string)} settId - Series id
  * @return {Promise<Object>} series info
  */
 function getSeriesInfo (settId) {
@@ -232,6 +232,10 @@ const CF_LABELS = {
 };
 const CF_STATES = Reflect.ownKeys(CF_LABELS);
 
+/**
+ * Triggers loading next cards or displaying message if there is no cards at all
+ * @param  {HTMLElement} card - <li.trade--item>
+ */
 function scrollCardList (card) {
     // trigger loading next cards if no scrollbars and user can't do it itself
     const list = card.closest("#print-list");
@@ -278,8 +282,8 @@ function scrollCardList (card) {
 
 /**
  * Shows or hides the card depending on the state
- * @param  {HTMLElement} card <li.trade--item>
- * @param  {string} state A value from CCF_STATES
+ * @param  {HTMLElement} card - <li.trade--item>
+ * @param  {string} state - A value from CF_STATES
  */
 function applyCardFilter (card, state, hiddenSeries) {
     card.classList.remove("hidden-item");
@@ -354,7 +358,7 @@ function applyCardFilter (card, state, hiddenSeries) {
 
 /**
  * Adds filter to one side of trade window
- * @param {HTMLElement} side <div.trade--add-items>
+ * @param {HTMLElement} side - <div.trade--add-items>
  */
 async function addCardFilter (side) {
     if (!side) return;
@@ -521,15 +525,15 @@ async function addCardFilter (side) {
 
 /**
  * @typedef {Object} UserData
- * @property {string} name User name
- * @property {string} link Link to user profile
- * @property {Object} profile User profile
- * @property {Object} setts Map of user collections
+ * @property {string} name - User name
+ * @property {string} link - Link to user profile
+ * @property {Object} profile - User profile
+ * @property {Object} setts - Map of user collections
  */
 /**
  * Gather user's info into one object
- * @param  {Object} profile User profile
- * @param  {string=} name User name to display
+ * @param  {Object} profile - User profile
+ * @param  {string=} name - User name to display
  * @return {Promise<UserData>} User data
  */
 async function getUserData (profile, name = profile.first_name) {
@@ -552,9 +556,9 @@ async function getUserData (profile, name = profile.first_name) {
 }
 
 /**
- * Returns an <a> with link to the collection and the collection progress at tooltip
- * @param  {UserData} user User data
- * @param  {HTMLElement} card <li.trade--item>
+ * Returns an <a> with link to the collection and the collection progress at its tooltip
+ * @param  {UserData} user - User data
+ * @param  {HTMLElement} card - <li.trade--item>
  * @return {HTMLElement} <a>
  */
 function getCollectionStats (user, card) {
@@ -595,9 +599,9 @@ function getCollectionStats (user, card) {
 
 /**
  * Adds to card your and partner's collection progress
- * @param {UserData} you Your data
- * @param {UserData} partner Partner data
- * @param {HTMLElement} card <li.trade--item>
+ * @param {UserData} you - Your data
+ * @param {UserData} partner - Partner data
+ * @param {HTMLElement} card - <li.trade--item>
  */
 function addCollectionProgress (you, partner, card) {
     const rarity = card.querySelector("dt:nth-of-type(3)");
@@ -613,9 +617,9 @@ function addCollectionProgress (you, partner, card) {
 
 /**
  * Turns name of sett to link to user's collection
- * @param {UserData} user1 User1 data
- * @param {UserData} user2 User2 data
- * @param {HTMLElement} card <li.trade--item>
+ * @param {UserData} user1 - User1 data
+ * @param {UserData} user2 - User2 data
+ * @param {HTMLElement} card - <li.trade--item>
  */
 function addLinkToSett (user1, user2, card) {
     const dd = card.querySelector("dd:nth-of-type(2)");
@@ -634,7 +638,7 @@ function addLinkToSett (user1, user2, card) {
 
 /**
  * Adds button before the <select> to resets it
- * @param {HTMLElement} select The <select> element
+ * @param {HTMLElement} select - The <select> element
  */
 function addResetSeries (select) {
     const span = document.createElement("span");
@@ -650,7 +654,7 @@ function addResetSeries (select) {
 
 /**
  * Apply enhancement to the trade window
- * @param {HTMLElement} tradeWindow <div.nm-modal.trade>
+ * @param {HTMLElement} tradeWindow - <div.nm-modal.trade>
  */
 async function addEnhancements (tradeWindow) {
     forAllElements(tradeWindow, ".trade--add-items", addCardFilter);
@@ -670,7 +674,7 @@ async function addEnhancements (tradeWindow) {
 
 /**
  * Adds how ago was last action of the user
- * @param {HTMLElement} header div.nm-conversation--header
+ * @param {HTMLElement} header - <div.nm-conversation--header>
  */
 async function addLastActionAgo (header, watchForChanges = true) {
     const userId = angular.element(header).scope().recipient.id;
