@@ -473,7 +473,7 @@ async function addCardFilter (side) {
     });
     // div#print-list is re-created at any change of the filters
     forAllElements(side, "#print-list", (printList) => {
-        printList.insertAdjacentElement("afterbegin", hiddenSeriesElem);
+        printList.prepend(hiddenSeriesElem);
     });
 
     // auto-apply filter to new cards
@@ -600,16 +600,15 @@ function getCollectionStats (user, card) {
  * @param {HTMLElement} card <li.trade--item>
  */
 function addCollectionProgress (you, partner, card) {
-    const cardInfo = card.querySelector(".trade--item--meta");
     const rarity = card.querySelector("dt:nth-of-type(3)");
     const dt = document.createElement("dt");
     dt.className = "small-caps";
     dt.textContent = "Collected";
-    cardInfo.insertBefore(dt, rarity);
+    rarity.before(dt);
     const dd = document.createElement("dd");
     dd.className = "collected-cards";
     dd.append(getCollectionStats(you, card), ", ", getCollectionStats(partner, card));
-    cardInfo.insertBefore(dd, rarity);
+    rarity.before(dd);
 }
 
 /**
@@ -695,9 +694,9 @@ async function addLastActionAgo (header, watchForChanges = true) {
     });
 }
 
-//------------------------
-// Program execution start
-//------------------------
+// =============================================================================
+//                         Program execution start
+// =============================================================================
 
 forAllElements(document, "div.nm-modal.trade", addEnhancements);
 forAllElements(document, "div.nm-conversation--header", addLastActionAgo);
