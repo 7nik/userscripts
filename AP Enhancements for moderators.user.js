@@ -4,6 +4,10 @@
 // @version      1.0.0
 // @description  Makes everything great! Moderator edition
 // @author       7nik
+// @homepageURL  https://github.com/7nik/userscripts
+// @supportURL   https://github.com/7nik/userscripts/issues
+// @updateURL    https://github.com/7nik/userscripts/raw/master/AP%20Enhancements%20for%20moderators.user.js
+// @downloadURL  https://github.com/7nik/userscripts/raw/master/AP%20Enhancements%20for%20moderators.user.js
 // @match        https://anime-pictures.net/*
 // @exclude      https://anime-pictures.net/chat*
 // @run-at       document-start
@@ -17,8 +21,8 @@
 /* global post_id AnimePictures */
 
 // variables of the AP Enhancements for users
-/* global NO_TAG PAGES SETTINGS TEXT hotkeys pageIs */
-/* global ajax fixedNewTabLink getElem getAllElems getTagInfo newElem newTagInput
+/* global NO_TAG PAGES SETTINGS TEXT hotkeys pageIs
+    ajax fixedNewTabLink getElem getAllElems getTagInfo newElem newTagInput
     newTagItem onready say */
 
 /* eslint-disable sonarjs/no-duplicate-string, sonarjs/cognitive-complexity */

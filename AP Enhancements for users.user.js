@@ -4,6 +4,10 @@
 // @version      1.0.1
 // @description  Makes everything great!
 // @author       7nik
+// @homepageURL  https://github.com/7nik/userscripts
+// @supportURL   https://github.com/7nik/userscripts/issues
+// @updateURL    https://github.com/7nik/userscripts/raw/master/AP%20Enhancements%20for%20users.user.js
+// @downloadURL  https://github.com/7nik/userscripts/raw/master/AP%20Enhancements%20for%20users.user.js
 // @match        https://anime-pictures.net/*
 // @exclude      https://anime-pictures.net/chat*
 // @run-at       document-start
@@ -447,12 +451,12 @@ const TEXT = new Proxy(
  */
 
 // tag with "empty" fields
-const NO_TAG = {
+const NO_TAG = Object.freeze({
     id: 0,
     name: "",
     type: 0,
     count: 0,
-};
+});
 
 // list of settings and methods for work with them
 const SETTINGS = new Proxy({
