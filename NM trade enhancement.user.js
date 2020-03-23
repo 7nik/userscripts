@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      1.2.5
+// @version      1.3.0
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -10,6 +10,8 @@
 // @downloadURL  https://github.com/7nik/userscripts/raw/master/NM%20trade%20enhancement.user.js
 // @match        https://www.neonmob.com/*
 // @grant        GM_addStyle
+// @grant        GM_getValue
+// @grant        GM_setValue
 // @require      https://github.com/rafaelw/mutation-summary/raw/master/src/mutation-summary.js
 // ==/UserScript==
 
@@ -24,6 +26,18 @@ GM_addStyle(`
     }
     .trade--side--items--loading:empty {
         display: none;
+    }
+
+    .trade--side--header .filter-sets + .icon-button {
+        display: none;
+        color: #5f5668;
+        margin-left: 0.3em;
+    }
+    .trade--side--header:hover .filter-sets + .icon-button {
+        display: initial;
+    }
+    .trade--side--header .filter-sets + .icon-button:hover {
+        color: #085b85;
     }
 
     .trade--add-items--filters .search,
@@ -155,6 +169,602 @@ GM_addStyle(`
 `);
 
 /**
+ * Adds card fitlers to one side of the trade window
+ */
+class CardFilter {
+    /**
+     * Constructor
+     * @param {HTMLElement} side - <div.trade--add-items>
+     */
+    constructor (side) {
+        if (!side) return null;
+        if (new.target !== CardFilter) return null; // if called without `new`
+
+        this.side = side;
+        this.scope = angular.element(side).scope();
+        this.currentState = CardFilter.STATES.allSeries;
+        this.hiddenSeries = {};
+        this.hiddenSeriesElem = document.createElement("div");
+
+        this.initFilterSets();
+        this.initHiddenSeries();
+        this.replaceSeriesList().then(() => {
+            this.addResetSeries();
+            this.filterSetSelect.disabled = false;
+            this.filterSetSelect.classList.remove("disabled");
+            // set default filter set if it presented
+            if ("Default" in CardFilter.filterSets) {
+                this.filterSetSelect.value = "Default";
+                this.filterSetSelect.dispatchEvent(new Event("change"));
+            }
+            // auto-apply filters to new cards
+            forAllElements(this.side, "li.trade--item", (card) => this.onCardAdded(card));
+        });
+    }
+
+    /**
+     * Replace series list <select> with new one
+     * which allows to select filter for series
+     */
+    async replaceSeriesList () {
+        // It's easier to create a proxy element with
+        // additional options than fight with angular
+        const origSeriesList = this.side.querySelector("select.series");
+        // wait until list of user collection is loaded
+        if (origSeriesList.disabled) {
+            await new Promise((resolve) => {
+                const observer = new MutationSummary({
+                    rootNode: origSeriesList,
+                    queries: [{ attribute: "disabled" }],
+                    callback: () => {
+                        observer.disconnect();
+                        resolve();
+                    },
+                });
+            });
+        }
+
+        if (origSeriesList.value !== "0") this.currentState = CardFilter.STATES.certainSeries;
+
+        // "replace" original <select> with customized one
+        const newSeriesList = origSeriesList.cloneNode(true);
+        this.seriesSelect = newSeriesList;
+        // sometimes here is no the empty option so add it if needed
+        if (newSeriesList.firstElementChild.value !== "") {
+            newSeriesList.insertAdjacentHTML(
+                "afterbegin",
+                `<option value="" label=""></option>`,
+            );
+        }
+        // remove trailing spaces in series names
+        newSeriesList.querySelectorAll("[label$=' ']")
+            .forEach((option) => option.setAttribute("label", option.getAttribute("label").trim()));
+        // add states
+        newSeriesList.insertAdjacentHTML(
+            "afterbegin",
+            Object.entries(CardFilter.STATE_LABELS)
+                .filter(([state, label]) => label)
+                .map(([state, label]) => `<option value="${state}">${label}</option>`)
+                .join(""),
+        );
+        // remove angular's data
+        newSeriesList.getAttributeNames()
+            .filter((name) => name.startsWith("ng-"))
+            .forEach((name) => newSeriesList.removeAttribute(name));
+        Array.from(newSeriesList.classList)
+            .filter((name) => name.startsWith("ng-"))
+            .forEach((name) => newSeriesList.classList.remove(name));
+        newSeriesList.classList.replace("series", "customSeries");
+
+        newSeriesList.addEventListener("change", () => {
+            const oldValue = origSeriesList.value;
+            // if selected the empty option, change it to "Choose a Series"
+            if (newSeriesList.value === "") {
+                newSeriesList.value = "0";
+            }
+            // if selected a filter
+            if (newSeriesList.value in CardFilter.STATES) {
+                this.currentState = newSeriesList.value;
+                origSeriesList.value = "0";
+            } else {
+                this.currentState = newSeriesList.value === "0"
+                    ? CardFilter.STATES.allSeries
+                    : CardFilter.STATES.certainSeries;
+                origSeriesList.value = newSeriesList.value;
+            }
+            // apply filters
+            this.updateHiddenSeriesList();
+            this.side.querySelectorAll(".trade--item")
+                .forEach((card) => this.applyCardFilter(card));
+            // hide a message if it's presented and there are visible cards
+            if (
+                this.side.querySelector(".trade--item:not(.hidden-item)")
+                && this.side.querySelector("#trade--search--empty")
+            ) {
+                this.side.querySelector("#trade--search--empty").remove();
+            }
+
+            if (origSeriesList.value !== oldValue) {
+                origSeriesList.dispatchEvent(new Event("change"));
+            }
+        });
+        origSeriesList.before(newSeriesList);
+    }
+
+
+    /**
+     * Adds button before the series list to resets it
+     */
+    addResetSeries () {
+        const span = document.createElement("span");
+        span.className = "filter-group reset tip";
+        span.title = "Reset series";
+        span.innerHTML = "<span class='btn-filter subdued'><i class='reset-sett'></i></span>";
+        span.addEventListener("click", () => {
+            this.seriesSelect.value = 0; // eslint-disable-line no-param-reassign
+            this.seriesSelect.dispatchEvent(new Event("change"));
+        });
+        this.seriesSelect.before(span);
+    }
+
+    /**
+     * Initialize hidden series filter
+     */
+    initHiddenSeries () {
+        // element with list of hidden series
+        this.hiddenSeriesElem.className = "hiddenSeries";
+        this.hiddenSeriesElem.innerHTML = `
+            <span class="small-caps">Hidden series: </span><span></span>
+        `;
+        this.hiddenSeriesElem.style.display = "none";
+        this.hiddenSeriesElem.addEventListener("click", (ev) => {
+            if (ev.target.nodeName !== "A") return;
+            const seriesName = ev.target.previousSibling.textContent;
+            this.updateHiddenSeriesList(seriesName, null);
+            this.side.querySelectorAll(".trade--item")
+                .forEach((cardd) => this.applyCardFilter(cardd));
+            ev.preventDefault();
+        });
+        // div#print-list is re-created at any change of the filters
+        forAllElements(this.side, "#print-list", (printList) => {
+            printList.prepend(this.hiddenSeriesElem);
+        });
+    }
+
+    /**
+     * Adds/removes series from the list and hides/shows/rebuilds list of hidden series
+     * @param  {string} seriesName - Series name for adding or removing from the list
+     * @param  {?string} collectionStats - Series stats (will be displayed in tooltip),
+     *                                  if `null` then the series will be removed from hidden
+     */
+    updateHiddenSeriesList (seriesName, collectionStats) {
+        if (seriesName) {
+            if (collectionStats) {
+                this.hiddenSeries[seriesName] = collectionStats;
+            } else {
+                delete this.hiddenSeries[seriesName];
+            }
+        }
+        // if selected certain series or no hidden series
+        if (this.currentState === CardFilter.STATES.certainSeries
+            || Reflect.ownKeys(this.hiddenSeries).length === 0
+        ) {
+            this.hiddenSeriesElem.style.display = "none";
+            return;
+        }
+        this.hiddenSeriesElem.style.display = "block";
+
+        if (!seriesName) return;
+        this.hiddenSeriesElem.lastElementChild.innerHTML = Object.entries(this.hiddenSeries)
+            .sort()
+            .map(([name, stats]) => (
+                `<span class="tip" title="${stats}">${name}</span><a href="#"">✕</a>`
+            ))
+            .join(", ");
+    }
+
+    /**
+     * Initialize <select> with filter sets
+     */
+    initFilterSets () {
+        // select for filter sets
+        const filterSetSelect = document.createElement("select");
+        filterSetSelect.className = "btn small subdued filter-sets disabled";
+        filterSetSelect.disabled = true;
+        filterSetSelect.innerHTML = [
+            "<option value selected>Choose filter set</option>",
+            ...Reflect.ownKeys(CardFilter.filterSets)
+                .sort()
+                .map((name) => `<option>${name}</option>`),
+            "<option value='new_filter_set'>Save filters...</option>",
+        ].join("");
+        this.filterSetSelect = filterSetSelect;
+
+        // button to delete the current filter set
+        const delFiltSetBtn = document.createElement("a");
+        delFiltSetBtn.href = "#";
+        delFiltSetBtn.textContent = "🗑";
+        delFiltSetBtn.className = "icon-button";
+        delFiltSetBtn.style.display = "none";
+
+        filterSetSelect.addEventListener("change", () => {
+            if (filterSetSelect.value === "new_filter_set") {
+                const filterSetName = this.saveFilterSet();
+                if (filterSetName) {
+                    filterSetSelect.value = filterSetName;
+                    delFiltSetBtn.style.display = null;
+                } else {
+                    filterSetSelect.value = "";
+                }
+                return;
+            }
+            if (filterSetSelect.value in CardFilter.filterSets) {
+                this.applyFilterSet(CardFilter.filterSets[filterSetSelect.value]);
+                delFiltSetBtn.style.display = null;
+            } else {
+                delFiltSetBtn.style.display = "none";
+            }
+        });
+
+        delFiltSetBtn.addEventListener("click", (ev) => {
+            if (filterSetSelect.value in CardFilter.filterSets
+                && window.confirm("Delete this filter set?") // eslint-disable-line no-alert
+            ) {
+                const name = filterSetSelect.value;
+                delete CardFilter.filterSets[name];
+                document.querySelectorAll("select.filter-sets").forEach((sel) => {
+                    [...sel.options].find((option) => option.textContent === name).remove();
+                    sel.value = "";
+                });
+                delFiltSetBtn.style.display = "none";
+            }
+            ev.preventDefault();
+        });
+
+        // add them for the document
+        this.side.querySelector(".trade--side--header select + span")
+            .textContent += ", use filter set";
+        this.side.querySelector(".trade--side--header").append(filterSetSelect, delFiltSetBtn);
+        // reset selector when some filter was changed
+        this.side.querySelector(".trade--add-items--filters").addEventListener("change", () => {
+            delFiltSetBtn.style.display = "none";
+            filterSetSelect.value = "";
+        });
+    }
+
+    /**
+     * Save the current filter set
+     * @return {?string} Name of the filter set, null if user canceled saving
+     */
+    saveFilterSet () {
+        let name = prompt("Enter name of fitler set"); // eslint-disable-line no-alert
+        if (!name) {
+            return null;
+        }
+        name = toPascalCase(name);
+
+        const filterSet = {
+            filters: {
+                wish_list_by: false,
+                incomplete_by: false,
+                not_owned_by: false,
+                ...this.scope.filters,
+            },
+            settName: window.confirm("Include series name?") // eslint-disable-line no-alert
+                ? this.seriesSelect.selectedOptions[0].label
+                : false,
+            state: this.currentState,
+            hiddenSeries: { ...this.hiddenSeries },
+        };
+        CardFilter.filterSets[name] = filterSet;
+        GM_setValue("filter_sets", CardFilter.filterSets);
+
+        // add new filter set to all selectors
+        document.querySelectorAll("select.filter-sets").forEach((sel) => {
+            const option = document.createElement("option");
+            option.innerHTML = name;
+            sel.lastElementChild.before(option);
+        });
+        return name;
+    }
+
+    /**
+     * Apply filter set and load cards
+     * @param  {string} options.state - State of CardFilter
+     * @param  {string|boolean} options.settName - Name of selected series,
+     *                                             if it's `false` the sereis won't changed
+     * @param  {Object} options.hiddenSeries - Map of the hidden series
+     * @param  {Object} options.filters - Map of native filters
+     */
+    applyFilterSet ({ state, settName, hiddenSeries, filters }) { // eslint-disable-line object-curly-newline, max-len
+        this.currentState = state;
+        this.hiddenSeries = { ...hiddenSeries };
+        this.updateHiddenSeriesList();
+        if (settName !== false) {
+            this.seriesSelect.value = this.seriesSelect
+                .querySelector(`[label="${settName}"]`).value;
+        }
+        Object.entries(filters).forEach(([filterName, filterValue]) => {
+            switch (filterName) {
+                case "sett":
+                    // change sett only it's "enabled"
+                    if (settName !== false && this.scope.filters.sett !== filterValue) {
+                        this.scope.filters.sett = filterValue;
+                    }
+                    break;
+                case "search":
+                case "duplicates_only":
+                case "common":
+                case "uncommon":
+                case "rare":
+                case "veryRare":
+                case "extraRare":
+                case "variant":
+                case "chase":
+                case "legendary":
+                    if (this.scope.filters[filterName] !== filterValue) {
+                        this.scope.filters[filterName] = filterValue;
+                    }
+                    break;
+                case "wish_list_by":
+                case "incomplete_by":
+                case "not_owned_by":
+                    // if state of the filter need to be changed
+                    // eslint-disable-next-line no-bitwise
+                    if (!!this.scope.filters[filterName] ^ !!filterValue) {
+                        let container;
+                        switch (filterName) {
+                            case "wish_list_by": container = "wishListBy"; break;
+                            case "incomplete_by": container = "incompleteBy"; break;
+                            case "not_owned_by": container = "notOwnedBy"; break;
+                            // no default
+                        }
+                        if (filterValue) {
+                            this.scope[container].val = true;
+                            this.scope.filters[filterName] = this.scope[container].filter;
+                        } else {
+                            this.scope[container].val = false;
+                            delete this.scope.filters[filterName];
+                        }
+                    }
+                    break;
+                case "user_id":
+                case "partner_id":
+                    break;
+                default:
+                    console.error(`Unknow filter ${filterName}`);
+                    break;
+            }
+        });
+        // apply filters and (re)load cards
+        this.scope.load();
+        // this.seriesSelect.dispatchEvent(new Event("change"));
+    }
+
+    /**
+     * Shows or hides the card depending on the state
+     * @param  {HTMLElement} card - <li.trade--item>
+     */
+    applyCardFilter (card) {
+        CardFilter.showCard(card);
+        switch (this.currentState) {
+            case CardFilter.STATES.allSeries:
+                // only apply hidden series filter
+                break;
+            case CardFilter.STATES.finite: {
+                const cardCount = card
+                    .querySelector("[ng-bind-html*='print.num_prints_total']")
+                    .textContent;
+                if (cardCount === "∞") CardFilter.hideCard(card);
+                break;
+            }
+            case CardFilter.STATES.infinite: {
+                const cardCount = card
+                    .querySelector("[ng-bind-html*='print.num_prints_total']")
+                    .textContent;
+                if (cardCount !== "∞") CardFilter.hideCard(card);
+                break;
+            }
+            case CardFilter.STATES.freePackAvailable: {
+                const scope = angular.element(card.closest("li")).scope();
+                getSeriesInfo((scope.print || scope.$parent.print).sett_id)
+                    .then(({ discontinue_date: oopDate, freebies_discontinued: freeEnds }) => {
+                        if (
+                            new Date(oopDate) < Date.now()
+                            || freeEnds && new Date(freeEnds) < Date.now()
+                        ) {
+                            CardFilter.hideCard(card);
+                            this.scrollCardList();
+                        }
+                    });
+                break;
+            }
+            case CardFilter.STATES.anyPackAvailable: {
+                const scope = angular.element(card.closest("li")).scope();
+                getSeriesInfo((scope.print || scope.$parent.print).sett_id)
+                    .then(({ discontinue_date: oopDate }) => {
+                        if (new Date(oopDate) < Date.now()) {
+                            CardFilter.hideCard(card);
+                            this.scrollCardList();
+                        }
+                    });
+                break;
+            }
+            case CardFilter.STATES.outOfPrint: {
+                const scope = angular.element(card.closest("li")).scope();
+                getSeriesInfo((scope.print || scope.$parent.print).sett_id)
+                    .then(({ discontinue_date: oopDate }) => {
+                        if (new Date(oopDate) > Date.now()) {
+                            CardFilter.hideCard(card);
+                            this.scrollCardList();
+                        }
+                    });
+                break;
+            }
+            case CardFilter.STATES.certainSeries:
+                // no filtering at all if selected certain series
+                return;
+            default:
+                console.error(`Unknow state ${this.currentState}`);
+                return;
+        }
+        const seriesName = card.querySelector("dd:nth-of-type(2)").firstChild.textContent;
+        if (seriesName in this.hiddenSeries) {
+            CardFilter.hideCard(card);
+        }
+
+        this.scrollCardList();
+    }
+
+    /**
+     * Triggers loading next cards if needed or
+     * displaying message if there is no cards at all
+     * @param  {HTMLElement} card - <li.trade--item>
+     */
+    scrollCardList (card) {
+        const list = this.side.querySelector("#print-list");
+        // trigger loading next cards if no scrollbars and user can't do it itself
+        if (
+            list
+            && list.scrollHeight <= list.clientHeight
+            && list.parentElement.classList.contains("active")
+        ) {
+            list.dispatchEvent(new Event("scroll"));
+        }
+        // remove message about empty search if there are items
+        if (
+            list.querySelector(".trade--item:not(.hidden-item)")
+            && list.querySelector("#trade--search--empty")
+        ) {
+            list.querySelector("#trade--search--empty").remove();
+        }
+        // if no visible cards and no message
+        if (
+            !list.querySelector(".trade--item:not(.hidden-item)")
+            && !list.querySelector(".trade--search--empty")
+        ) {
+            const name = list.closest(".trade--side").matches(".trade--you")
+                ? "You don't"
+                : `${angular
+                        .element(list.closest(".trade--add-items"))
+                        .scope()
+                        .partner
+                        .first_name
+                    } doesn't`;
+
+            const div = document.createElement("div");
+            div.id = "trade--search--empty";
+            div.className = "trade--search--empty";
+            div.innerHTML = `
+                <div class="text-emoji">😭</div>
+                <div class="text-emphasis text-subdued text-body">
+                    ${name} have any cards matching that search.
+                </div>
+            `;
+            list.querySelector(".trade--side--items--loading").append(div);
+        }
+    }
+
+    /**
+     * Handler for new cards: add buttons "select series",
+     * "hide series", and apply the filters
+     * @param  {HTMLElement} card - <li.trade--item>
+     */
+    onCardAdded (card) {
+        const dd = card.querySelector("dd:nth-of-type(2)");
+
+        // button to set card's series as selected
+        const findElem = document.createElement("a");
+        findElem.href = "#";
+        findElem.textContent = "🔍";
+        findElem.className = "icon-button";
+        findElem.addEventListener("click", (ev) => {
+            const seriesName = findElem.parentElement.firstElementChild.textContent;
+            const seriesNumber = this.seriesSelect.querySelector(`[label="${seriesName}"]`).value;
+            if (!seriesNumber) {
+                console.error(`Series "${seriesName}"" was not found`);
+                return;
+            }
+            this.seriesSelect.value = seriesNumber;
+            this.seriesSelect.dispatchEvent(new Event("change"));
+
+            ev.preventDefault();
+        });
+        dd.append(findElem);
+
+        // button to select card's series
+        const hideElem = document.createElement("a");
+        hideElem.href = "#";
+        hideElem.textContent = "✕";
+        hideElem.className = "icon-button";
+        hideElem.addEventListener("click", (ev) => {
+            this.updateHiddenSeriesList(
+                dd.firstChild.textContent, // series name
+                card.querySelector("dd:nth-of-type(3)").textContent, // collection stats
+            );
+            this.side.querySelectorAll(".trade--item")
+                .forEach((cardd) => this.applyCardFilter(cardd));
+            ev.preventDefault();
+        });
+        dd.append(hideElem);
+
+        this.applyCardFilter(card);
+    }
+
+    /**
+     * Hide card and pause video if it's animated
+     * @param  {HTMLElement} card - <li.trade--item>
+     */
+    static hideCard (card) {
+        card.classList.add("hidden-item");
+        const video = card.querySelector("video");
+        if (video) video.pause();
+    }
+
+    /**
+     * Show card and play video if it's animated
+     * @param  {HTMLElement} card - <li.trade--item>
+     */
+    static showCard (card) {
+        card.classList.remove("hidden-item");
+        const video = card.querySelector("video");
+        if (video) video.play();
+    }
+
+    // map of filter sets
+    static filterSets = GM_getValue("filter_sets", {})
+
+    // states and labels of the card filter
+    static STATE_LABELS = {
+        allSeries: "",
+        infinite: "Unlimited series",
+        finite: "Limited series",
+        freePackAvailable: "Free packs available",
+        anyPackAvailable: "Any packs available",
+        outOfPrint: "Out of print series",
+        certainSeries: "",
+    }
+
+    static STATES = Reflect
+        .ownKeys(CardFilter.STATE_LABELS)
+        .reduce((states, name) => { states[name] = name; return states; }, {})
+}
+
+/**
+ * Converts string to The Camel Case
+ * @param  {string} str - String for converting
+ * @return {string} String in the camel case
+ */
+function toPascalCase (str) {
+    return str
+        .trim()
+        .replace(/\s+/g, " ")
+        .split(" ")
+        .map((s) => s[0].toUpperCase().concat(s.slice(1).toLowerCase()))
+        .join(" ");
+}
+
+/**
  * API call to server
  * @param  {("api"|"napi"|"root")} type - Which API scheme use
  * @param  {string} url - Relative URL to API
@@ -218,309 +828,6 @@ function getSeriesInfo (settId) {
         getSeriesInfo[settId] = api("api", `/setts/${settId}/`);
     }
     return getSeriesInfo[settId];
-}
-
-/* states and labels of the card filter */
-const CF_LABELS = {
-    allSeries: "",
-    infinite: "Unlimited series",
-    finite: "Limited series",
-    freePackAvailable: "Free packs available",
-    anyPackAvailable: "Any packs available",
-    outOfPrint: "Out of print series",
-    certainSeries: "",
-};
-const CF_STATES = Reflect.ownKeys(CF_LABELS);
-
-/**
- * Triggers loading next cards or displaying message if there is no cards at all
- * @param  {HTMLElement} card - <li.trade--item>
- */
-function scrollCardList (card) {
-    // trigger loading next cards if no scrollbars and user can't do it itself
-    const list = card.closest("#print-list");
-    if (
-        list
-        && list.scrollHeight <= list.clientHeight
-        && list.parentElement.classList.contains("active")
-    ) {
-        list.dispatchEvent(new Event("scroll"));
-    }
-    // remove message about empty search if there are items
-    if (
-        list.querySelector(".trade--item:not(.hidden-item)")
-        && list.querySelector("#trade--search--empty")
-    ) {
-        list.querySelector("#trade--search--empty").remove();
-    }
-    // if no visible cards and no message
-    if (
-        !list.querySelector(".trade--item:not(.hidden-item)")
-        && !list.querySelector(".trade--search--empty")
-    ) {
-        const name = list.closest(".trade--side").matches(".trade--you")
-            ? "You don't"
-            : `${angular
-                    .element(list.closest(".trade--add-items"))
-                    .scope()
-                    .partner
-                    .first_name
-                } doesn't`;
-
-        const div = document.createElement("div");
-        div.id = "trade--search--empty";
-        div.className = "trade--search--empty";
-        div.innerHTML = `
-            <div class="text-emoji">😭</div>
-            <div class="text-emphasis text-subdued text-body">
-                ${name} have any cards matching that search.
-            </div>
-        `;
-        list.querySelector(".trade--side--items--loading").append(div);
-    }
-}
-
-/**
- * Shows or hides the card depending on the state
- * @param  {HTMLElement} card - <li.trade--item>
- * @param  {string} state - A value from CF_STATES
- */
-function applyCardFilter (card, state, hiddenSeries) {
-    card.classList.remove("hidden-item");
-    switch (state) {
-        case "allSeries":
-            // only apply hidden series
-            break;
-        case "finite": {
-            const cardCount = card
-                .querySelector("[ng-bind-html*='print.num_prints_total']")
-                .textContent;
-            if (cardCount === "∞") card.classList.add("hidden-item");
-            break;
-        }
-        case "infinite": {
-            const cardCount = card
-                .querySelector("[ng-bind-html*='print.num_prints_total']")
-                .textContent;
-            if (cardCount !== "∞") card.classList.add("hidden-item");
-            break;
-        }
-        case "freePackAvailable": {
-            const scope = angular.element(card.closest("li")).scope();
-            getSeriesInfo((scope.print || scope.$parent.print).sett_id)
-                .then(({ discontinue_date: oopDate, freebies_discontinued: freeEnds }) => {
-                    if (
-                        new Date(oopDate) < Date.now()
-                        || freeEnds && new Date(freeEnds) < Date.now()
-                    ) {
-                        card.classList.add("hidden-item");
-                        scrollCardList(card);
-                    }
-                });
-            break;
-        }
-        case "anyPackAvailable": {
-            const scope = angular.element(card.closest("li")).scope();
-            getSeriesInfo((scope.print || scope.$parent.print).sett_id)
-                .then(({ discontinue_date: oopDate }) => {
-                    if (new Date(oopDate) < Date.now()) {
-                        card.classList.add("hidden-item");
-                        scrollCardList(card);
-                    }
-                });
-            break;
-        }
-        case "outOfPrint": {
-            const scope = angular.element(card.closest("li")).scope();
-            getSeriesInfo((scope.print || scope.$parent.print).sett_id)
-                .then(({ discontinue_date: oopDate }) => {
-                    if (new Date(oopDate) > Date.now()) {
-                        card.classList.add("hidden-item");
-                        scrollCardList(card);
-                    }
-                });
-            break;
-        }
-        case "certainSeries":
-            // no filtering at all if selected certain series
-            return;
-        default:
-            console.error(`Unknow state ${state}`);
-            return;
-    }
-    const seriesName = card.querySelector("dd:nth-of-type(2)").firstChild.textContent;
-    if (seriesName in hiddenSeries) {
-        card.classList.add("hidden-item");
-    }
-
-    scrollCardList(card);
-}
-
-/**
- * Adds filter to one side of trade window
- * @param {HTMLElement} side - <div.trade--add-items>
- */
-async function addCardFilter (side) {
-    if (!side) return;
-    let currentState = CF_STATES[0];
-
-    // It's easier to create a proxy element with
-    // additional options than fight with angular
-    const origSeriesList = side.querySelector("select.series");
-    // wait untill list of user collection is loaded
-    if (origSeriesList.disabled) {
-        await new Promise((resolve) => {
-            const observer = new MutationSummary({
-                rootNode: origSeriesList,
-                queries: [{ attribute: "disabled" }],
-                callback: () => {
-                    observer.disconnect();
-                    resolve();
-                },
-            });
-        });
-    }
-
-    const hiddenSeries = {};
-    const hiddenSeriesElem = document.createElement("div");
-    /**
-     * Adds/removes series from the list and hides/shows/rebuilds list of hidden series
-     * @param  {string} seriesName which series add or remove from the list
-     * @param  {string} collectionStats if false-like then remove series otherwise add it
-     */
-    function updateHiddenSeriesList (seriesName, collectionStats) {
-        if (seriesName) {
-            if (collectionStats) {
-                hiddenSeries[seriesName] = collectionStats;
-            } else {
-                delete hiddenSeries[seriesName];
-            }
-        }
-        if (origSeriesList.value !== "0" || Reflect.ownKeys(hiddenSeries).length === 0) {
-            hiddenSeriesElem.style.display = "none";
-            return;
-        }
-        hiddenSeriesElem.style.display = "block";
-        if (!seriesName) return;
-        hiddenSeriesElem.lastElementChild.innerHTML = Object.entries(hiddenSeries)
-            .sort()
-            .map(([name, stats]) => (
-                `<span class="tip" title="${stats}">${name}</span><a href="#"">✕</a>`
-            ))
-            .join(", ");
-    }
-
-    // "replace" original <select> with customized one
-    const newSeriesList = origSeriesList.cloneNode(true);
-    // sometimes here is no the empty option so add it if needed
-    if (newSeriesList.firstElementChild.value !== "") {
-        newSeriesList.insertAdjacentHTML(
-            "afterbegin",
-            `<option value="" label=""></option>`,
-        );
-    }
-    // remove trailing spaces in series names
-    newSeriesList.querySelectorAll("[label$=' ']")
-        .forEach((option) => option.setAttribute("label", option.getAttribute("label").trim()));
-    newSeriesList.insertAdjacentHTML(
-        "afterbegin",
-        Object.entries(CF_LABELS)
-            .filter(([state, label]) => label)
-            .map(([state, label]) => `<option value="${state}">${label}</option>`)
-            .join(""),
-    );
-    newSeriesList.getAttributeNames()
-        .filter((name) => name.startsWith("ng-"))
-        .forEach((name) => newSeriesList.removeAttribute(name));
-    Array.from(newSeriesList.classList)
-        .filter((name) => name.startsWith("ng-"))
-        .forEach((name) => newSeriesList.classList.remove(name));
-    newSeriesList.classList.replace("series", "customSeries");
-    newSeriesList.addEventListener("change", () => {
-        // if selected the empty option, change it to "Choose a Series"
-        if (newSeriesList.value === "") {
-            newSeriesList.value = 0;
-        }
-        // if selected filter
-        if (newSeriesList.value in CF_LABELS) {
-            currentState = newSeriesList.value;
-            origSeriesList.value = 0;
-
-            side.querySelectorAll(".trade--item")
-                .forEach((card) => applyCardFilter(card, currentState, hiddenSeries));
-            if (
-                side.querySelector(".trade--item:not(.hidden-item)")
-                && side.querySelector("#trade--search--empty")
-            ) {
-                side.querySelector("#trade--search--empty").remove();
-            }
-        } else {
-            currentState = CF_STATES[newSeriesList.value === "0" ? 0 : CF_STATES.length - 1];
-            origSeriesList.value = newSeriesList.value;
-        }
-        updateHiddenSeriesList();
-        origSeriesList.dispatchEvent(new Event("change"));
-    });
-    origSeriesList.parentElement.insertBefore(newSeriesList, origSeriesList);
-
-    // element with list of hidden series
-    hiddenSeriesElem.className = "hiddenSeries";
-    hiddenSeriesElem.innerHTML = `<span class="small-caps">Hidden series: </span><span></span>`;
-    hiddenSeriesElem.style.display = "none";
-    hiddenSeriesElem.addEventListener("click", (ev) => {
-        if (ev.target.nodeName !== "A") return;
-        const seriesName = ev.target.previousSibling.textContent;
-        updateHiddenSeriesList(seriesName, null);
-        side.querySelectorAll(".trade--item")
-            .forEach((cardd) => applyCardFilter(cardd, currentState, hiddenSeries));
-        ev.preventDefault();
-    });
-    // div#print-list is re-created at any change of the filters
-    forAllElements(side, "#print-list", (printList) => {
-        printList.prepend(hiddenSeriesElem);
-    });
-
-    // auto-apply filter to new cards
-    forAllElements(side, "li.trade--item", (card) => {
-        const dd = card.querySelector("dd:nth-of-type(2)");
-
-        // button to set card's series as selected
-        const findElem = document.createElement("a");
-        findElem.href = "#";
-        findElem.textContent = "🔍";
-        findElem.className = "icon-button";
-        findElem.addEventListener("click", (ev) => {
-            const seriesName = findElem.parentElement.firstElementChild.textContent;
-            const seriesNumber = newSeriesList.querySelector(`[label="${seriesName}"]`).value;
-            if (!seriesNumber) {
-                console.error(`Series ${seriesName} was not found`);
-                return;
-            }
-            newSeriesList.value = seriesNumber;
-            newSeriesList.dispatchEvent(new Event("change"));
-
-            ev.preventDefault();
-        });
-        dd.append(findElem);
-
-        // button to select card's series
-        const hideElem = document.createElement("a");
-        hideElem.href = "#";
-        hideElem.textContent = "✕";
-        hideElem.className = "icon-button";
-        hideElem.addEventListener("click", (ev) => {
-            updateHiddenSeriesList(
-                dd.firstChild.textContent, // series name
-                card.querySelector("dd:nth-of-type(3)").textContent, // collection stats
-            );
-            side.querySelectorAll(".trade--item")
-                .forEach((cardd) => applyCardFilter(cardd, currentState, hiddenSeries));
-            ev.preventDefault();
-        });
-        dd.append(hideElem);
-
-        applyCardFilter(card, currentState, hiddenSeries);
-    });
 }
 
 /**
@@ -637,28 +944,11 @@ function addLinkToSett (user1, user2, card) {
 }
 
 /**
- * Adds button before the <select> to resets it
- * @param {HTMLElement} select - The <select> element
- */
-function addResetSeries (select) {
-    const span = document.createElement("span");
-    span.className = "filter-group reset tip";
-    span.title = "Reset series";
-    span.innerHTML = "<span class='btn-filter subdued'><i class='reset-sett'></i></span>";
-    span.addEventListener("click", () => {
-        select.value = 0; // eslint-disable-line no-param-reassign
-        select.dispatchEvent(new Event("change"));
-    });
-    select.parentElement.insertBefore(span, select);
-}
-
-/**
  * Apply enhancement to the trade window
  * @param {HTMLElement} tradeWindow - <div.nm-modal.trade>
  */
 async function addEnhancements (tradeWindow) {
-    forAllElements(tradeWindow, ".trade--add-items", addCardFilter);
-    forAllElements(tradeWindow, "select.customSeries", addResetSeries);
+    forAllElements(tradeWindow, ".trade--add-items", (side) => new CardFilter(side));
 
     const you = await getUserData(NM.you.attributes, "You");
     // wait for the appearance of partner data and then get it
