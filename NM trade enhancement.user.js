@@ -412,6 +412,7 @@ class CardFilter {
             ) {
                 const name = filterSetSelect.value;
                 delete CardFilter.filterSets[name];
+                GM_setValue("filter_sets", CardFilter.filterSets);
                 document.querySelectorAll("select.filter-sets").forEach((sel) => {
                     [...sel.options].find((option) => option.textContent === name).remove();
                     sel.value = "";
