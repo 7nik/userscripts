@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.0
+// @version      1.0.1
 // @description  Makes everything great!
 // @author       7nik
 // @match        https://anime-pictures.net/*
@@ -1443,6 +1443,10 @@ async function getTagInfo (tagName) {
             tag.type = 8;
         }
         cache[tag.name] = tag;
+        // change tagName if it doesn't correspond to the interface language
+        if ([t.tag, t.tag_ru, t.tag_jp].includes(tagName) && t.name !== tagName) {
+            tagName = t.name; // eslint-disable-line no-param-reassign
+        }
     });
     SETTINGS.tagsCache = cache;
 
@@ -2382,8 +2386,8 @@ GM_addStyle(`
     }
 
     /* for say() */
-    ul.autocomplite {
-        z-index: 30;
+    ul.autocomplite:not(#id) {
+        z-index: 130;
     }
     #dialog {
         position: fixed;
