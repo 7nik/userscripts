@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for moderators
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.0
+// @version      1.0.1
 // @description  Makes everything great! Moderator edition
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -126,16 +126,36 @@ async function removeTag (tag, postId) {
 }
 
 /**
+ * Removes recommended tag from cache and moderating page
+ * @param  {string} preId - Id of recommendation
+ * @return {Promise<undefined>}
+ */
+async function resolvePreTag (preId) {
+    const tags = await getRecommendedTags();
+    const preTagIndex = tags.findIndex((tag) => tag.preId === preId);
+    if (preTagIndex < 0) return;
+    tags.splice(preTagIndex, 1);
+    // if it was the last tag then update cache
+    if (tags.length === 0) {
+        const allTags = SETTINGS.preTagsCache;
+        delete allTags[post_id];
+        SETTINGS.preTagsCache = allTags;
+    }
+
+    if (window.opener) {
+        // remove the recommended tag in opener (if it's moderate recommeded tags page)
+        window.opener.postMessage({ cmd: "resolve_pretag", preTagId: preId });
+    }
+}
+
+/**
  * Accept the precomended tag
  * @param  {Tag} preTag - Recommend tag (with `preId`)
  * @return {Promise<undefined>}
  */
 async function acceptPreTag ({ preId, name }) {
+    resolvePreTag(preId);
     const { success, msg } = await ajax(`/pictures/accept_pre_tag/${preId}`);
-    if (window.opener) {
-        // remove the recommended tag in opener (if it's moderate recommeded tags page)
-        window.opener.postMessage({ cmd: "resolve_pretag", preTagId: preId });
-    }
     if (!success) {
         console.error(`Error of accepting of pretag ${name}#${preId}:`, msg);
         const editTag = getElem(`span[data-pre-tag-id="${preId}"]`);
@@ -149,10 +169,11 @@ async function acceptPreTag ({ preId, name }) {
             }
             li.remove();
         }
+    } else {
+        const editTag = getElem(`span[data-pre-tag-id="${preId}"]`);
+        if (!editTag) return; // no pretag on the page
+        editTag.closest("li").classList.remove("preTag");
     }
-    const editTag = getElem(`span[data-pre-tag-id="${preId}"]`);
-    if (!editTag) return; // no pretag on the page
-    editTag.closest("li").classList.remove("preTag");
 }
 
 /**
@@ -161,14 +182,10 @@ async function acceptPreTag ({ preId, name }) {
  * @return {Promise<undefined>}
  */
 async function declinePreTag ({ preId, name }) {
+    resolvePreTag(preId);
     const { success, msg } = await ajax(`/pictures/del_pre_tag/${preId}`);
-    if (window.opener) {
-        // remove the recommended tag in opener (if it's moderate recommeded tags page)
-        window.opener.postMessage({ cmd: "resolve_pretag", preTagId: preId });
-    }
     if (!success) {
-        console.error(`error of removing of pretag #${preId}:`, msg);
-        throw msg;
+        console.error(`Error of removing of pretag ${name}#${preId}:`, msg);
     }
     const editTag = getElem(`span[data-pre-tag-id="${preId}"]`);
     if (!editTag) return; // no pretag on the page
@@ -423,28 +440,24 @@ async function addRecommendedTags () {
     if (!addRecommendedTags.wasHandlersAdded) {
         addRecommendedTags.wasHandlersAdded = true;
         getElem("#post_tags").addEventListener("click", async (event) => {
-            const tagItem = event.target.closest("li");
+            const tagElem = event.target.closest("li");
             const { preTagId } = event.target.parentNode.dataset;
-            if (!tagItem || !preTagId) return;
-            const [preTag] = pretags.splice(pretags.findIndex((tag) => tag.preId === preTagId), 1);
+            if (!tagElem || !preTagId) return;
+            const preTag = (await getRecommendedTags()).find((tag) => tag.preId === preTagId);
+            if (!preTag) return;
+
             if (event.target.classList.contains("accept")) {
-                tagItem.classList.remove("preTag");
+                tagElem.classList.remove("preTag");
                 acceptPreTag(preTag).then(() => {
                     console.log(`${preTag.name}#${preTag.preId} %caccepted`, "color: green;");
                     // scrollTop = document.getElementById("post_tags").scrollTop;
                     AnimePictures.post.refresh_tags();
                 });
             } else if (event.target.classList.contains("decline")) {
-                tagItem.classList.remove("preTag");
+                tagElem.classList.remove("preTag");
                 declinePreTag(preTag).then(() => {
                     console.log(`${preTag.name}#${preTag.preId} %cdeclined`, "color: orange;");
                 });
-            }
-            // if it was the last tag then update cache
-            if (pretags.length === 0) {
-                const tags = SETTINGS.preTagsCache;
-                delete tags[post_id];
-                SETTINGS.preTagsCache = tags;
             }
         });
     }
@@ -457,27 +470,21 @@ async function addRecommendedTags () {
     pretags = pretags.filter((tag, i, tags) => {
         // accepted presented tags
         if (presentedTags.includes(tag.name)) {
-            console.log(`${tag.name} (#${tag.preId}) %cautoaccepted`, "color: mediumspringgreen;");
-            acceptPreTag(tag.preId);
+            acceptPreTag(tag).then(() => {
+                console.log(`${tag.name}#${tag.preId} %cautoaccepted`, "color: mediumseagreen;");
+            });
             return false;
         }
         // decline double tags
         if (tags.findIndex((t) => t.name === tag.name) < i) {
-            console.log(`${tag.name} (#${tag.preId}) %cautodeclined`, "color: brown;");
-            declinePreTag(tag.preId);
+            declinePreTag(tag).then(() => {
+                console.log(`${tag.name}#${tag.preId} %cautodeclined`, "color: brown;");
+            });
             return false;
         }
         return true;
     });
-    if (pretags.length <= 0) {
-        const tags = SETTINGS.preTagsCache;
-        delete tags[post_id];
-        SETTINGS.preTagsCache = tags;
-        return;
-    }
-
-    // const ptags = Array.from(pretags[post_id] || []); // copy the array
-    // if (!ptags.length) return;
+    if (pretags.length === 0) return;
 
     const getTagTypeByPosition = (pos) => Object.keys(tagTypePosition)
         .find((k) => tagTypePosition[k] === pos);
@@ -677,8 +684,7 @@ function improveTagEditor () {
 // =============================================================================
 
 if (!SETTINGS.isModerator) {
-    console.error("You don't have moderator rights");
-    return;
+    throw new Error("You don't have moderator rights!");
 }
 
 GM_addStyle(`

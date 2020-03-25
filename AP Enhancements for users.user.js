@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.1
+// @version      1.0.2
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -21,7 +21,7 @@
 
 "use strict";
 
-// dictinary of localized texts
+// dictionary of localized texts
 const TEXT = new Proxy(
     {
         /**
@@ -445,6 +445,7 @@ const TEXT = new Proxy(
 /**
  * @typedef {Object} Tag
  * @property {number} id - The tag id
+ * @property {?string} preId - Id of recommendation if it's recommended tag
  * @property {string} name - The tag name
  * @property {number} type - The tag type
  * @property {number} count - The number of posts with this tag
@@ -2482,6 +2483,9 @@ if (SETTINGS.hideNewPostMessage) {
     `);
 }
 
+document.addEventListener("keydown", onhotkey);
+unsafeWindow.registerHotkey = registerHotkey;
+
 // make sidebar floating
 if (!pageIs.editTag && SETTINGS.floatingSidebar) {
     GM_addStyle(floatingSidebarCSS);
@@ -2493,9 +2497,6 @@ if (pageIs.post && SETTINGS.wideLayout) {
     GM_addStyle(wideLayoutCSS);
     onready(makeLayoutWide);
 }
-
-document.addEventListener("keydown", onhotkey);
-unsafeWindow.registerHotkey = registerHotkey;
 
 onready(() => {
     /* eslint-disable camelcase */
