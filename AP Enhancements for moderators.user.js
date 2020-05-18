@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for moderators
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.1
+// @version      1.1.0
 // @description  Makes everything great! Moderator edition
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -14,6 +14,7 @@
 // @grant        GM_addStyle
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_addValueChangeListener
 // @require      https://github.com/7nik/userscripts/raw/master/AP%20Enhancements%20for%20users.user.js
 // ==/UserScript==
 
@@ -21,9 +22,9 @@
 /* global post_id AnimePictures */
 
 // variables of the AP Enhancements for users
-/* global NO_TAG PAGES SETTINGS TEXT hotkeys pageIs
-    ajax fixedNewTabLink getElem getAllElems getTagInfo newElem newTagInput
-    newTagItem onready say */
+/* global NO_TAG PAGES SETTINGS TEXT API hotkeys pageIs Tag
+    onNewTabLinkClick getElem getAllElems getTagInfo newElem newTagInput
+    onready say */
 
 /* eslint-disable sonarjs/no-duplicate-string, sonarjs/cognitive-complexity */
 
@@ -59,20 +60,6 @@ const MOD_SETTIGNS = {
     },
 };
 
-// order of tag types in the tag list
-const tagTypePosition = {
-    3: 0,
-    5: 1,
-    6: 2,
-    1: 3,
-    4: 4,
-    8: 5,
-    2: 6,
-    7: 7,
-    0: 8,
-    9: 9,
-};
-
 /**
  * Sets to the field number type and int pattern
  * @param {HTMLElement} el - <input> to set type number
@@ -97,10 +84,7 @@ function setNumType (el) {
  */
 async function addTag (tag, postId) {
     if (!tag.id) return;
-    const { success, errormsg } = await ajax(
-        `/pictures/add_tag_to_post/${postId}`,
-        { text: tag.name, add_new_tag: "false" },
-    );
+    const { success, errormsg } = await API.addTags(tag.enName, postId);
     if (!success) {
         getElem("#add_tag_status").innerHTML = errormsg;
         console.log("Error:", errormsg, tag, postId);
@@ -115,89 +99,11 @@ async function addTag (tag, postId) {
  */
 async function removeTag (tag, postId) {
     if (!tag.id) return;
-    const { success, errormsg } = await ajax(
-        `/pictures/del_tag_from_post/${postId}`,
-        { tag_id: tag.id },
-    );
+    const { success, errormsg } = await API.removeTag(tag.id, postId);
     if (!success) {
         say(errormsg, TEXT.error);
         console.error("Error:", errormsg, tag, postId);
     }
-}
-
-/**
- * Removes recommended tag from cache and moderating page
- * @param  {string} preId - Id of recommendation
- * @return {Promise<undefined>}
- */
-async function resolvePreTag (preId) {
-    const tags = await getRecommendedTags();
-    const preTagIndex = tags.findIndex((tag) => tag.preId === preId);
-    if (preTagIndex < 0) return;
-    tags.splice(preTagIndex, 1);
-    // if it was the last tag then update cache
-    if (tags.length === 0) {
-        const allTags = SETTINGS.preTagsCache;
-        delete allTags[post_id];
-        SETTINGS.preTagsCache = allTags;
-    }
-
-    if (window.opener) {
-        // remove the recommended tag in opener (if it's moderate recommeded tags page)
-        window.opener.postMessage({ cmd: "resolve_pretag", preTagId: preId });
-    }
-}
-
-/**
- * Accept the precomended tag
- * @param  {Tag} preTag - Recommend tag (with `preId`)
- * @return {Promise<undefined>}
- */
-async function acceptPreTag ({ preId, name }) {
-    resolvePreTag(preId);
-    const { success, msg } = await ajax(`/pictures/accept_pre_tag/${preId}`);
-    if (!success) {
-        console.error(`Error of accepting of pretag ${name}#${preId}:`, msg);
-        const editTag = getElem(`span[data-pre-tag-id="${preId}"]`);
-        if (editTag) { // the pretag presented on the page
-            const li = editTag.parentNode.parentNode;
-            // if it's last tag of this type
-            if (li.previousElementSibling.nodeName === "SPAN"
-                && (li.nextElementSibling == null
-                    || li.nextElementSibling.nodeName === "SPAN")) {
-                li.previousElementSibling.remove();
-            }
-            li.remove();
-        }
-    } else {
-        const editTag = getElem(`span[data-pre-tag-id="${preId}"]`);
-        if (!editTag) return; // no pretag on the page
-        editTag.closest("li").classList.remove("preTag");
-    }
-}
-
-/**
- * Decline the precomended tag
- * @param  {Tag} preTag - Recommend tag (with `preId`)
- * @return {Promise<undefined>}
- */
-async function declinePreTag ({ preId, name }) {
-    resolvePreTag(preId);
-    const { success, msg } = await ajax(`/pictures/del_pre_tag/${preId}`);
-    if (!success) {
-        console.error(`Error of removing of pretag ${name}#${preId}:`, msg);
-    }
-    const editTag = getElem(`span[data-pre-tag-id="${preId}"]`);
-    if (!editTag) return; // no pretag on the page
-    const li = editTag.closest("li");
-    // if it's last tag of this type
-    if (li.previousElementSibling.nodeName === "SPAN"
-        && (li.nextElementSibling == null
-            || li.nextElementSibling.nodeName === "SPAN")
-    ) {
-        li.previousElementSibling.remove();
-    }
-    li.remove();
 }
 
 /**
@@ -301,12 +207,22 @@ function addReplaceTagButton () {
     function finish () {
         getElem("#replace_tag").style.display = "none";
         switch (SETTINGS.tagReplacingAction) {
-            case "nothing": break;
+            case "nothing":
+                AnimePictures.post.refresh_tags();
+                break;
             case "next":
-                getElem(".chevron_right").click();
+                if (getElem(".chevron_right")) {
+                    getElem(".chevron_right").click();
+                } else {
+                    AnimePictures.post.refresh_tags();
+                }
                 break;
             case "prev":
-                getElem(".chevron_left").click();
+                if (getElem(".chevron_left")) {
+                    getElem(".chevron_left").click();
+                } else {
+                    AnimePictures.post.refresh_tags();
+                }
                 break;
             case "close":
                 window.close();
@@ -316,8 +232,8 @@ function addReplaceTagButton () {
         }
     }
 
-    let tagToRemove = SETTINGS.tagReplacingRemoveTag;
-    let tagToAdd = SETTINGS.tagReplacingAddTag;
+    let tagToRemove = new Tag(SETTINGS.tagReplacingRemoveTag);
+    let tagToAdd = new Tag(SETTINGS.tagReplacingAddTag);
     const replaceTag = () => addTag(tagToAdd, post_id)
         .then(() => removeTag(tagToRemove, post_id))
         .then(finish);
@@ -356,192 +272,24 @@ function addReplaceTagButton () {
  * Opens tag editor of tags created just now
  */
 function openNewTags () {
-    const tabs = openNewTags.tabs || (openNewTags.tabs = {});
-    // open only new tags
-    const lis = getAllElems("#post_tags li").filter((li) => (
-        li.classList.length === 0
-        && (
-            li.lastElementChild.textContent.trim() === "1"
-            || li.firstElementChild.textContent === "tagme"
-            || li.firstElementChild.textContent === "протегируй меня"
-        )
-    ));
-    if (lis.length > 0 && lis[0].previousElementSibling.nodeName === "SPAN") {
-        lis.forEach((li) => {
-            const tagName = li.firstElementChild.textContent;
-            if (tagName === "tagme" || tagName === "протегируй меня") return;
-            const { tagId } = li.lastElementChild.firstElementChild.dataset;
-            if (tabs[tagId] && !tabs[tagId].closed) return;
+    const tabs = openNewTags.tabs ?? (openNewTags.tabs = {});
+    // get span for unknow tags
+    const span = getAllElems("#post_tags span")
+        .filter((sp) => sp.textContent === TEXT.categories[0])[0];
+    if (!span) return;
+
+    for (let li = span.nextElementSibling; li && li.nodeName === "LI"; li = li.nextElementSibling) {
+        const { tagId } = li.lastElementChild.firstElementChild.dataset;
+        if (li.lastElementChild.textContent.trim() === "1"
+            && (!tabs[tagId] || tabs[tagId].closed)
+        ) {
             tabs[tagId] = window.open(
-                `/pictures/view_edit_tag/${tagId}`,
-                `${TEXT.editTag} ${tagName}`,
-                "width=500,height=700,alwaysRaised=yes",
+                `${PAGES.editTag}${tagId}`,
+                `${TEXT.editTag} ${li.firstElementChild.textContent}`,
+                "width=500,height=700",
             );
-        });
-    }
-}
-
-/**
- * Get list of tags recommended to current post
- * @return {Promise<array<Tag>>} Recommended tags
- */
-async function getRecommendedTags () {
-    const now = Date.now();
-    let pics = SETTINGS.preTagsCache;
-    // return from cache if it's less 30 minutes
-    if (pics.lastCheck && pics.lastCheck + 30 * 60 * 1000 > now) {
-        return pics[post_id] || [];
-    }
-
-    pics = {};
-    document.body.classList.add("wait");
-    // get recommended tag from <tr>
-    const getPreTag = async (tr) => {
-        const tag = await getTagInfo(tr.children[1].textContent.trim());
-        [tag.preId] = tr.id.match(/\d+/);
-        tag.by = tr.children[0].querySelector("a").textContent;
-        [tag.postId] = tr.children[2].querySelector("a").href.match(/\d+/);
-        tag.count += 1;
-        if (!pics[tag.postId]) {
-            pics[tag.postId] = [tag];
-        } else {
-            pics[tag.postId].push(tag);
-        }
-    };
-
-    // get recommended tags from 1st page
-    const dom = await ajax("/pictures/moderating_pre_tags/0", null, "GET");
-    await Promise.all(getAllElems(".messages tr", dom).map(getPreTag));
-    // get recommended tags from other pages
-    await Promise.all(
-        getAllElems("table + div .numeric_pages a:not(:last-child)", dom)
-            .map(async (a) => {
-                const dom2 = await ajax(a.href, null, "GET");
-                await Promise.all(getAllElems(".messages tr", dom2).map(getPreTag));
-            }),
-    );
-
-    // save to cache and return
-    pics.lastCheck = now;
-    SETTINGS.preTagsCache = pics;
-    document.body.classList.remove("wait");
-    return pics[post_id] || [];
-}
-
-/**
- * Adds recommended tags to post
- * @return {Promise<undefined>}
- */
-async function addRecommendedTags () {
-    let pretags = await getRecommendedTags();
-    if (pretags.length <= 0 || getElem(".tags li span.accept")) return;
-
-    // add accept/decline handler if it wasn't added yet
-    if (!addRecommendedTags.wasHandlersAdded) {
-        addRecommendedTags.wasHandlersAdded = true;
-        getElem("#post_tags").addEventListener("click", async (event) => {
-            const tagElem = event.target.closest("li");
-            const { preTagId } = event.target.parentNode.dataset;
-            if (!tagElem || !preTagId) return;
-            const preTag = (await getRecommendedTags()).find((tag) => tag.preId === preTagId);
-            if (!preTag) return;
-
-            if (event.target.classList.contains("accept")) {
-                tagElem.classList.remove("preTag");
-                acceptPreTag(preTag).then(() => {
-                    console.log(`${preTag.name}#${preTag.preId} %caccepted`, "color: green;");
-                    // scrollTop = document.getElementById("post_tags").scrollTop;
-                    AnimePictures.post.refresh_tags();
-                });
-            } else if (event.target.classList.contains("decline")) {
-                tagElem.classList.remove("preTag");
-                declinePreTag(preTag).then(() => {
-                    console.log(`${preTag.name}#${preTag.preId} %cdeclined`, "color: orange;");
-                });
-            }
-        });
-    }
-
-    const presentedTags = getAllElems(".tags a").map((a) => a.textContent);
-
-    console.log("presented tags:", presentedTags);
-    console.log("recommended tags:", pretags.map(({ name, preId }) => `${name}:${preId}`));
-
-    pretags = pretags.filter((tag, i, tags) => {
-        // accepted presented tags
-        if (presentedTags.includes(tag.name)) {
-            acceptPreTag(tag).then(() => {
-                console.log(`${tag.name}#${tag.preId} %cautoaccepted`, "color: mediumseagreen;");
-            });
-            return false;
-        }
-        // decline double tags
-        if (tags.findIndex((t) => t.name === tag.name) < i) {
-            declinePreTag(tag).then(() => {
-                console.log(`${tag.name}#${tag.preId} %cautodeclined`, "color: brown;");
-            });
-            return false;
-        }
-        return true;
-    });
-    if (pretags.length === 0) return;
-
-    const getTagTypeByPosition = (pos) => Object.keys(tagTypePosition)
-        .find((k) => tagTypePosition[k] === pos);
-    const getTagName = (tagItem) => (tagItem && tagItem.nodeName === "LI"
-        ? tagItem.firstElementChild.textContent.trim()
-        : null);
-
-    const types = pretags.reduce((set, { type }) => set.add(type), new Set());
-    // eslint-disable-next-line no-restricted-syntax
-    for (const type of types) {
-        // find tag block of tags of current type
-        const spanText = TEXT.categories[type];
-        let span = getAllElems(".tags > span").find((el) => el.textContent === spanText);
-        // create tag block if there is no tags of current type
-        if (!span) {
-            const typeCount = TEXT.categories.length; // also includes "deleted by moderator"
-            let nextSpan;
-            for (let pos = tagTypePosition[type] + 1; !nextSpan && pos < typeCount; pos++) {
-                const prevSpanText = TEXT.categories[getTagTypeByPosition(pos)];
-                nextSpan = getAllElems(".tags > span")
-                    .find((el) => el.textContent === prevSpanText);
-            }
-            span = newElem("span", { text: TEXT.categories[type] });
-            if (nextSpan) {
-                nextSpan.before(span);
-            } else {
-                getElem(".tags").append(span);
-            }
-        }
-        // get the recommended tags of the current type in order of usage count
-        const tags = pretags
-            .filter((tag) => tag.type === type)
-            .sort((t1, t2) => t2.count - t1.count);
-        let currentElem = span.nextElementSibling;
-        let currentText = getTagName(currentElem);
-        // eslint-disable-next-line no-restricted-syntax
-        for (const tag of tags) {
-            // find a presented tag which has usage count bigger then the recommended tag
-            // eslint-disable-next-line no-await-in-loop
-            while (currentText && (await getTagInfo(currentText)).count > tag.count) {
-                currentElem = currentElem.nextElementSibling;
-                currentText = getTagName(currentElem);
-            }
-            if (currentElem) {
-                // eslint-disable-next-line no-await-in-loop
-                if (currentText && (await getTagInfo(currentText)).count > tag.count) {
-                    currentElem.after(newTagItem(tag));
-                } else {
-                    currentElem.before(newTagItem(tag));
-                }
-            } else {
-                getElem(".tags").append(newTagItem(tag));
-            }
         }
     }
-
-    // ul.parentNode.scrollTop = scrollTop;
 }
 
 /**
@@ -553,16 +301,137 @@ async function addRecommendedTags () {
  * - automatically set tag type or parent tag in some cases.
  */
 function improveTagEditor () {
-    // convert dropped link to tag name
-    function link2tag (ev) {
-        const link = ev.dataTransfer.getData("text");
-        if (!link) return;
-        const tagname = link.match(/\?.*(?:search_tag|tags|word|name|title)=([^&]+)/i);
-        if (!tagname) return;
+    let changed = false; // whether some data on the form was changed
+    // add link to description and format it
+    function addLink (ev) {
+        if (!ev.dataTransfer.types.includes("text/uri-list")) return;
+        const newLink = ev.dataTransfer.getData("text/uri-list");
+        const text = ev.target.value;
+        const getLink = /(?:\[url=([^\]]+)][\w-]+\[\/url])|http.*/gi;
+        const siteNames = {
+            "www.animenewsnetwork.com": "ANN",
+            "anidb.net": "aniDB",
+            "anidb.info": "aniDB",
+            "myanimelist.net": "MAL",
+            "www.world-art.ru": "World-Art",
+            "vndb.org": "VNDB",
+            "www.mangaupdates.com": "Baka-Updates",
+            "en.wikipedia.org": "eng",
+            "ru.wikipedia.org": "rus",
+            "ja.wikipedia.org": "jap",
+        };
+        const siteOrder = [
+            "animenewsnetwork.com",
+            "anidb.net",
+            "anidb.info",
+            "myanimelist.net",
+            "mangaupdates.com",
+            "world-art.ru",
+            "vndb.org",
+            "en.wikipedia.org",
+            "ru.wikipedia.org",
+            "ja.wikipedia.org",
+            "atwiki.jp",
+            "pixiv.net",
+            "deviantart.com",
+            "artstation.com",
+            "twitter.com",
+            "instagram.com",
+            "tinami.com",
+            "nicovideo.jp",
+            "piapro.jp",
+            "pawoo.net",
+            "tumblr.com",
+        ];
+
+        const links = [];
+        let match;
+        // eslint-disable-next-line no-cond-assign
+        while (match = getLink.exec(text)) links.push(match[1] ?? match[0]);
+        const pureText = text.replace(getLink, "").replace(/^[ (),.adeikpw]*\s*/i, "");
+        links.push(newLink);
+
+        const urls = links
+            .filter((link, i) => links.indexOf(link) === i)
+            .map((link) => new URL(link))
+            .map((url) => {
+                if (url.host === "www.pixiv.net" && !pageIs("/users/", false, url)) {
+                    return new URL(`https://www.pixiv.net/users/${url.href.match(/\d+/)[0]}`);
+                }
+                if (url.host === "vndb.org") {
+                    return new URL(`https://vndb.org/${url.href.match(/v\d+/)[0]}`);
+                }
+                return url;
+            })
+            // sort by site order > domain name > href (ignore protocol)
+            .sort((u1, u2) => {
+                const p1 = siteOrder.findIndex((domain) => u1.host.endsWith(domain));
+                const p2 = siteOrder.findIndex((domain) => u2.host.endsWith(domain));
+                if (p1 >= 0 && p2 >= 0 && p1 !== p2) return p1 - p2;
+                if (p1 >= 0 && p2 < 0) return -1;
+                if (p1 < 0 && p2 >= 0) return 1;
+                if (u1.host > u2.host) return 1;
+                if (u1.host < u2.host) return -1;
+                if (u1.pathname + u1.search > u2.pathname + u2.search) return 1;
+                return -1;
+            });
+        // console.log(urls);
+        let hasWiki = false;
+        const newText = [
+            pureText,
+            urls
+                .filter((url) => url.host in siteNames)
+                .map((url, i, arr) => {
+                    let t = `[URL=${url}]${siteNames[url.host]}[/URL]`;
+                    if (url.host.endsWith("wikipedia.org") && !hasWiki) {
+                        t = `Wikipedia (${t}`;
+                        hasWiki = true;
+                    }
+                    if (i === arr.length - 1) {
+                        t += hasWiki ? ")." : ".";
+                    }
+                    return t;
+                })
+                .join(", "),
+            ...urls.filter((url) => !(url.host in siteNames)),
+        ].filter((t) => t);
+        // insert with keeping the change in the edit history
+        ev.target.selectionStart = 0;
+        ev.target.selectionEnd = text.length;
+        ev.target.focus();
+        document.execCommand("insertText", false, newText.join("\n"));
+        changed = true;
         ev.preventDefault();
         ev.stopPropagation();
-        // eslint-disable-next-line no-param-reassign
-        ev.target.value = decodeURIComponent(tagname[1].replace(/[+_]/g, " ")).trim().toLowerCase();
+    }
+
+    // convert dropped link to tag name
+    function link2tag (ev) {
+        let text;
+        // get selected text or link title
+        if (ev.dataTransfer.types.includes("text/html")) {
+            text = document.createRange()
+                .createContextualFragment(ev.dataTransfer.getData("text/html"))
+                .textContent;
+        // extract tag from URL parameter
+        } else if (ev.dataTransfer.types.includes("text/uri-list")) {
+            const match = ev.dataTransfer
+                .getData("text/uri-list")
+                .match(/(?:search_tag|tags|word|name|title|search%5bany_name_matches%5d)=([^&]+)/i);
+            if (match) text = decodeURIComponent(match[1]);
+        // if it's just a text
+        } else {
+            text = ev.dataTransfer.getData("text/plain");
+        }
+        if (!text) return;
+        // insert with keeping the change in the edit history
+        ev.target.selectionStart = 0;
+        ev.target.selectionEnd = ev.target.value.length;
+        ev.target.focus();
+        document.execCommand("insertText", false, text.replace(/[+_]/g, " ").trim().toLowerCase());
+        changed = true;
+        ev.preventDefault();
+        ev.stopPropagation();
     }
 
     // replace field for tag id with advanced tag field
@@ -594,7 +463,6 @@ function improveTagEditor () {
         });
     }
 
-    let changed = false;
     // validate fields before saving
     async function saveTag (ev) {
         if (getElem("#tag_type").value === "0") {
@@ -604,25 +472,23 @@ function improveTagEditor () {
             return;
         }
 
-        const { success, errormsg } = await ajax(
-            `/pictures/edit_tag/${window.location.pathname.match(/\d+/)[0]}`,
-            {
-                tag_type: getElem("#tag_type").value,
-                alias: getElem("#alias").value,
-                parent: getElem("#parent").value,
-                name_en: getElem("#name_en").value,
-                name_ru: getElem("#name_ru").value,
-                name_jp: getElem("#name_jp").value,
-                description_en: getElem("#description_en").value,
-                description_ru: getElem("#description_ru").value,
-                description_jp: getElem("#description_jp").value,
-            },
-        );
+        const { success, errormsg } = await API.editTag({
+            id: window.location.pathname.match(/\d+/)[0],
+            type: getElem("#tag_type").value,
+            alias: getElem("#alias").value,
+            parent: getElem("#parent").value,
+            tag: getElem("#name_en").value,
+            tag_ru: getElem("#name_ru").value,
+            tag_jp: getElem("#name_jp").value,
+            description_en: getElem("#description_en").value,
+            description_ru: getElem("#description_ru").value,
+            description_jp: getElem("#description_jp").value,
+        });
 
         if (success) {
             changed = false;
             if (window.opener) {
-                window.opener.postMessage({ cmd: "update_tags" }, "https://anime-pictures.net");
+                window.opener.postMessage({ cmd: "update_tags" }, PAGES.origin);
             }
             window.close();
         } else {
@@ -643,21 +509,22 @@ function improveTagEditor () {
         if (!changed) return;
         // legal way
         ev.preventDefault(); // no effect on chrome
-        // depricated ways
+        // deprecated ways
         // for chrome:
         ev.returnValue = "Some data were changed"; // eslint-disable-line no-param-reassign
         // return "Some data were changed";
     });
 
-    // support of droping links to tag to the field names
+    // support of dropping links to tag to the field names
     getAllElems("#name_en, #name_ru, #name_jp")
         .forEach((ev) => ev.addEventListener("drop", link2tag));
+    getElem("#description_en").addEventListener("drop", addLink);
 
-    // autosetting tag type
+    // auto-setting tag type
     const tagtype = getElem("#tag_type");
     getElem("#description_en").addEventListener("input", (ev) => {
         if (tagtype.value !== "0") return;
-        if (ev.target.value.startsWith("http")) tagtype.value = 4;
+        if (ev.target.value.startsWith("http")) tagtype.value = 4; // type author
     });
 
     replaceField(getElem("#to_tag"));
@@ -675,31 +542,17 @@ function improveTagEditor () {
 }
 
 // TODO list
-// highlight post props
-// improve detecting of tags with unknown type for openNewTags and makeTagsMeta
 // related posts editor
+// lock updating of recommended tags
 
 // =============================================================================
 //                         Program execution start
 // =============================================================================
 
 if (!SETTINGS.isModerator) {
-    throw new Error("You don't have moderator rights!");
+    say(TEXT.isntModerator, "AP Enhancements for moderators");
+    return;
 }
-
-GM_addStyle(`
-    /* for recommended tags */
-    .tags li.preTag a {
-        border-left: 2px solid aqua;
-    }
-    #AP_Enhancements .tags .icon_frame,
-    .tags li.preTag .icon_delete,
-    .tags li.preTag .icon_frame,
-    .tags li:not(.preTag) .accept,
-    .tags li:not(.preTag) .decline {
-        display: none;
-    }
-`);
 
 // add moderator settings
 Object.entries(MOD_SETTIGNS).forEach(([name, setting]) => SETTINGS.append(name, setting));
@@ -716,8 +569,8 @@ onready(() => {
     if (pageIs.moderatePreTags) {
         // fix lack of window.opener for links opened in new tab
         getAllElems(".messages td:nth-child(3) a").forEach((a) => {
-            a.addEventListener("auxclick", fixedNewTabLink);
-            a.addEventListener("click", fixedNewTabLink);
+            a.addEventListener("auxclick", onNewTabLinkClick);
+            a.addEventListener("click", onNewTabLinkClick);
         });
         // remove resolved recommended tags
         window.addEventListener("message", ({ data: { cmd, preTagId } }) => {
@@ -732,12 +585,10 @@ onready(() => {
     if (pageIs.post) {
         new MutationObserver(() => {
             openNewTags();
-            addRecommendedTags();
         }).observe(getElem("#post_tags"), { childList: true });
-        addRecommendedTags();
     }
 
-    if (pageIs.search) addRemoveTagsButton();
+    if (pageIs.searchPosts) addRemoveTagsButton();
     if (pageIs.post && SETTINGS.tagReplacingAddButton) addReplaceTagButton();
     if (pageIs.editTag) improveTagEditor();
 });
