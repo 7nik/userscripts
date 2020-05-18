@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.0.2
+// @version      1.1.0
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -9,14 +9,15 @@
 // @updateURL    https://github.com/7nik/userscripts/raw/master/AP%20Enhancements%20for%20users.user.js
 // @downloadURL  https://github.com/7nik/userscripts/raw/master/AP%20Enhancements%20for%20users.user.js
 // @match        https://anime-pictures.net/*
-// @exclude      https://anime-pictures.net/chat*
 // @run-at       document-start
 // @grant        GM_addStyle
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_addValueChangeListener
 // ==/UserScript==
 
-/* global lang site_theme post_id ajax_request2 is_moderator AnimePictures */
+/* global GM_addValueChangeListener */
+/* global lang site_theme post_id ajax_request2 is_login is_moderator AnimePictures */
 /* eslint-disable sonarjs/no-duplicate-string, sonarjs/cognitive-complexity */
 
 "use strict";
@@ -27,8 +28,8 @@ const TEXT = new Proxy(
         /**
          * Returns one of the plural form according to the given number
          * @param  {number} n - The number for plural form
-         * @param  {string[]} pluralForms - Arrays of plural forms
-         * @return {string} The plural form accortind to the number
+         * @param  {string[]} pluralForms - Array of plural forms
+         * @return {string} The plural form according to the number
          */
         plural:  {
             // no plural form - no reason to use the function
@@ -83,9 +84,9 @@ const TEXT = new Proxy(
                 const npics = TEXT.plural(
                     used,
                     [
-                        "непроверенное изображние",
-                        "непроверенных изображния",
-                        "непроверенных изображний",
+                        "непроверенное изображение",
+                        "непроверенных изображения",
+                        "непроверенных изображений",
                     ],
                 );
                 return `У вас ${used} ${npics}, вы можете загрузить ещё ${free}.`;
@@ -143,6 +144,66 @@ const TEXT = new Proxy(
                 "meta tags",
                 "deleted by moderator",
             ],
+            zh_CH: [
+                "未知",
+                "字符",
+                "参考",
+                "版权 (产品)",
+                "作者",
+                "游戏版权",
+                "其他版权",
+                "对象",
+                "meta tags",
+                "deleted by moderator",
+            ],
+            es: [
+                "unknown",
+                "personaje",
+                "referencia",
+                "copyright(producto)",
+                "autor",
+                "copyright del juego",
+                "otros copyright",
+                "object",
+                "meta tags",
+                "deleted by moderator",
+            ],
+            it: [
+                "sconosciuto",
+                "character",
+                "riferimento",
+                "copyright (prodotto)",
+                "autore",
+                "game copyright",
+                "altro copyright",
+                "oggetto",
+                "meta tags",
+                "deleted by moderator",
+            ],
+            de: [
+                "unknown",
+                "character",
+                "reference",
+                "copyright (product)",
+                "author",
+                "game copyright",
+                "other copyright",
+                "object",
+                "meta tags",
+                "deleted by moderator",
+            ],
+            fr: [
+                "Inconnu",
+                "Personnages",
+                "Référence",
+                "Droit d’auteur du produit",
+                "Auteur",
+                "Droit d’auteur du jeu",
+                "Autre droit d’auteur",
+                "Objets",
+                "Meta tags",
+                "deleted by moderator",
+            ],
         },
         // regular text
         accept: {
@@ -154,7 +215,7 @@ const TEXT = new Proxy(
             ru: "Добавить",
         },
         availableHotkeys: {
-            en: "Hotkeys avaible on this page",
+            en: "Hotkeys available on this page",
             ru: "Горячие клавиши доступные на этой странице",
         },
         bigFile: {
@@ -199,11 +260,11 @@ const TEXT = new Proxy(
         },
         fileLabel: {
             en: "Choose files or drag'n'drop them",
-            ru: "Выберите или перещати файлы сюда",
+            ru: "Выберите или перетащите файлы сюда",
         },
         hkAddTagsField: {
-            en: "(add) focus on an input field for adding tags",
-            ru: "(add) фокус на поле для добавления тегов",
+            en: "(add) focus on an input field for adding/recommending tags",
+            ru: "(add) фокус на поле для добавления/рекомендации тегов",
         },
         hkAddUrl: {
             en: "add link to selected text",
@@ -223,7 +284,7 @@ const TEXT = new Proxy(
         },
         hkCommentField: {
             en: "(comment) focus on the comment/message textarea",
-            ru: "(comment) фокус на поля для коментария/сообщения",
+            ru: "(comment) фокус на поле для коментария/сообщения",
         },
         hkDeclineTagChanges: {
             en: "decline changes of a tag and close the window",
@@ -231,11 +292,11 @@ const TEXT = new Proxy(
         },
         hkDownload: {
             en: "(download) download the image",
-            ru: "(download) скачать изображние",
+            ru: "(download) скачать изображение",
         },
         hkFavorite: {
             en: "(favorite) add the image to default favorite",
-            ru: "(favorite) добавить изображние в избранные",
+            ru: "(favorite) добавить изображение в избранные",
         },
         hkHelp: {
             en: "(help) show this message",
@@ -263,7 +324,7 @@ const TEXT = new Proxy(
         },
         hkOpenFull: {
             en: "(view) open the full image",
-            ru: "(view) открыть оригинал изображния",
+            ru: "(view) открыть оригинал изображения",
         },
         hkPasteUrl: {
             en: "Paste URL",
@@ -271,7 +332,7 @@ const TEXT = new Proxy(
         },
         hkPicture: {
             en: "(picture) turn the selected URL to picture",
-            ru: "(picture) сдеать выделенную ссылку изображнием",
+            ru: "(picture) сделать выделенную ссылку изображением",
         },
         hkPrevPost: {
             en: "go to the previous post",
@@ -315,7 +376,7 @@ const TEXT = new Proxy(
         },
         hkStar: {
             en: "(star) star the image",
-            ru: "(star) звёзднуть изображние",
+            ru: "(star) звёзднуть изображение",
         },
         hkUnderline: {
             en: "(underline) make selected text underline",
@@ -323,11 +384,11 @@ const TEXT = new Proxy(
         },
         hkUnfovarite: {
             en: "(unFavorite) remove the image from favorite",
-            ru: "(unFavorite) убрать изображние из избранных",
+            ru: "(unFavorite) убрать изображение из избранных",
         },
         hkUnstar: {
             en: "(unStar) unstar the image",
-            ru: "(unStar) раззвёздить изображние",
+            ru: "(unStar) раззвездить изображение",
         },
         hotkeys: {
             en: "hotkeys",
@@ -336,6 +397,14 @@ const TEXT = new Proxy(
         interrupted: {
             en: "Interrupted",
             ru: "Прервано",
+        },
+        isntLogined: {
+            en: "You must login for correct work of the userscript",
+            ru: "Вы должны авторизоватся для правильной работы юзерскрипта",
+        },
+        isntModerator: {
+            en: "You don't have moderator rights!",
+            ru: "У вас нет прав модератора!",
         },
         netError: {
             en: "Network error",
@@ -369,6 +438,31 @@ const TEXT = new Proxy(
             en: "Processing",
             ru: "Обработка",
         },
+        pPicsAfter: {
+            en: "Pictures published since ",
+            ru: "Изображения опубликованные после ",
+        },
+        pPrePics: {
+            en: "Pictures with PRE status only",
+            ru: "Изображения только со статусом ПРЕ",
+        },
+        pUserAllFav: {
+            en: "All pictures favorited by ",
+            ru: "Все изображения добавленные в избранные пользователем ",
+        },
+        pUserFavorited: {
+            // Pictures favorited as "Nice pics" by SomeUserName
+            en: `Pictures favorited as "%s" by `,
+            ru: `Изображения добавленные в избранное "%s" пользователем `,
+        },
+        pUserPics: {
+            en: "Pictures uploaded by ", // + SomeUserName
+            ru: "Изображения загруженные пользователем ",
+        },
+        pUserStars: {
+            en: "Pictures starred by ", // + SomeUserName
+            ru: "Изображения звёзднутые пользователем ",
+        },
         reading: {
             en: "Reading",
             ru: "Открытие",
@@ -383,11 +477,15 @@ const TEXT = new Proxy(
         },
         showImages: {
             en: "Show images",
-            ru: "Показать изображния",
+            ru: "Показать изображения",
         },
         sourceID: {
             en: "Source ID",
             ru: "ID источника",
+        },
+        sAlwaysLoadPreTags: {
+            en: "Always load recommended tags",
+            ru: "Всегда загружать рекомендованные теги",
         },
         sFloatingSidebar: {
             en: "Make the sidebar floating",
@@ -399,11 +497,15 @@ const TEXT = new Proxy(
         },
         sHideNewPostMessage: {
             en: "Do not show message about new post",
-            ru: "Не показать сообщение о нопом посте",
+            ru: "Не показать сообщение о новом посте",
         },
         sMetaTags: {
             en: `"Set" type meta for these tags`,
-            ru: `"Задаёт" этим тегам тип мета`,
+            ru: `"Задать" этим тегам тип мета`,
+        },
+        sOpenLinkInNewTab: {
+            en: "Open all links in new tab",
+            ru: "Открывать все ссылки в новой вкладке",
         },
         sTagReplacingAction: {
             en: "What to do after the tag replacing",
@@ -435,7 +537,7 @@ const TEXT = new Proxy(
         },
     },
     {
-        lang: new URL(window.location.href).searchParams.get("lang") || GM_setValue("lang", "en"),
+        lang: new URL(window.location.href).searchParams.get("lang") || GM_getValue("lang", "en"),
         get (dictinary, name) {
             return dictinary[name][this.lang] || dictinary[name].en;
         },
@@ -443,34 +545,82 @@ const TEXT = new Proxy(
 );
 
 /**
+ * Raw tag - site's object that descripes a tag
+ * @typedef {Object} RawTag
+ * @property {number} id - The tag id
+ * @property {string} tag - The English tag name
+ * @property {string} tag_ru - The Russian tag name
+ * @property {string} tag_jp - The Japanese tag name
+ * @property {number} num - The number of posts with this tag
+ * @property {number} type - The tag type
+ * @property {string} description_en - The English description of the tag
+ * @property {string} description_ru - The Russian description of the tag
+ * @property {string} description_jp - The Japanese description of the tag
+ * @property {number} alias - Id of the aliased tag or null
+ * @property {number} parent - Id of the parent tag or null
+ */
+/**
+ * Presented tag - site's object that descripes a tag added to a post
+ * @typedef {RawTag} PresentedTag
+ * @property {Date} addtime - When the tag was added
+ * @property {Date} removetime - When the tag was removed or null
+ * @property {number} user_id - Who added the tag
+ */
+/**
+ * Advenced tag object that should be used when possible
  * @typedef {Object} Tag
  * @property {number} id - The tag id
- * @property {?string} preId - Id of recommendation if it's recommended tag
- * @property {string} name - The tag name
+ * @property {?string} preId - Id of recommendation if it's a recommended tag
+ * @property {?string} by - Name of a user which added/recommended the tag
+ * @property {string} name - The localized tag name
+ * @property {string} enName - The English tag name
+ * @property {?string} ruName - The Russian tag name
+ * @property {?string} jpName - The Japanese tag name
+ * @property {?number} alias - If it's an alias, id of the aliased tag
  * @property {number} type - The tag type
  * @property {number} count - The number of posts with this tag
+ * @property {string} countStr - The number of posts with this tag
+ */
+/**
+ * Info about a user
+ * @typedef {Object} User
+ * @property {number} id - The user id
+ * @property {string} name - The user name
+ * @property {number} level - The level of user's rights
  */
 
-// tag with "empty" fields
+// full tag with "empty" fields
 const NO_TAG = Object.freeze({
     id: 0,
+    preId: null,
+    by: null,
     name: "",
+    enName: "",
+    ruName: null,
+    jpName: null,
+    alias: null,
     type: 0,
     count: 0,
+    countStr: "0",
 });
 
 // list of settings and methods for work with them
 const SETTINGS = new Proxy({
     // private settings
+    isFirstRun: {
+        descr: null,
+        type: "boolean",
+        defValue: true,
+    },
     lang: {
         descr: null,
         type: "string",
         defValue: "en",
     },
-    isThemeDark: {
+    themeName: {
         descr: null,
-        type: "boolean",
-        defValue: false,
+        type: "string",
+        defValue: "first",
     },
     isModerator: {
         descr: null,
@@ -479,13 +629,21 @@ const SETTINGS = new Proxy({
     },
     tagsCache: {
         descr: null,
-        type: "object",
-        defValue: {},
+        type: "cache",
+        defValue: { data: [], lastUpdate: 0 },
+        lifetime: 12 * 60 * 60 * 1000,
+    },
+    userCache: {
+        descr: null,
+        type: "cache",
+        defValue: { data: [], lastUpdate: 0 },
+        lifetime: 7 * 24 * 60 * 60 * 1000,
     },
     preTagsCache: {
         descr: null,
-        type: "object",
-        defValue: {},
+        type: "cache",
+        defValue: { data: {}, lastUpdate: 0 },
+        lifetime: 15 * 60 * 1000,
     },
     // public settings
     wideLayout: {
@@ -505,6 +663,16 @@ const SETTINGS = new Proxy({
     },
     hideNewPostMessage: {
         descr: TEXT.sHideNewPostMessage,
+        type: "boolean",
+        defValue: false,
+    },
+    openLinkInNewTab: {
+        descr: TEXT.sOpenLinkInNewTab,
+        type: "boolean",
+        defValue: false,
+    },
+    alwaysLoadPreTags: {
+        descr: TEXT.sAlwaysLoadPreTags,
         type: "boolean",
         defValue: false,
     },
@@ -529,6 +697,15 @@ const SETTINGS = new Proxy({
     },
 }, {
     cache: {},
+    listeners: {},
+    // remove a setting value from the cache when it was changed in another tab
+    removeFromCacheOnChange (name) {
+        if (name in this.listeners) return;
+        this.listeners[name] = GM_addValueChangeListener(name, (name2, oldVal, newVal, remote) => {
+            if (remote) delete this.cache[name];
+        });
+    },
+    // find a setting object, not a setting value
     find (list, name) {
         if (name in list) {
             return {
@@ -539,6 +716,7 @@ const SETTINGS = new Proxy({
         console.error(`No setting ${name}`);
         return null;
     },
+    // whether a setting value is valid
     isValid (list, name, value) {
         const setting = this.find(list, name);
         if (!setting) return false;
@@ -546,14 +724,23 @@ const SETTINGS = new Proxy({
             case "string":   return typeof value === "string";
             case "boolean":  return typeof value === "boolean";
             case "object":   return value && typeof value === "object";
-            case "tag":      return value && "id" in value && "name" in value;
             case "list":     return value in setting.values;
-            case "tag-list": return Array.isArray(value) && value.every(Number.isInteger);
+            case "tag-list": return Array.isArray(value) && value.every(Number.isFinite);
+            case "tag":      return value
+                                    && typeof value === "object"
+                                    && "id" in value
+                                    && "enName" in value;
+            case "cache":    return value
+                                    && typeof value === "object"
+                                    && "data" in value
+                                    && "lastUpdate" in value
+                                    && value.lastUpdate + setting.lifetime > Date.now();
             default:
                 console.error(`Unsupported type ${setting.type}`);
                 return null;
         }
     },
+    // append new setting object
     append (list, name, setting) {
         if (name in list) {
             console.error(`You cannot overwrite setting "${name}"`);
@@ -561,19 +748,30 @@ const SETTINGS = new Proxy({
         }
         if (!["descr", "type", "defValue"].every((field) => field in setting)
             || setting.type === "list" && !setting.values
+            || setting.type === "cache" && !setting.lifetime
         ) {
             console.error(`Setting lacks some field`, setting);
             return;
         }
-        if (!this.isValid({ s: setting }, "s", setting.defValue)) {
+        if (
+            setting.type === "cache"
+                ? !(Number.isFinite(setting.lifetime)
+                    && setting.defValue
+                    && typeof setting.defValue === "object"
+                    && "data" in setting.defValue
+                    && "lastUpdate" in setting.defValue)
+                : !this.isValid({ s: setting }, "s", setting.defValue)
+        ) {
             console.error(`The default value "${setting.defValue}" isn't valid`);
             return;
         }
         list[name] = setting;
     },
+    // get all setting objects
     getAll (list) {
         return Reflect.ownKeys(list).map((name) => this.find(list, name));
     },
+    // get HTMLElement to edit a setting value
     getAsElement (list, name) {
         const setting = this.find(list, name);
         if (!setting) return null;
@@ -612,17 +810,28 @@ const SETTINGS = new Proxy({
                     idList.push(newTag.id);
                     // force update tag value in the tag cache
                     const cache = this.get(list, "tagsCache");
-                    delete cache[newTag.name];
+                    cache.data.splice(cache.data.findIndex(({ id }) => id === newTag.id), 1);
                     this.set(list, "tagsCache", cache);
                     this.set(list, name, idList);
                     // display tags as sorted
                     Promise.all(idList.map((id) => getTagInfo(id)))
+                        .then((tags) => tags.sort((t1, t2) => t2 - t1))
                         .then((tags) => tags.map((tag) => newTagItem(tag)))
-                        .then((tags) => tags.sort((t1, t2) => t2.count - t1.count))
                         .then((items) => {
-                            elem.lastChild.innerHTML = "";
-                            elem.lastChild.append(...items);
+                            elem.lastChild.lastChild.innerHTML = "";
+                            elem.lastChild.lastChild.append(...items);
                         });
+                };
+                const removeTagItem = (ev) => {
+                    if (!ev.target.matches(".icon_delete")) return;
+                    const idDel = +ev.target.parentNode.dataset.tagId;
+                    ev.target.closest("li").remove();
+                    idList.splice(idList.findIndex((id) => id === idDel), 1);
+                    // force update tag value in the tag cache
+                    const cache = this.get(list, "tagsCache");
+                    cache.data.splice(cache.data.findIndex(({ id }) => id === idDel), 1);
+                    this.set(list, "tagsCache", cache);
+                    this.set(list, name, idList);
                 };
                 elem = newElem("form", {
                     submit: (ev) => {
@@ -638,30 +847,21 @@ const SETTINGS = new Proxy({
                             css: { marginLeft: "5px" },
                             click: addTagItem,
                         }),
-                        newElem("br"),
-                        newElem("ul", {
-                            className: "tags",
-                            click: (ev) => {
-                                if (!ev.target.matches(".icon_delete")) return;
-                                const idDel = +ev.target.parentNode.dataset.tagId;
-                                ev.target.closest("li").remove();
-                                idList.splice(idList.findIndex((id) => id === idDel), 1);
-                                // force update tag value in the tag cache
-                                const tags = this.get(list, "tagsCache");
-                                const tag = Object.values(tags).find(({ id }) => id === idDel);
-                                delete tags[tag.name];
-                                this.set(list, "tagsCache", tags);
-                                this.set(list, name, idList);
-                            },
+                        newElem("div", {
+                            css: { paddingRight: "100px" },
+                            children: [
+                                newElem("ul", {
+                                    className: "tags",
+                                    click: removeTagItem,
+                                }),
+                            ],
                         }),
                     ],
                 });
                 Promise.all(idList.map((id) => getTagInfo(id)))
-                    .then((tags) => (tags
-                        .sort((t1, t2) => t2.count - t1.count)
-                        .map((tag) => newTagItem(tag))
-                    ))
-                    .then((items) => elem.lastChild.append(...items));
+                    .then((tags) => tags.sort((t1, t2) => t2 - t1))
+                    .then((tags) => tags.map((tag) => newTagItem(tag)))
+                    .then((items) => elem.lastChild.lastChild.append(...items));
                 return elem;
             }
 
@@ -674,6 +874,7 @@ const SETTINGS = new Proxy({
                 return null;
         }
     },
+    // get <tr> to edit a setting value
     getAsRow (list, name) {
         const setting = this.find(list, name);
         if (!setting) return null;
@@ -682,32 +883,321 @@ const SETTINGS = new Proxy({
         return row;
     },
 
+    // get a setting value
     get (list, name) {
+        // if is's method of SETTINGS
         if (name in this) return (...args) => this[name](list, ...args);
         if (name in this.cache) return this.cache[name];
         const setting = this.find(list, name);
         if (!setting) return null;
-        const value = GM_getValue(name);
+        this.removeFromCacheOnChange(name);
+        let value = GM_getValue(name);
         if (!this.isValid(list, name, value)) {
             GM_setValue(name, setting.defValue);
-            this.cache[name] = setting.defValue;
-            return setting.defValue;
+            value = setting.defValue;
         }
+        if (setting.type === "cache") value = value.data;
         this.cache[name] = value;
         return value;
     },
+    // set a setting value
     set (list, name, value) {
         const setting = this.find(list, name);
         if (!setting) return false;
+        if (setting.type === "cache") value = { data: value, lastUpdate: Date.now() };
         if (this.isValid(list, name, value)) {
             GM_setValue(name, value);
-            this.cache[name] = value;
+            this.cache[name] = (setting.type === "cache") ? value.data : value;
+            this.removeFromCacheOnChange(name);
             return true;
         }
         console.error(`The value ${value} cannot be set to ${name}.`);
         return false;
     },
 });
+
+// page names of the pathnames
+const PAGES = {
+    origin:          "https://anime-pictures.net",
+    any:             "/",
+    main:            "/",
+    api:             "/api/",
+    chat:            "/chat/view",
+    about:           "/index/about",
+    moderatePreTags: "/pictures/moderating_pre_tags/",
+    yourPreTags:     "/pictures/pre_tags/",
+    uploadPicture:   "/pictures/view_add_wall",
+    comments:        "/pictures/view_all_comments/",
+    editTag:         "/pictures/view_edit_tag/",
+    post:            "/pictures/view_post/",
+    searchPosts:     "/pictures/view_posts/",
+    PMChat:          "/profile/messages/",
+    PMList:          "/profile/messages",
+    settings:        "/profile/view",
+    profile:         "/profile/view_ext_profile/",
+    withTextarea: [
+        "/chat/view",
+        "/pictures/view_edit_tag/",
+        "/pictures/view_post/",
+        "/profile/messages",
+    ],
+    strictComparisonIsRequired: [
+        "main",
+        "settings",
+        "PMList",
+    ],
+};
+
+const API = {
+    ajax (url, body) {
+        const timer = setTimeout(() => document.body.classList.add("waiting"), 500);
+        const clearTimer = async (resp) => {
+            document.body.classList.remove("waiting");
+            clearTimeout(timer);
+        };
+        this.lastAjax = (this.lastAjax || Promise.resolve())
+            .then(() => fetch(url, body), () => fetch(url, body));
+        this.lastAjax.then(clearTimer);
+        return this.lastAjax;
+    },
+    html (url) {
+        return this.ajax(url).then((resp) => {
+            if (!resp.ok) throw resp;
+            return resp.text().then((text) => new DOMParser().parseFromString(text, "text/html"));
+        });
+    },
+    get (url, params = null) {
+        const fullParams = { ...params, lang: SETTINGS.lang };
+        const fullUrl = url
+            + (url.includes("?") ? "&" : "?")
+            + Object.entries(fullParams).map(([k, v]) => `${k}=${v}`).join("&");
+        return this.ajax(fullUrl, { method: "GET" }).then((resp) => {
+            if (!resp.ok) throw resp;
+            return resp.json();
+        });
+    },
+    post (url, params = null) {
+        const body = { method: "POST" };
+        if (params) {
+            body.body = Object.entries(params)
+                .reduce((fd, [k, v]) => { fd.append(k, v); return fd; }, new FormData());
+        }
+        return this.ajax(url, body).then((resp) => {
+            if (!resp.ok) throw resp;
+            return resp.json();
+        });
+    },
+    extractParams (link) {
+        const url = "searchParams" in link ? link : new URL(link);
+        return [...url.searchParams.entries()]
+            .reduce((params, [key, val]) => { params[key] = val; return params; }, {});
+    },
+
+    acceptPreTag: (preTagId) => API.post(`/pictures/accept_pre_tag/${preTagId}`),
+    addTags: (tagNames, postId, createTags = false) => API.post(
+        `/pictures/add_tag_to_post/${postId}`,
+        { text: tagNames, add_new_tag: createTags.toString() },
+    ),
+    editTag: (rawTag) => API.post(
+        `/pictures/edit_tag/${rawTag.id}`,
+        {
+            tag_type: rawTag.type,
+            alias: rawTag.alias ?? "",
+            parent: rawTag.parent ?? "",
+            name_en: rawTag.tag,
+            name_ru: rawTag.tag_ru ?? "",
+            name_jp: rawTag.tag_jp ?? "",
+            description_en: rawTag.description_en ?? "",
+            description_ru: rawTag.description_ru ?? "",
+            description_jp: rawTag.description_jp ?? "",
+        },
+    ),
+    declinePreTag: (preTagId) => API.post(`/pictures/del_pre_tag/${preTagId}`),
+    getPostInfo: (postId) => API.get(`${PAGES.post}${postId}?type=json`),
+    getPostTags: (postId) => API.get(`/api/v2/posts/${postId}/tags`),
+    getPosts (pageNum, searchParams = {}) {
+        const params = { page: pageNum };
+        [
+            "search_tag",
+            "denied_tags",
+            "favorite_by",
+            "favorite_folder",
+            "res_x",
+            "res_y",
+            "res_x_n", // if set: 1: >=res_x, 0: <=res_x
+            "res_y_n", // if set: 1: >=res_y, 0: <=res_y
+            "aspect", // double or like 3:4
+            "order_by", // date|date_r|rating|views|size|tag_num
+            "ldate", // 0-7: off, 1 week, 1 month, 1 day, 6 month,year, 2 years, 3 years
+            "small_prev",
+            "dmi", // disable moderators images
+            "ext_jpg", // only jpeg
+            "ext_png", // only png
+            "ext_gif", // only gif
+            "color", // RR_GG_BB_DD, rgb color + deviation
+            "view_after", // timestamp
+            "user", // filter by uploader
+            "status", // `pre` or nothing
+            "stars_by",
+        ].forEach((name) => {
+            if (name in searchParams) params[name] = searchParams[name];
+        });
+        return this.post(PAGES.searchPosts, params);
+    },
+    getTagById: (tagId) => API.get(`/api/v3/tags/${tagId}`),
+    getTagsByName: (tagName) => API.get(`/api/v3/tags?tag:smart=${encodeURIComponent(tagName)}`),
+    getUserInfo: (userId) => API.get(`${PAGES.profile}${userId}?type=json`),
+    removeTag: (tagId, postId) => API.post(
+        `/pictures/del_tag_from_post/${postId}`,
+        { tag_id: tagId },
+    ),
+};
+
+// color-related stuff
+const COLORS = {
+    tagTypeColor: [
+        "", "blue", "", "green", "orange", "green", "green", "", "purple",
+    ],
+    tagTypeClass: [
+        "", "character", "", "copyright", "artist", "copyright", "copyright", "", "meta",
+    ],
+    eroticLevel: [null, "#F0F", "#F90", "#F00"],
+    userName: [null, "#00C", "#0A0", "#F00"],
+    tagAdder: {
+        curr: "green", // current user
+        0: "#888", // regular user
+        1: "#00C", // commiter
+        2: "#F00", // moderator
+        3: "#F00", // admin
+    },
+    themeColors: {
+        first:  ["#066dab", "#f1bf48"],
+        second: ["#5d1600", "#210800"],
+        third:  ["#3a408b", "#0688d5"],
+        fourth: ["#6e0837", "#1a0f1a"],
+    },
+};
+
+const generalCSS = `
+    .hidden {
+        display: none;
+    }
+    /* some general fixes */
+    .title {
+        height: 32px;
+    }
+    .sidebar_login img {
+        vertical-align: top;
+    }
+    .title > img {
+        vertical-align: middle;
+        cursor: pointer;
+    }
+
+    /* for say() */
+    ul.autocomplite:not(#id) {
+        z-index: 130;
+    }
+    #dialog {
+        position: fixed;
+        top: 0;
+        margin: 0;
+        height: 100%;
+        width: 100%;
+        display: flex;
+        z-index: 100;
+        background: rgba(0,0,0,0.75);
+    }
+    #dialog > div {
+        margin: auto;
+    }
+    #dialog .body {
+        margin: 0;
+    }
+
+    /* comments on post page */
+    #cont.cont_view_post > :not([id]):not(:first-child) {
+        width: 680px;
+        min-width: auto;
+    }
+
+    /* for long request and actions */
+    body.wait *,
+    body.waiting * {
+        cursor: wait;
+    }
+    body.wait a, body.wait a *,
+    body.waiting a, body.waiting a * {
+        cursor: progress;
+    }
+
+    /* for meta tags */
+    .tags .purple a {
+        color: #870fff;
+    }
+    .tags .purple a + span {
+        border-color: #9c60d7 #9658d5 #8f4bd2;
+        background-image: linear-gradient(to bottom, #bd95e4, #a36cda);
+    }
+    .messages td>div.img_block2 {
+        width: 150px;
+    }
+
+    /* for post status */
+    .body + .body .img_block_text + .img_block_text {
+        display: none;
+    }
+    .body + .body .img_block2:hover .img_block_text:not(:last-child) {
+        display: none;
+    }
+    .body + .body .img_block2:hover .img_block_text + .img_block_text {
+        display: block;
+    }
+
+    /* hide the spin buttons */
+    input[type='number']::-webkit-inner-spin-button { display: none; }
+
+    /* style scrollbars */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 10px;
+    }
+    ::-webkit-scrollbar {
+        background: ${SETTINGS.themeName === "second" ? "#6663" : "#4444"};
+    }
+    ::-webkit-scrollbar-thumb {
+        background: ${SETTINGS.themeName === "second" ? "#4446" : "#8888"};
+    }
+    #content ::-webkit-scrollbar {
+        background: ${COLORS.themeColors[SETTINGS.themeName][1]};
+    }
+    #content ::-webkit-scrollbar-thumb {
+        background: ${COLORS.themeColors[SETTINGS.themeName][0]};
+    }
+    #sidebar:not(#id) {
+        margin-right: 1px;
+    }
+
+    /* for recommended tags */
+    #post_tags .tags li.waiting a,
+    #post_tags .tags li.preTag a {
+        border-left: 2px solid aqua;
+    }
+    .tags li.preTag .icon_delete,
+    .tags li.preTag .icon_frame,
+    .tags li:not(.preTag) .accept,
+    .tags li:not(.preTag) .decline {
+        display: none;
+    }
+
+    /* for APE settings */
+    #AP_Enhancements .tags .icon_frame {
+        display: none;
+    }
+    #AP_Enhancements .tags a {
+        border-left: none;
+    }
+`;
 
 const wideLayoutCSS = `
     body {
@@ -720,7 +1210,6 @@ const wideLayoutCSS = `
     @media screen and (min-width: 1630px) and (max-width: 1899px)  {
         div#content {
             margin: 0;
-            width: calc(100% - 300px);
         }
         div#cont.cont_view_post {
             margin: 10px auto;
@@ -731,24 +1220,25 @@ const wideLayoutCSS = `
     }
 
     @media screen and (orientation: landscape) and (min-width: 1900px) {
+        #body_wrapper:not(#id) {
+            grid-template-columns: 0 auto 300px;
+        }
         /* temporal layout */
-        #cont.cont_view_post > [itemscope]:not(#part0) {
+        #content > [itemscope]:not(#part0) {
             grid-area: imgPost;
             display: flex !important;
             flex-direction: column;
         }
-        #cont.cont_view_post > [itemscope]:not(#part0) ~  *,
-        #cont.cont_view_post > [itemscope]:not(#part0) > :first-child,
-        #cont.cont_view_post > [itemscope]:not(#part0) > .post_content:nth-child(2):not(.moderator),
-        #cont.cont_view_post > [itemscope]:not(#part0) > .post_content:nth-child(3),
-        #cont.cont_view_post > [itemscope]:not(#part0) > #big_preview_cont + .post_content ~ * {
+        #content > [itemscope]:not(#part0) ~  *,
+        #content > [itemscope]:not(#part0) > :first-child,
+        #content > [itemscope]:not(#part0) > .post_content:nth-child(2):not(.moderator),
+        #content > [itemscope]:not(#part0) > .post_content:nth-child(3),
+        #content > [itemscope]:not(#part0) > #big_preview_cont + .post_content ~ * {
             display: none;
         }
+
         div#content {
-            margin: 0;
-            width: calc(1280px + (100vw - 1891px) / 3);
-        }
-        div#cont.cont_view_post {
+            width: calc(1280px + (100vw - 1884px) / 3);
             display: grid;
             grid-template-areas:
                 "message  message"
@@ -757,60 +1247,58 @@ const wideLayoutCSS = `
                 "comments imgPost"
                 ".        imgPost";
             grid-template-columns: 640px;
-            gap: 0 calc((100vw - 1891px) / 3);
+            grid-template-rows: repeat(5, min-content);
+            gap: 0 calc((100vw - 1884px) / 3);
             margin: 10px 0;
             padding: 0;
             overflow: initial;
         }
-        div#cont:not(.cont_view_post) {
-            margin: 10px 0;
-        }
         /* ban/new_post message  */
-        div#cont.cont_view_post > div:first-child:not([itemscope]):not(#part0) {
+        div#content > div:first-child:not([itemscope]):not(#part0) {
             grid-area: message;
             width: 100%;
             text-align: center;
             margin: 0 0 10px 0;
         }
-        #cont > #part0 {
+        #content > #part0 {
             grid-area: uploader;
         }
-        #cont > #part1 {
+        #content > #part1 {
             grid-area: imgPost;
         }
-        #cont > #part2 {
+        #content > #part2 {
             grid-area: postInfo;
         }
         /* comments */
-        #cont.cont_view_post > :not([id]):not(:first-child) {
+        #content > :not([id]):not(:first-child) {
             grid-area: comments;
             width: 640px;
             margin-bottom: 0;
         }
         /* Linked pictures */
-        #cont > #part0 .post_content:nth-child(2) {
+        #content > #part0 .post_content:nth-child(2) {
             display: flex;
             flex-direction: column;
             align-items: flex-end;
         }
-        #cont > #part0 .post_content:nth-child(2) > .title  {
+        #content > #part0 .post_content:nth-child(2) > .title  {
             align-self: stretch;
         }
-        #cont > #part0 .post_content:nth-child(2) > .body[style]  {
+        #content > #part0 .post_content:nth-child(2) > .body[style]  {
             max-width: 100%;
         }
-        #cont.cont_view_post > div:not(.post_content) {
+        #content > div:not(.post_content) {
             width: 640px !important;
         }
-        #cont.cont_view_post > :not(.post_content) > div:not(.body) {
+        #content > :not(.post_content) > div:not(.body) {
             width: 640px !important;
             margin: 0 0 10px 0;
         }
-        #cont :not(#part0) .post_content:last-child {
+        #content :not(#part0) .post_content:last-child {
             margin-bottom: 0;
         }
 
-        #cont .moderator {
+        #content .moderator {
             font-size: 97%;
             word-spacing: -1.5px;
         }
@@ -828,7 +1316,7 @@ const wideLayoutCSS = `
             position: absolute;
             background: none;
             top: 0;
-            left: calc(300px + 15px - 100vw);
+            left: calc(300px + 10px - 100vw);
             height: 100%;
         }
         div#tags_sidebar > div:last-child {
@@ -844,43 +1332,52 @@ const wideLayoutCSS = `
     @media screen and (min-width: 1900px) {
         div#tags_sidebar {
             left: auto;
-            right: calc((100vw - 1891px) / 3 + 300px);
+            right: calc((100vw - 1884px) / 3 + 296px);
         }
     }
 `;
 
 const floatingSidebarCSS = `
     #body_wrapper {
-        min-height: calc(100vh - 186px);
+        min-height: calc(100vh - 40px);
+        margin: 10px 0 0 0;
     }
-    div#content {
-        margin-top: 0;
+    div#content[id] {
+        margin: 0 10px 10px 0;
+    }
+    .index-title {
+        margin-top: 10px;
+    }
+    #content > .full_size {
+        margin: 0 10px;
     }
     @media screen and (min-width: 1630px) {
         #sidebar > div[style] {
             display: none;
         }
         div#sidebar[id] {
-            position: fixed;
+            position: sticky;
             right: 0;
             top: 0;
             margin: 0;
-            height: calc(100vh - 76px);
+            padding: 0;
+            height: calc(100vh - 50px);
             display: flex;
             flex-direction: column;
         }
         div#tags_sidebar[id] {
             position: absolute;
             background: none;
-            left: calc(300px + 15px - 100vw);
+            left: calc(300px + 10px - 100vw);
             top: 0px;
+            margin: 0;
             height: 100%;
         }
         div#tags_sidebar[id] > div:last-child {
             display: flex;
             flex-direction: column;
             height: calc(100% - 36px);
-            padding: 4px 0 !important;
+            padding: 4px 0 0 0 !important;
         }
         div#tags_sidebar > div:last-child br {
             display: none;
@@ -898,39 +1395,26 @@ const floatingSidebarCSS = `
     }
     @media screen and (min-width: 1900px) {
         div#tags_sidebar[id] {
-            left: -305px;
+            left: calc((1884px - 100vw) / 3 - 296px);
         }
     }
 `;
 
-// page names of the pathnames
-const PAGES = {
-    any:             "/",
-    main:            "/",
-    chat:            "/chat/view",
-    moderatePreTags: "/pictures/moderating_pre_tags/",
-    uploadPicture:   "/pictures/view_add_wall",
-    comments:        "/pictures/view_all_comments/",
-    editTag:         "/pictures/view_edit_tag/",
-    post:            "/pictures/view_post/",
-    search:          "/pictures/view_posts/",
-    PMChat:          "/profile/messages_from_user/",
-    PMList:          "/profile/messages_users/",
-    settings:        "/profile/view",
-    profile:         "/profile/view_ext_profile/",
-    withTextarea: [
-        "/chat/view",
-        "/pictures/view_edit_tag/",
-        "/pictures/view_post/",
-        "/profile/messages_from_user/",
-    ],
-    strictComparisonIsRequired: [
-        "main",
-        "settings",
-    ],
+// order of tag types in the tag list
+const tagTypePosition = {
+    3: 0,
+    5: 1,
+    6: 2,
+    1: 3,
+    4: 4,
+    8: 5,
+    2: 6,
+    7: 7,
+    0: 8,
+    9: 9,
 };
 
-// list of hotkey available to everybody
+// list of hotkeys available to everybody
 const hotkeys = [
     {
         hotkey: "Escape",
@@ -950,7 +1434,7 @@ const hotkeys = [
         hotkey: "A",
         descr: TEXT.hkAddTagsField,
         pages: [PAGES.post],
-        selectors: ["#add_tag_input"],
+        selectors: ["#add_tag_input", "#add_pre_tag_input"],
         action: (element) => element.focus(),
     },
     {
@@ -1085,7 +1569,7 @@ const hotkeys = [
             element,
             "URL",
             null,
-            `https://anime-pictures.net/pictures/view_posts/0?search_tag=${getSelText().replace(/\s/g, "+")}`,
+            `${PAGES.origin}${PAGES.searchPosts}0?search_tag=${getSelText().replace(/\s/g, "+")}`,
         ),
     },
     {
@@ -1119,17 +1603,27 @@ const hotkeys = [
 ];
 
 /**
- * Check weather pathname is/starts with `path`
+ * Check whether pathname of url is/starts with `path`
  * Also you indirectly call it by reading a property with the same name as one of `PAGES`
  * @param  {string}  path - A pathname for comparing
  * @param  {boolean} [strict=false] - True: exact matching; false: pathname starts with `path`
- * @return {boolean} Weather pathname is/starts with `path`
+ * @param  {(URL|Location|string)} [strict=window.location] - Url for comparing
+ * @return {boolean} Whether pathname is/starts with `path`
  */
-const pageIs = new Proxy((path, strict = false) => {
-    if (strict) {
-        return window.location.pathname === path;
+const pageIs = new Proxy((path, strict = false, url = window.location) => {
+    if (!url) return false;
+    if (!url.href) {
+        try {
+            url = new URL(url);
+        } catch (ex) {
+            console.error(ex);
+            return false;
+        }
     }
-    return window.location.pathname.startsWith(path);
+    if (strict) {
+        return url.pathname === path;
+    }
+    return url.pathname.startsWith(path);
 }, {
     get (pathIs, pageName) {
         if (PAGES.strictComparisonIsRequired.includes(pageName)) {
@@ -1138,6 +1632,91 @@ const pageIs = new Proxy((path, strict = false) => {
         return pathIs(PAGES[pageName]);
     },
 });
+
+/**
+ * Wrapper for tag that adds some additional methods and protects from modifying
+ */
+class Tag {
+    /**
+     * Creates an advanced tag object
+     * @param  {(RawTag|Tag)} tag - Raw tag object
+     * @return {Tag} Advenced tag
+     */
+    constructor (tag) {
+        if (!tag) return NO_TAG;
+        if (new.target !== Tag) return new Tag(tag);
+
+        const isRawTag = "tag" in tag;
+        this.data = {
+            id: tag.id,
+            type: tag.type,
+            alias: tag.alias,
+            enName: isRawTag ? tag.tag : tag.enName,
+            ruName: isRawTag ? tag.tag_ru : tag.ruName,
+            jpName: isRawTag ? tag.tag_jp : tag.jpName,
+            count: isRawTag ? tag.num : tag.count,
+        };
+        if (tag.preId) this.data.preId = tag.preId;
+        if (tag.by) this.data.by = tag.by;
+
+        if (this.data.enName.endsWith("(cosplay)") && this.data.type !== 0
+            || SETTINGS.metaTags.includes(this.data.id)
+        ) {
+            this.data.type = 8;
+        }
+    }
+
+    get id () { return this.data.id; }
+
+    get enName () { return this.data.enName; }
+
+    get ruName () { return this.data.ruName; }
+
+    get jpName () { return this.data.jpName; }
+
+    get alias () { return this.data.alias; }
+
+    get type () { return this.data.type; }
+
+    // writable properties
+
+    get preId () { return this.data.preId; }
+
+    set preId (val) { this.data.preId = val; }
+
+    get by () { return this.data.by; }
+
+    set by (val) { this.data.by = val; }
+
+    // added properties and methods
+
+    get name () {
+        if (SETTINGS.lang === "ru") return this.data.ruName || this.data.enName;
+        if (SETTINGS.lang === "jp") return this.data.jpName || this.data.enName;
+        return this.data.enName;
+    }
+
+    get count () {
+        return this.data.preId ? this.data.count + 1 : this.data.count;
+    }
+
+    get countStr () {
+        return this.data.count < 1000
+            ? this.data.count.toString()
+            : `${Math.floor(this.data.count / 1000)}K`;
+    }
+
+    toJSON () { return this.data; }
+
+    toString () {
+        return this.data.preId ? `${this.data.enName}#${this.data.preId}` : this.data.enName;
+    }
+
+    // allows to sort and compare tags by number of usage
+    [Symbol.toPrimitive] (hint) {
+        return hint === "number" ? this.data.count : this.toString();
+    }
+}
 
 /**
  * Executes `fn` when DOM is loaded
@@ -1149,17 +1728,6 @@ function onready (fn) {
         return;
     }
     fn();
-}
-
-/**
- * Handles opening of link in new tab to provide them `window.opener`
- * @param  {MouseEvent} ev - Event object
- */
-function fixedNewTabLink (ev) {
-    if (ev.type === "click" && !ev.ctrlKey) return;
-    window.open(ev.target.closest("a").href);
-    ev.preventDefault();
-    ev.stopPropagation();
 }
 
 /**
@@ -1189,7 +1757,7 @@ function getAllElems (selector, container = document) {
  * Prop `data` - object of the Data attributes.
  * Prop `html`/`text` - HTML or text content of the element.
  * Prop `children` - List of child elements and text nodes.
- * Prop with function as value - event handler wher `prop` is space-separeted list of event names.
+ * Prop with function as value - event handler where `prop` is space-separated list of event names.
  * Other props - regular properties (not attributes).
  * @param  {string} tagName - Name of the element
  * @param  {object=} props - Properties of the element
@@ -1259,11 +1827,10 @@ function newTagInput (tag, onTagChange) {
 
     const elem = newElem("input", {
         type: "text",
-        value: tag.id ? tag.name : "",
-        input: checkTag,
-        change: checkTag,
+        value: new Tag(tag).name,
+        "input change": checkTag,
     });
-    // temporaly replace get_by_id to allow create
+    // temporally replace `get_by_id` to allow create
     // the AutoComplete for element which isn't in the DOM
     const origGetById = unsafeWindow.get_by_id;
     unsafeWindow.get_by_id = (el) => el;
@@ -1286,27 +1853,39 @@ function newTagInput (tag, onTagChange) {
  */
 function newTagItem (tag) {
     // eslint-disable-next-line object-curly-newline
-    const { id, preId = null, name, type, count, by } = tag;
-    const classColor = [
-        "", "blue", "", "green", "orange", "green", "green", "", "purple",
-    ][type];
-    const textColor = [
-        "", "character", "", "copyright", "artist", "copyright", "copyright", "", "meta",
-    ][type];
+    const { id, preId, name, type, countStr, by } = new Tag(tag);
     const uploaderName = (getElem(".post_content_avatar a") || {}).textContent;
+    const ownPost = by === uploaderName;
+    const buttons = [];
+
+    if (preId && SETTINGS.isModerator) {
+        buttons.push(newElem("span", { className: "accept", title: TEXT.accept, text: " ✓ " }));
+    }
+    if (preId) {
+        buttons.push(newElem("span", { className: "decline", title: TEXT.decline, text: " ✗ " }));
+    }
+    if (ownPost || SETTINGS.isModerator) {
+        buttons.push(
+            newElem("span", { id: `delete_span_tag_${id}`, className: "icon_delete" }),
+            newElem("span", { id: `set_span_tag_${id}`, className: "icon_frame" }),
+        );
+    }
+    if (SETTINGS.isModerator) {
+        buttons.push(newElem("span", { id: `edit_span_tag_${id}`, className: "icon_edit" }));
+    }
+
     return newElem("li", {
         id: `tag_li_${id}`,
-        className: `${classColor} ${preId ? "preTag" : ""}`,
+        className: `${COLORS.tagTypeColor[type]} ${preId ? "preTag" : ""}`,
         title: by ? `${TEXT.by} ${by}` : null,
         children: [
             newElem("a", {
                 href: `/pictures/view_posts/0?search_tag=${encodeURIComponent(name)}`,
                 title: `${TEXT.picsWithTag} ${name}`,
                 className: `
-                    ${textColor}
-                    ${textColor ? "big_tag" : ""}
-                    ${(by !== uploaderName) ? "not_my_tag_border" : ""}
-                    ${preId ? "preTag" : ""}
+                    ${COLORS.tagTypeClass[type]}
+                    ${COLORS.tagTypeClass[type] ? "big_tag" : ""}
+                    ${ownPost ? "" : "not_my_tag_border"}
                 `,
                 text: name,
             }),
@@ -1314,32 +1893,8 @@ function newTagItem (tag) {
                 children: [newElem("span", {
                     className: "edit_tag",
                     data: { tagId: id, preTagId: preId },
-                    text: count >= 1000 ? `${Math.floor(count / 1000)}K` : count,
-                    children: [
-                        " ",
-                        newElem("span", {
-                            className: "accept",
-                            title: TEXT.accept,
-                            text: " ✓ ",
-                        }),
-                        newElem("span", {
-                            className: "decline",
-                            title: TEXT.decline,
-                            text: " ✗ ",
-                        }),
-                        newElem("span", {
-                            id: `delete_span_tag_${id}`,
-                            className: "icon_delete",
-                        }),
-                        newElem("span", {
-                            id: `set_span_tag_${id}`,
-                            className: "icon_frame",
-                        }),
-                        newElem("span", {
-                            id: `edit_span_tag_${id}`,
-                            className: "icon_edit",
-                        }),
-                    ],
+                    text: countStr,
+                    children: [" ", ...buttons],
                 })],
             }),
         ],
@@ -1351,112 +1906,257 @@ function newTagItem (tag) {
  * @param  {string}  url - URL of the request
  * @param  {object}  [params=null] - The request params
  * @param  {string}  [method="POST"] - method of request executing
- * @param  {boolean} [sequentially=true] - execute the request in queue (one by one) or immediately
  * @return {Promise<(object|Document)>} - The parsed response
  * @throws {Exception} - Network or parsing exception
  */
-function ajax (url, params = null, method = "POST", sequentially = true) {
-    let fullUrl = url;
-    if (method === "GET") {
-        const fullParams = { lang: SETTINGS.lang, ...params };
-        fullUrl = url
-            + (url.includes("?") ? "&" : "?")
-            + Object.entries(fullParams).map(([k, v]) => `${k}=${v}`).join("&");
-        params = null; // eslint-disable-line no-param-reassign
-    }
-    const body = {
-        method,
-        body: params && Object.entries(params || {})
-            .reduce((fd, [k, v]) => { fd.append(k, v); return fd; }, new FormData()),
-    };
-    const timer = setTimeout(() => document.body.classList.add("waiting"), 500);
-    const checkResponse = async (resp) => {
-        document.body.classList.remove("waiting");
-        clearTimeout(timer);
-        if (!resp.ok) throw resp;
-        const text = await resp.text();
-        if (text[0] === "<") {
-            return new DOMParser().parseFromString(text, "text/html");
+
+/**
+ * Returns tag by its name or id
+ * @param  {(string|number)} tagName - The tag name (string) or id (number)
+ * @param  {(string|number)} [postId] - ID of a post where the will be search in the first order.
+ *                                    Use it if you going to get multiple tags from this post.
+ * @return {Promise<Tag>} Found tag or `NO_TAG`
+ */
+async function getTagInfo (tagName, postId) {
+    if (!tagName) return NO_TAG;
+    const cache = SETTINGS.tagsCache;
+
+    // cast raw tag to advanced one and cache it
+    // if the tag is alias, returns aliased tag
+    // the cache must be saved manually
+    const cacheTag = (rawTag) => {
+        if (!rawTag) return NO_TAG;
+        const tag = new Tag(rawTag);
+        const tagPos = cache.findIndex(({ id }) => id === rawTag.id);
+        if (tagPos < 0) {
+            cache.push(tag);
+        } else {
+            cache.splice(tagPos, 1, tag);
         }
-        return JSON.parse(text);
+        return tag.alias ? getTagInfo(tag.alias) : tag;
     };
-    if (sequentially) {
-        ajax.last = (ajax.last || Promise.resolve())
-            .then(() => fetch(fullUrl, body), () => fetch(fullUrl, body))
-            .then(checkResponse);
-        return ajax.last;
+    let tag;
+
+    // check in cache
+    if (typeof tagName === "number") {
+        const tagId = tagName;
+        tag = cache.find(({ id }) => id === tagId);
+    } else {
+        tag = cache.find(({ enName, ruName, jpName }) => (
+            enName === tagName || ruName === tagName || jpName === tagName
+        ));
     }
-    return fetch(fullUrl, body).then(checkResponse);
+
+    // if not tag then get it from post if it provided
+    if (!tag && postId) {
+        await Promise.all(
+            (await API.getPostTags(postId)).tags.map(cacheTag),
+        );
+        SETTINGS.tagsCache = cache;
+        return getTagInfo(tagName);
+    }
+
+    // if still no tag
+    if (!tag) {
+        if (typeof tagName === "number") {
+            const tagId = tagName;
+            tag = await cacheTag((await API.getTagById(tagId)).tag);
+        } else {
+            const { success, tags } = await API.getTagsByName(tagName);
+            if (!success || tags.length === 0) return NO_TAG;
+            if (tags.length > 2) {
+                console.warn("Name colision:", tags);
+            }
+            // eslint-disable-next-line no-restricted-syntax
+            for (const rawTag of tags) {
+                tag = await cacheTag(rawTag); // eslint-disable-line no-await-in-loop
+            }
+        }
+    }
+
+    SETTINGS.tagsCache = cache;
+    return new Tag(tag); // return copy
 }
 
 /**
- * Returns tag by its name or id, uses cache
- * @param  {(string|number)} tagName - The tag name or id
- * @return {Promise<Tag>} Found tag or `NO_TAG`
+ * Returns user info by its name or id
+ * Search by name correctly works only for non-regular users.
+ * @param  {(string|number)} userName - The user name (string) or id (number)
+ * @return {Promise<Object>} Found user or null
  */
-async function getTagInfo (tagName) {
-    // load and update cache
-    const now = Date.now();
-    const cache = SETTINGS.tagsCache;
-    if (cache.lastClean && cache.lastClean + 24 * 3600 * 1000 < now) {
-        // remove old items
-        Object.entries(cache).forEach(([name, tag]) => {
-            if (tag.date + 7 * 24 * 3600 * 1000 < now) delete cache[name];
+async function getUserInfo (userName) {
+    let cache = SETTINGS.userCache;
+    // add to cache the moderators and commiters
+    if (cache.length === 0) {
+        const dom = await API.html(PAGES.about);
+        cache = getAllElems("a.user_link span", dom).map((span) => ({
+            id: span.parentNode.href.match(/\d+/)[0],
+            name: span.textContent,
+            level: span.style.color === "rgb(0, 0, 204)" ? 1 : 2,
+        }));
+        cache.unshift({
+            id: getElem(".sidebar_login .title a").href.match(/\d+/)[0],
+            name: getElem(".sidebar_login .title a").textContent,
+            level: "curr",
         });
-        cache.lastClean = now;
-        SETTINGS.tagsCache = cache;
+        SETTINGS.userCache = cache;
     }
 
-    if (!tagName) return NO_TAG;
-    // if it is tag id
-    if (typeof tagName === "number") {
-        // check in cache
-        const tag = Object.values(cache).find((t) => t.id === tagName);
-        if (tag) return { ...tag }; // return copy
-        // convert tag id to tag name
-        const { success, name } = await ajax(`/pictures/get_tag_name_by_id/${tagName}`);
-        if (!success) return NO_TAG;
-        tagName = name; // eslint-disable-line no-param-reassign
+    if (!userName) return null;
+    if (typeof userName === "string") {
+        // no site search by user name, + user names aren't unique
+        return cache.find(({ name }) => name === userName) || null;
     }
-    // check in cache
-    if (tagName in cache) return { ...cache[tagName] }; // return copy
-    // get tag info
-    const { posts } = await ajax(
-        `/pictures/view_posts/0?search_tag=${tagName}&type=json`,
-    );
-    if (posts.length === 0) return NO_TAG;
-    const { tags } = await ajax(
-        `/api/v2/posts/${posts[0].id}/tags`,
-        null,
-        "GET",
-    );
-    tags.forEach((t) => {
-        const tag = {
-            id: t.id,
-            name: t.name,
-            type: t.type,
-            count: t.num,
-            date: Date.now(),
+    const userId = userName;
+    let user = cache.find(({ id }) => id === userId);
+    if (!user) {
+        let userInfo;
+        try {
+            userInfo = await API.getUserInfo(userId);
+        } catch {
+            return null;
+        }
+        const userLvl = Math.max(
+            ...userInfo.groups.map((gr) => ["user", "commiter", "moderator", "admin"].indexOf(gr)),
+        );
+        user = {
+            id: userInfo.id,
+            name: userInfo.name,
+            level: userLvl,
         };
-        if (tag.type !== 2 && tag.type !== 7) { // it's neither a reference nor an object
-            tag.date += 1000 * 3600 * 24 * 6.75; // keep only 6 hours
-        }
-        // overide type for meta tags
-        if (tag.name.endsWith(" (cosplay)") && tag.type !== 0
-            || SETTINGS.metaTags.includes(tag.id)
-        ) {
-            tag.type = 8;
-        }
-        cache[tag.name] = tag;
-        // change tagName if it doesn't correspond to the interface language
-        if ([t.tag, t.tag_ru, t.tag_jp].includes(tagName) && t.name !== tagName) {
-            tagName = t.name; // eslint-disable-line no-param-reassign
-        }
-    });
-    SETTINGS.tagsCache = cache;
+        cache.push(user);
+        SETTINGS.userCache = cache;
+    }
+    return user;
+}
 
-    if (tagName in cache) return { ...cache[tagName] }; // return copy
-    return NO_TAG;
+/**
+ * Removes recommended tag from cache and moderating page
+ * @param  {Tag} tag - The recommended tag
+ * @return {Promise<undefined>}
+ */
+async function resolvePreTag (tag) {
+    const tags = await getRecommendedTags();
+    const preTagIndex = tags.findIndex(({ preId }) => preId === tag.preId);
+    if (preTagIndex < 0) return;
+    tags.splice(preTagIndex, 1);
+
+    if (window.opener) {
+        // remove the recommended tag in opener (if it's moderate recommended tags page)
+        window.opener.postMessage({ cmd: "resolve_pretag", preTagId: tag.preId });
+    }
+}
+
+/**
+ * Accept the recommended tag
+ * @param  {Tag} preTag - Recommend tag (with `preId`)
+ * @return {Promise<undefined>}
+ */
+async function acceptPreTag (tag) {
+    resolvePreTag(tag);
+    const { success, msg } = await API.acceptPreTag(tag.preId);
+    if (!success) {
+        console.error(`Error of accepting of pretag ${tag}:`, msg);
+        const editTag = getElem(`span[data-pre-tag-id="${tag.preId}"]`);
+        if (editTag) { // the pretag presented on the page
+            const li = editTag.parentNode.parentNode;
+            // if it's last tag of this type
+            if (li.previousElementSibling.nodeName === "SPAN"
+                && li.nextElementSibling?.nodeName === "SPAN") {
+                li.previousElementSibling.remove();
+            }
+            li.remove();
+        }
+    } else {
+        const editTag = getElem(`span[data-pre-tag-id="${tag.preId}"]`);
+        if (!editTag) return; // no pretag on the page
+        editTag.closest("li").classList.remove("waiting");
+    }
+}
+
+/**
+ * Decline the recommended tag
+ * @param  {Tag} preTag - Recommend tag (with `preId`)
+ * @return {Promise<undefined>}
+ */
+async function declinePreTag (tag) {
+    resolvePreTag(tag);
+    const { success, msg } = await API.declinePreTag(tag.preId);
+    if (!success) {
+        console.error(`Error of removing of pretag ${tag}:`, msg);
+    }
+    const editTag = getElem(`span[data-pre-tag-id="${tag.preId}"]`);
+    if (!editTag) return; // no pretag on the page
+    const li = editTag.closest("li");
+    // if it's last tag of this type
+    if (li.previousElementSibling.nodeName === "SPAN"
+        && (li.nextElementSibling == null
+            || li.nextElementSibling.nodeName === "SPAN")
+    ) {
+        li.previousElementSibling.remove();
+    }
+    li.remove();
+}
+
+/**
+ * Get list of tags recommended to current post
+ * @return {Promise<Array<Tag>>} Recommended tags
+ */
+async function getRecommendedTags () {
+    const currPostId = unsafeWindow.post_id;
+    let cache = SETTINGS.preTagsCache;
+    // return from cache
+    if (cache.notEmpty) {
+        let tags = cache[currPostId] || [];
+        // convert tags to advanced if needed
+        if (tags.length > 0 && !("name" in tags[0])) {
+            tags = tags.map((t) => new Tag(t));
+            cache[currPostId] = tags;
+        }
+        return tags;
+    }
+
+    cache = {};
+    document.body.classList.add("wait");
+    const { isModerator } = SETTINGS;
+    // get recommended tag from <tr>
+    const getPreTag = async (tr) => {
+        const tag = await getTagInfo(tr.children[isModerator ? 1 : 0].textContent.trim());
+        [tag.preId] = tr.id.match(/\d+/);
+        tag.by = isModerator
+            ? tr.children[0].querySelector("a").textContent
+            : getElem(".sidebar_login .title a").textContent;
+        const postId = tr.children[isModerator ? 2 : 1].querySelector("a").href.match(/\d+/);
+        if (!cache[postId]) {
+            cache[postId] = [tag];
+        } else {
+            cache[postId].push(tag);
+        }
+    };
+
+    // get recommended tags from the first page
+    const page = isModerator ? PAGES.moderatePreTags : PAGES.yourPreTags;
+    const dom = await API.html(`${page}0`);
+    await Promise.all(getAllElems(".messages tr", dom).map(getPreTag));
+    // get recommended tags from other pages
+    const lastPage = getElem("table + div .numeric_pages a:nth-last-child(2)", dom);
+    if (lastPage) {
+        await Promise.all(
+            new Array(+lastPage.textContent)
+                .fill(1)
+                .map((_, i) => `${page}${i + 1}`)
+                .map(async (link) => {
+                    const dom2 = await API.html(link);
+                    await Promise.all(getAllElems(".messages tr", dom2).map(getPreTag));
+                }),
+        );
+    }
+
+    // save cache and return
+    cache.notEmpty = true;
+    SETTINGS.preTagsCache = cache;
+    document.body.classList.remove("wait");
+    return cache[currPostId] || [];
 }
 
 /**
@@ -1494,11 +2194,11 @@ function pasteBBTag (textarea, bbtag, askParam, param = "") {
     }
     tagParam = tagParam ? `=${tagParam}` : "";
 
-    document.execCommand("insertText", false, `[${bbtag}${tagParam}]${text}[/${bbtag}]`);
     // set the cursor after the bbtag if any text was selected, otherwise - inside the bbtag
     const cursorPos = textarea.selectionStart + (text
         ? 2 * bbtag.length + tagParam.length + text.length + 5
         : bbtag.length + tagParam.length + 2);
+    document.execCommand("insertText", false, `[${bbtag}${tagParam}]${text}[/${bbtag}]`);
     // eslint-disable-next-line no-param-reassign, no-multi-assign
     textarea.selectionStart = textarea.selectionEnd = cursorPos;
 }
@@ -1578,7 +2278,7 @@ function showAvailableHotkeys () {
  * Handler for triggering hotkeys
  * @param  {KeyEvent} ev
  */
-function onhotkey (ev) {
+function onHotkeyPress (ev) {
     // get hotkey name
     let hotkey = "";
     let controlHotKey = false;
@@ -1593,7 +2293,7 @@ function onhotkey (ev) {
     if (ev.shiftKey) {
         hotkey += "Shift+";
     }
-    hotkey += (ev.key.length > 1) ? ev.key : String.fromCharCode(ev.which || ev.keyCode);
+    hotkey += (ev.key.length > 1) ? ev.key : String.fromCharCode(ev.which);
     const focusElem = document.activeElement;
     // unfocus element on Escape
     if ((hotkey === "Escape") && (focusElem !== document.body)) {
@@ -1611,8 +2311,8 @@ function onhotkey (ev) {
     ) {
         return;
     }
-    // filter hotkeys by a current url and the hotkey, execute hotkey.func for
-    // the first found by selectors an element and cancel KeyEvent if the element was found
+    // filter hotkeys by a current url and the hotkey, execute `hotkey.func` with
+    // the first element found by selectors and cancel KeyEvent if the element was found
     if (hotkeys
         .filter((hk) => hk.hotkey === hotkey)
         .filter((hk) => hk.pages.some((url) => pageIs(url)))
@@ -1629,6 +2329,81 @@ function onhotkey (ev) {
 }
 
 /**
+ * Handles opening of link in new tab to provide them `window.opener`
+ * @param  {MouseEvent} ev - Event object
+ */
+function onNewTabLinkClick (ev) {
+    if (ev.type === "click" && !ev.ctrlKey) return;
+    window.open(ev.target.closest("a").href);
+    ev.preventDefault();
+    ev.stopPropagation();
+}
+
+/**
+ * Handler for when moderator clicks accept or decline recommended tag
+ * @param  {Event} ev - Event object
+ * @return {Promise<undefined>}
+ */
+async function onPreTagClick (ev) {
+    const tagElem = ev.target.closest("li");
+    const { preTagId } = ev.target.parentNode.dataset;
+    if (!tagElem || !preTagId) return;
+    // -1 - temporal preId => force update preTags and re-add them to the page
+    if (preTagId === "-1") {
+        const cache = SETTINGS.preTagsCache;
+        cache.notEmpty = false; // invalidate cache
+        SETTINGS.preTagsCache = cache;
+        addRecommendedTags();
+        return;
+    }
+    const preTag = (await getRecommendedTags()).find((tag) => tag.preId === preTagId);
+    if (!preTag) return;
+
+    if (ev.target.classList.contains("accept")) {
+        tagElem.classList.replace("preTag", "waiting");
+        acceptPreTag(preTag).then(() => {
+            console.log(`${preTag} %caccepted`, "color: green;");
+            // scrollTop = document.getElementById("post_tags").scrollTop;
+            AnimePictures.post.refresh_tags();
+        });
+    } else if (ev.target.classList.contains("decline")) {
+        tagElem.classList.replace("preTag", "waiting");
+        declinePreTag(preTag).then(() => {
+            console.log(`${preTag} %cdeclined`, "color: orange;");
+        });
+    }
+}
+
+/**
+ * Handler to immediately display recommended tags on the post page
+ * @param  {Event} ev - Event object
+ * @return {Promise<undefined>}
+ */
+async function onTagRecommended (ev) {
+    const by = getElem(".sidebar_login .title a").textContent;
+    // get recommended tags
+    const tags = (await Promise.all(
+        getElem("#add_pre_tag_input").value
+            .split("||")
+            .map((tagName) => getTagInfo(tagName.trim())),
+    ))
+        .filter(({ id }) => id);
+    tags.forEach((tag) => {
+        tag.by = by;
+        tag.preId = -1; // no way to get preId without (re)parsing page with recommended tags
+    });
+
+    const cache = SETTINGS.preTagsCache;
+    const currPostId = unsafeWindow.post_id;
+    if (!cache[currPostId]) {
+        cache[currPostId] = [];
+    }
+    cache[currPostId].push(...tags);
+    SETTINGS.preTagsCache = cache;
+    addRecommendedTags();
+}
+
+/**
  * Registers a hotkey
  * @param {string} hotkey - The hotkey, e.g. `Ctrl+Shift+R`
  * @param {string} descr - Description of the hotkey
@@ -1640,7 +2415,7 @@ function registerHotkey (hotkey, descr, pages, selectors, action) {
     /* eslint-disable no-param-reassign */
     if (typeof pages === "function") [pages, action] = [null, pages];
     if (typeof selectors === "function") [selectors, action] = [null, selectors];
-    if (pages && pages[0] && pages[0] !== "/") [pages, selectors] = [selectors, pages];
+    if (pages?.[0] && pages[0] !== "/") [pages, selectors] = [selectors, pages];
     /* eslint-enable no-param-reassign */
     hotkeys.push({
         descr,
@@ -1652,32 +2427,11 @@ function registerHotkey (hotkey, descr, pages, selectors, action) {
 }
 
 /**
- * Adds hotkeys for pagination if needed,
- * ones for moderating if allowed, and link to the hotkey list
+ * Adds hotkeys for pagination if needed
  */
-function addOptionalHotkeys () {
-    // add a link to show avaible for current page hotkeys
-    if (getElem("#footer span")) {
-        getElem("#footer span").append(
-            ", ",
-            newElem("a", {
-                id: "show_hotkeys",
-                href: "#",
-                css: { color: "white" },
-                text: TEXT.hotkeys,
-                click:  (ev) => {
-                    // remove focus from #show_hotkeys
-                    // to avoid double pressing Escape to close the message
-                    ev.target.blur();
-                    ev.preventDefault();
-                    ev.stopPropagation();
-                    showAvailableHotkeys();
-                },
-            }),
-        );
-    }
+function addPaginationHotkeys () {
     // there are too many pages with pagination to list them
-    if (pageIs.search || getElem(".numeric_pages a")) {
+    if (pageIs.searchPosts || getElem(".numeric_pages a")) {
         hotkeys.push(
             {
                 hotkey: "Z",
@@ -1701,31 +2455,29 @@ function addOptionalHotkeys () {
  * Applies alternative wide layout
  */
 function makeLayoutWide () {
-    if (getElem("#cont.cont_view_post")) {
-        getElem("#cont > [itemscope]").id = "part0";
-        let div = getElem("#cont > div[itemscope] > div:first-child");
-        const container1 = newElem("div", { id: "part1" });
-        const container2 = newElem("div", { id: "part2" });
+    getElem("#content > [itemscope]").id = "part0";
+    let div = getElem("#content > div[itemscope] > div:first-child");
+    const container1 = newElem("div", { id: "part1" });
+    const container2 = newElem("div", { id: "part2" });
 
-        do {
-            // skip block "Linked pictures"
-            if (div.nextElementSibling.matches(".post_content")
-                && div.nextElementSibling.children.length === 3) {
-                div = div.nextElementSibling;
-            } else {
-                container1.append(div.nextElementSibling);
-            }
-        } while (!div.nextElementSibling.lastElementChild.classList.contains("image_body"));
-
-        while (div.nextElementSibling) container2.append(div.nextElementSibling);
-        // comments block is added dynamicaly
-
-        getElem("#cont").append(container1, container2);
-
-        const animImg = getElem("#big_preview_cont video");
-        if (animImg) { // video stops after moving it in the DOM so start it play
-            animImg.play();
+    do {
+        // skip block "Linked pictures"
+        if (div.nextElementSibling.matches(".post_content")
+            && div.nextElementSibling.children.length === 3) {
+            div = div.nextElementSibling;
+        } else {
+            container1.append(div.nextElementSibling);
         }
+    } while (!div.nextElementSibling.lastElementChild.classList.contains("image_body"));
+
+    while (div.nextElementSibling) container2.append(div.nextElementSibling);
+    // comments block is added dynamically
+
+    getElem("#content").append(container1, container2);
+
+    const animImg = getElem("#big_preview_cont video");
+    if (animImg) { // video stops after moving it in the DOM so start it play
+        animImg.play();
     }
 }
 
@@ -1741,29 +2493,27 @@ function makeSidebarFloating () {
     function alignSidebar (ev) {
         const {
             scrollTop,
-            scrollHeight,
             clientHeight,
         } = document.scrollingElement;
-        const top = Math.max(0, 76 - scrollTop);
-        const bottom = Math.max(0, scrollTop + clientHeight + 130 - scrollHeight);
-        sidebar.style.height = `${clientHeight - top - bottom}px`;
-        sidebar.style.top = `${top}px`;
+        const top = Math.max(0, 50 - scrollTop);
+        const maxHeight = sidebar.parentElement.clientHeight;
+        sidebar.style.height = `${Math.min(maxHeight, clientHeight - top)}px`;
 
-        // adjust position of autocomplete if needed
+        // adjust position of the Autocomplete if needed
         const field = document.activeElement;
         const autocomplite = getElem(".autocomplite[style*='visibility: visible;']");
         if (autocomplite
             && sidebar.contains(field)
             && field.nodeName === "INPUT"
-            && field.type === "text"
+            && (field.type === "text" || field.type === "search")
         ) {
             autocomplite.style.top = `${field.offsetTop + top + scrollTop + field.offsetHeight}px`;
         }
     }
 
-    document.addEventListener("scroll", alignSidebar, true);
-    window.addEventListener("resize", alignSidebar, true);
-    window.addEventListener("load", alignSidebar, true);
+    document.addEventListener("scroll", alignSidebar);
+    window.addEventListener("resize", alignSidebar);
+    window.addEventListener("load", alignSidebar);
     alignSidebar();
     setTimeout(alignSidebar, 100);
 }
@@ -1800,16 +2550,34 @@ function makeTagsMeta () {
         .filter((li) => li.lastElementChild.textContent.trim() !== "1"
                 || li.previousElementSibling.nodeName === "LI")
         .concat(tags)
+        .filter((li) => {
+            li.classList.add("purple"); // eslint-disable-line no-param-reassign
+            li.firstElementChild.classList.add("big_tag"); // eslint-disable-line no-param-reassign
+            return !li.firstElementChild.classList.contains("removed");
+        })
         .sort((t1, t2) => tagCount(t2) - tagCount(t1));
     if (tags.length <= 0) return;
 
-    const span = (getElem("#post_tags li[class=' ']") || {}).previousElementSibling;
-    if (span) span.insertAdjacentHTML("beforeBegin", `<span>${TEXT.categories[8]}</span>`);
-    tags.forEach((tag) => {
-        tag.className = "purple"; // eslint-disable-line no-param-reassign
-        tag.firstElementChild.className += " big_tag"; // eslint-disable-line no-param-reassign
-        if (span) span.before(tag);
-    });
+    const span = getElem("#post_tags li[class=' ']")?.previousElementSibling;
+    if (!span) return;
+    span.insertAdjacentHTML("beforeBegin", `<span>${TEXT.categories[8]}</span>`);
+    tags.forEach((tag) => span.before(tag));
+}
+
+/**
+ * Shows waiting cursor if some network request executes over 500ms
+ */
+function makeLoadingCursor () {
+    const origAjax = ajax_request2; // eslint-disable-line camelcase
+    unsafeWindow.ajax_request2 = function newAjaxRequest2 (url, params, handler, method) {
+        const timer = setTimeout(() => document.body.classList.add("waiting"), 500);
+        const newHandler = (...args) => {
+            clearTimeout(timer);
+            document.body.classList.remove("waiting");
+            handler(...args);
+        };
+        origAjax(url, params, newHandler, method);
+    };
 }
 
 /**
@@ -1828,7 +2596,7 @@ async function addNeighborPostsButtons () {
         postIds: resp.posts.map(({ id }) => id),
     });
     let data;
-    const getPage = (shift) => ajax(`${PAGES.search}${data.page + shift}${data.query}`);
+    const getPage = (shift) => API.getPosts(data.page + shift, data.query);
 
     const sourceUrl = document.referrer ? new URL(document.referrer) : null;
     const to = new URL(window.location).searchParams.get("to");
@@ -1850,8 +2618,8 @@ async function addNeighborPostsButtons () {
             }
         }
     // opened neighbor post in new tab
-    } else if (to && sourceUrl && sourceUrl.pathname.startsWith(PAGES.post)) {
-        if (window.opener && window.opener.history.state) {
+    } else if (to && pageIs(PAGES.post, false, sourceUrl)) {
+        if (window.opener?.history.state) {
             data = window.opener.history.state;
 
             // eslint-disable-next-line camelcase
@@ -1865,9 +2633,11 @@ async function addNeighborPostsButtons () {
             }
         }
     // opened post from the search page
-    } else if (sourceUrl && sourceUrl.pathname.startsWith(PAGES.search)) {
-        const resp = await ajax(`${sourceUrl}&type=json`);
-        data = toData(resp, `${sourceUrl.search}&type=json`);
+    } else if (pageIs(PAGES.searchPosts, false, sourceUrl)) {
+        const query = API.extractParams(sourceUrl);
+        const page = sourceUrl.pathname.match(/\d+/)[0];
+        const resp = await API.getPosts(page, query);
+        data = toData(resp, query);
     }
     if (!data) return;
     if (data.pos < 0) {
@@ -1891,7 +2661,7 @@ async function addNeighborPostsButtons () {
         },
         title: TEXT.hkPrevPost,
         href: postId ? `${PAGES.post}${postId}?lang=${SETTINGS.lang}&to=prev` : null,
-        "click auxclick": fixedNewTabLink,
+        "click auxclick": onNewTabLinkClick,
     }));
     // add button to next post
     postId = (data.page === data.lastPage && data.pos === data.lastPos)
@@ -1907,7 +2677,7 @@ async function addNeighborPostsButtons () {
         },
         title: TEXT.hkNextPost,
         href: postId ? `${PAGES.post}${postId}?lang=${SETTINGS.lang}&to=next` : null,
-        "click auxclick": fixedNewTabLink,
+        "click auxclick": onNewTabLinkClick,
     }));
 }
 
@@ -1918,7 +2688,7 @@ function addPostStatus () {
     const cache = addPostStatus.cahce || (addPostStatus.cache = {});
     async function makeImgBlockTextElem (postId) {
         if (!cache[postId]) {
-            cache[postId] = ajax(`${PAGES.post}${postId}?type=json`);
+            cache[postId] = API.getPostInfo(postId);
         }
         const {
             color,
@@ -1931,7 +2701,6 @@ function addPostStatus () {
         const bg = `linear-gradient(to left, rgba(${color},0), rgba(${color},1), rgba(${color},0))`;
         const textColor = color.reduce((s, c) => s + c) / 3 > 96 ? "black" : "white";
         const link = `/pictures/view_posts/0?res_x=${width}&res_y=${height}&lang=${SETTINGS.lang}`;
-        const eroticBG = ["none", "#F0F", "#F90", "#F00"][erotics];
 
         return newElem("div", {
             className: "img_block_text",
@@ -1945,7 +2714,7 @@ function addPostStatus () {
                     href: link,
                     title: `${TEXT.pics} ${width}x${height}`,
                     onclick: "this.target='_blank';return true;",
-                    css: { background: eroticBG },
+                    css: { background: SETTINGS.isModerator ? COLORS.eroticLevel[erotics] : null },
                     text: `${width}x${height}`,
                 }),
                 " ",
@@ -1960,6 +2729,7 @@ function addPostStatus () {
     }
 
     getAllElems("td:nth-child(3) a").forEach(async (a) => {
+        getElem("img", a).style.maxHeight = "150px";
         const postId = a.href.match(/\d+/)[0];
 
         a.after(newElem("div", {
@@ -1970,10 +2740,115 @@ function addPostStatus () {
     });
 
     getAllElems(".body + .body > span > a").forEach(async (a) => {
+        getElem("img", a).style.maxHeight = "150px";
         const postId = a.href.match(/\d+/)[0];
 
         a.after(await makeImgBlockTextElem(postId));
     });
+}
+
+/**
+ * Adds recommended tags to post
+ * @return {Promise<undefined>}
+ */
+async function addRecommendedTags () {
+    let pretags = await getRecommendedTags();
+    if (pretags.length <= 0 || getElem(".tags li span.accept")) return;
+
+    // add accept/decline handler if it wasn't added yet
+    if (!addRecommendedTags.wereHandlersAdded) {
+        addRecommendedTags.wereHandlersAdded = true;
+        getElem("#post_tags").addEventListener("click", onPreTagClick);
+        window.addEventListener("unload", () => {
+            // save modified cache
+            // eslint-disable-next-line no-self-assign
+            SETTINGS.preTagsCache = SETTINGS.preTagsCache;
+        });
+    }
+
+    getAllElems(".tags li.preTag").forEach((li) => li.remove());
+    const presentedTags = getAllElems(".tags .edit_tag").map((el) => +el.dataset.tagId);
+
+    console.log("presented tags:", presentedTags);
+    console.log("recommended tags:", pretags.map((tag) => tag.toString()));
+
+    pretags = pretags.filter((tag, i, tags) => {
+        // accepted presented tags
+        if (presentedTags.includes(tag.id)) {
+            acceptPreTag(tag).then(() => {
+                console.log(`${tag} %cautoaccepted`, "color: mediumseagreen;");
+            });
+            return false;
+        }
+        // decline double tags
+        if (tags.findIndex((t) => t.id === tag.id) < i) {
+            declinePreTag(tag).then(() => {
+                console.log(`${tag} %cautodeclined`, "color: brown;");
+            });
+            return false;
+        }
+        return true;
+    });
+    if (pretags.length === 0) return;
+
+    const getTagTypeByPosition = (pos) => Object.keys(tagTypePosition)
+        .find((k) => tagTypePosition[k] === pos);
+    const getTagName = (tagItem) => (tagItem?.nodeName === "LI"
+        ? tagItem.firstElementChild.textContent.trim()
+        : null);
+
+    const types = pretags.reduce((set, { type }) => set.add(type), new Set());
+    // eslint-disable-next-line no-restricted-syntax
+    for (const type of types) {
+        // find tag block of tags of current type
+        const spanText = TEXT.categories[type];
+        let span = getAllElems(".tags > span").find((el) => el.textContent === spanText);
+        // create tag block if there is no tags of current type
+        if (!span) {
+            const typeCount = TEXT.categories.length; // also includes "deleted by moderator"
+            let nextSpan;
+            for (let pos = tagTypePosition[type] + 1; !nextSpan && pos < typeCount; pos++) {
+                const nextSpanText = TEXT.categories[getTagTypeByPosition(pos)];
+                nextSpan = getAllElems(".tags > span")
+                    .find((el) => el.textContent === nextSpanText);
+            }
+            span = newElem("span", { text: TEXT.categories[type] });
+            if (nextSpan) {
+                nextSpan.before(span);
+            } else if (getElem(".tags > span")) {
+                getElem(".tags").append(span);
+            } else {
+                // site bug: no categories if there is only "tagme" tag
+                // also includes case when no tags at all
+                getElem(".tags").prepend(span, newElem("span", { text: TEXT.categories[9] }));
+            }
+        }
+        // get the recommended tags of the current type in order of usage count
+        const tags = pretags
+            .filter((tag) => tag.type === type)
+            .sort((t1, t2) => t2 - t1);
+        let currentElem = span.nextElementSibling;
+        let currentText = getTagName(currentElem);
+        // eslint-disable-next-line no-restricted-syntax
+        for (const tag of tags) {
+            // find a presented tag which has usage count bigger then the recommended tag
+            // eslint-disable-next-line no-await-in-loop
+            while (currentText && await getTagInfo(currentText, post_id) > tag) {
+                currentElem = currentElem.nextElementSibling;
+                currentText = getTagName(currentElem);
+            }
+            if (currentElem) {
+                // eslint-disable-next-line no-await-in-loop
+                if (currentText && await getTagInfo(currentText, post_id) > tag) {
+                    currentElem.after(newTagItem(tag));
+                } else {
+                    currentElem.before(newTagItem(tag));
+                }
+            } else {
+                getElem(".tags").append(newTagItem(tag));
+            }
+        }
+    }
 }
 
 /**
@@ -1989,7 +2864,7 @@ async function uploadFile (file) {
     const toRGBA = ({ r, g, b, a = 1 }, a2 = a) => `rgba(${r},${g},${b},${a2})`;
     const toContrastColor = ({ r, g, b }) => ((r + g + b) > 128 * 3 ? "black" : "white");
 
-    const id = (uploadFile.maxID || 0) + 1;
+    const id = (uploadFile.maxID ?? 0) + 1;
     uploadFile.maxID = id;
     let color = { r: 128, g: 128, b: 128 };
 
@@ -2012,18 +2887,17 @@ async function uploadFile (file) {
                 children: [
                     newElem("strong", { className: "dim" }),
                     newElem("br"),
-                    newElem("span", { className: "status", text: TEXT.pending }),
+                    newElem("span", { className: "status", text: TEXT.reading }),
                     newElem("div", { className: "progress" }),
                 ],
             }),
         ],
     });
     getElem("#posts").append(post);
-    const status = getElem(".status", post);
 
     // save the post in history
     function save () {
-        const state = (window.history.state || {});
+        const state = window.history.state ?? {};
         state[post.dataset.id] = {
             html: post.innerHTML,
             isPending: post.classList.contains("pending"),
@@ -2035,14 +2909,13 @@ async function uploadFile (file) {
     save();
 
     // do only 1 preview at the same time
-    uploadFile.previewQueue = (uploadFile.previewQueue || Promise.resolve())
+    uploadFile.previewQueue = (uploadFile.previewQueue ?? Promise.resolve())
         .then(() => new Promise((resolve) => {
             const img = new Image();
             img.addEventListener("load", () => {
-                status.textContent = TEXT.reading;
                 // get dimensions
-                let height = img.naturalHeight || img.offsetHeight || img.height;
-                let width = img.naturalWidth || img.offsetWidth || img.width;
+                let height = img.naturalHeight;
+                let width = img.naturalWidth;
                 getElem(".dim", post).textContent = `${width}x${height}`;
                 // resize the dimensions
                 [width, height] = width >= height
@@ -2050,7 +2923,7 @@ async function uploadFile (file) {
                     : [width / height * 300, 300];
                 // resize the image
                 const canvas = newElem("canvas");
-                const context = canvas.getContext && canvas.getContext("2d");
+                const context = canvas.getContext("2d");
                 canvas.height = height;
                 canvas.width = width;
                 context.drawImage(img, 0, 0, width, height);
@@ -2076,7 +2949,7 @@ async function uploadFile (file) {
                 getElem("img", post).style.boxShadow = `0 0 20px ${toRGBA(color, 1)}`;
                 getElem("img", post).src = canvas.toDataURL("image/jpeg", 0.75);
 
-                status.textContent = TEXT.pending;
+                getElem(".status", post).textContent = TEXT.pending;
 
                 save();
                 resolve();
@@ -2087,8 +2960,9 @@ async function uploadFile (file) {
     await uploadFile.previewQueue;
 
     // upload only 1 file at the same time
-    uploadFile.uploadQueue = (uploadFile.uploadQueue || Promise.resolve())
+    uploadFile.uploadQueue = (uploadFile.uploadQueue ?? Promise.resolve())
         .then(() => new Promise((resolve) => {
+            const status = getElem(".status", post);
             const slots = getElem("#slot_status");
             const prog1 = getElem(".img_block_text", post);
             const prog2 = getElem(".progress", post);
@@ -2132,30 +3006,26 @@ async function uploadFile (file) {
             xhr.addEventListener("load", () => {
                 if (xhr.status === 200) {
                     // HTML response
-                    const cont = document.createRange()
+                    const resp = document.createRange()
                         .createContextualFragment(xhr.responseText)
                         .querySelector(".post_content");
                     // if it's duplicate
-                    if (cont.querySelector(".body span[style='color: red;'] ~ .img_block2")) {
+                    if (getElem(".body span[style='color: red;'] ~ .img_block2", resp)) {
                         status.textContent = TEXT.duplicate;
                         post.classList.add("error");
-                        getElem("a", post).href = cont.querySelector("a").href;
-                        getElem("img", post).src = cont.querySelector("img").src
-                            .replace("_sp.", "_cp.");
+                        getElem("a", post).href = getElem("a", resp).href;
+                        getElem("img", post).src = getElem("img", resp).src.replace("_sp.", "_cp.");
                     // if there was no free slots
-                    } else if (cont.querySelector("form span[style='color: red;']")) {
+                    } else if (getElem("form span[style='color: red;']", resp)) {
                         status.textContent = TEXT.noSlots;
                         post.classList.add("error");
                         slots.dataset.usedSlots = slots.dataset.totalSlots;
                         slots.textContent = TEXT.slots(slots.dataset.usedSlots, 0);
                     // if uploading was successful
                     } else {
-                        status.textContent = (
-                            cont.querySelector(".img_block_text").lastChild.textContent
-                        );
-                        getElem("a", post).href = cont.querySelector("a").href;
-                        getElem("img", post).src = cont.querySelector("img").src
-                            .replace("_sp.", "_cp.");
+                        status.textContent = getElem(".img_block_text", resp).lastChild.textContent;
+                        getElem("a", post).href = getElem("a", resp).href;
+                        getElem("img", post).src = getElem("img", resp).src.replace("_sp.", "_cp.");
                         slots.dataset.usedSlots = +slots.dataset.usedSlots + 1;
                         slots.textContent = TEXT.slots(
                             slots.dataset.usedSlots,
@@ -2270,7 +3140,7 @@ function improveFileUploader () {
     });
     document.forms[1].style.display = "none";
     document.forms[1].parentElement.append(newElem("br"), fileField, ffLabel);
-    getElem("#cont").append(posts);
+    getElem("#content").append(posts);
 
     // drag'n'drop label
     const dnd = newElem("div", {
@@ -2279,15 +3149,7 @@ function improveFileUploader () {
     });
     document.body.append(dnd);
     document.addEventListener("scroll", (ev) => {
-        const {
-            scrollTop,
-            scrollHeight,
-            clientHeight,
-        } = document.scrollingElement;
-        const top = Math.max(0, 46 - scrollTop);
-        const bottom = Math.max(0, scrollTop + clientHeight + 120 - scrollHeight);
-        dnd.style.top = `${top}px`;
-        dnd.style.bottom = `${bottom}px`;
+        dnd.style.top = `${Math.max(0, 46 - document.scrollingElement.scrollTop)}px`;
     }, false);
     // drag'n'drop events
     const cont = getElem("#content");
@@ -2318,7 +3180,7 @@ function improveFileUploader () {
     const { state } = window.history;
     if (!state) return;
     Object.entries(state).forEach(([postId, { html, isPending, hasError }]) => {
-        uploadFile.maxID = Math.max(uploadFile.maxID || 0, postId);
+        uploadFile.maxID = Math.max(uploadFile.maxID ?? 0, postId);
         // create post
         const post = newElem("span", {
             data: { id: postId },
@@ -2333,7 +3195,7 @@ function improveFileUploader () {
         } else if (hasError) {
             post.classList.add("error");
         } else {
-            ajax(`${getElem("a", post).href}&type=json`).then((postInfo) => {
+            API.getPostInfo(getElem("a", post).href.match(/\d+/)[0]).then((postInfo) => {
                 const status = TEXT.statuses[postInfo.status];
                 getElem(".status", post).textContent = status;
                 if (!status) {
@@ -2357,115 +3219,130 @@ function buildSettings () {
                 .getAll()
                 .filter(({ descr }) => descr !== null)
                 .map(({ name }) => SETTINGS.getAsRow(name)),
+            newElem("tr", {
+                children: [newElem("td", {
+                    colSpan: "2",
+                    css: { textAlign: "center" },
+                    children: [newElem("input", {
+                        type: "button",
+                        value: "Clear cache",
+                        click: () => {
+                            SETTINGS.getAll()
+                                .filter(({ type }) => type === "cache")
+                                .forEach(({ name, defValue }) => {
+                                    SETTINGS[name] = defValue.data;
+                                });
+                            window.location.reload();
+                        },
+                    })],
+                })],
+            }),
         ],
     });
 }
 
+/**
+ * Highlights level of the tag adder and shows username of the tag remover
+ * @return {Promise<undefined>}
+ */
+async function highlightTagger () {
+    // change border color according to adder level
+    if (!highlightTagger.wasCssAdded) {
+        highlightTagger.wasCssAdded = true;
+        await getUserInfo(); // update cache if needed
+
+        const makeCSS = (level) => SETTINGS.userCache
+            .filter((user) => user.level === level)
+            .map(({ name }) => `li[title="by ${name}"] a.not_my_tag_border`)
+            .join(",\n")
+            .concat(`\n{ border-left-color: ${COLORS.tagAdder[level]}; }`);
+
+        const css = [
+            `.tags a.not_my_tag_border { border-left-color: ${COLORS.tagAdder[0]}; }`,
+            makeCSS(1), // commiter
+            makeCSS(2), // moderator
+            makeCSS("curr"), // current user
+        ].join("\n");
+
+        GM_addStyle(css);
+    }
+
+    // replace remover id with name
+    getAllElems("#post_tags a.removed").forEach(async (a) => {
+        const tagRemoverId = a.title.match(/\d+$/);
+        if (!tagRemoverId) return;
+        const tagRemover = await getUserInfo(+tagRemoverId[0]);
+        if (!tagRemover) {
+            console.warn(`User with id ${tagRemoverId} was not found`);
+            return;
+        }
+        a.title = a.title.replace(/\d+$/, tagRemover.name);
+    });
+}
+
+/**
+ * Adds text about applying some "hidden" search option
+ */
+function showHiddenSearchProps () {
+    if (getElem(".hidden_search_props")) return; // no self-triggering
+    const urlParams = new URL(window.location).searchParams;
+
+    const showParam = async (param, text) => {
+        if (!urlParams.has(param)) return;
+        const user = await getUserInfo(+urlParams.get(param));
+        getElem("#posts > [style]").before(newElem("div", {
+            className: "posts_body_head hidden_search_props",
+            children: [
+                text,
+                newElem("a", {
+                    href: `${PAGES.profile}${user.id}`,
+                    css: {
+                        color: COLORS.userName[user.level],
+                        fontWeight: user.level === 2 ? "bold" : null,
+                    },
+                    text: user.name,
+                }),
+            ],
+        }));
+    };
+
+    showParam("user", TEXT.pUserPics);
+    showParam("stars_by", TEXT.pUserStars);
+    showParam(
+        "favorite_by",
+        urlParams.has("favorite_folder")
+            ? TEXT.pUserFavorited.replace("%s", urlParams.get("favorite_folder"))
+            : TEXT.pUserAllFav,
+    );
+
+    if (urlParams.has("view_after")) {
+        const date = new Date(urlParams.get("view_after") * 1000).toLocaleString(SETTINGS.lang);
+        getElem("#posts > [style]").before(newElem("div", {
+            className: "posts_body_head hidden_search_props",
+            text: `${TEXT.pPicsAfter}${date}`,
+        }));
+    }
+    if (urlParams.has("status")) {
+        getElem("#posts > [style]").before(newElem("div", {
+            className: "posts_body_head hidden_search_props",
+            text: TEXT.pPrePics,
+        }));
+    }
+}
+
 // TODO list
-// support of aliases
-// tag name accorting to user language
 // SPA
-// display hidden search options
-// show who deleted the tag
-// style the scrollbar
-// open all links in new tab
 
 // =============================================================================
 //                         Program execution start
 // =============================================================================
 
-GM_addStyle(`
-    .hidden {
-        display: none;
-    }
-    /* some general fixes */
-    .title {
-        height: 32px;
-    }
-    .sidebar_login img {
-        vertical-align: top;
-    }
-    .title > img {
-        vertical-align: middle;
-        cursor: pointer;
-    }
+if (pageIs.api || new URL(window.location).searchParams.get("type")) return;
 
-    /* for say() */
-    ul.autocomplite:not(#id) {
-        z-index: 130;
-    }
-    #dialog {
-        position: fixed;
-        top: 0;
-        margin: 0;
-        height: 100%;
-        width: 100%;
-        display: flex;
-        z-index: 100;
-        background: rgba(0,0,0,0.75);
-    }
-    #dialog > div {
-        margin: auto;
-    }
-    #dialog .body {
-        margin: 0;
-    }
+GM_addStyle(generalCSS);
 
-    /* comments on post page */
-    #cont.cont_view_post > :not([id]):not(:first-child) {
-        width: 680px;
-        min-width: auto;
-    }
-
-    /* for long request and actions */
-    body.wait *,
-    body.waiting * {
-        cursor: wait;
-    }
-    body.wait a, body.wait a *,
-    body.waiting a, body.waiting a * {
-        cursor: progress;
-    }
-
-    /* for meta tags */
-    .tags .purple a {
-        color: #870fff;
-    }
-    .tags .purple a + span {
-        border-color: #9c60d7 #9658d5 #8f4bd2;
-        background-image: linear-gradient(to bottom, #bd95e4, #a36cda);
-    }
-    .messages td>div.img_block2 {
-        width: 150px;
-    }
-
-    /* for recommended tags */
-    .tags li.preTag a {
-        border-left: 2px solid aqua;
-    }
-    #AP_Enhancements .tags .icon_frame,
-    .tags li.preTag .icon_delete,
-    .tags li.preTag .icon_frame,
-    .tags li:not(.preTag) .accept,
-    .tags li:not(.preTag) .decline {
-        display: none;
-    }
-
-    /* for post status */
-    .body + .body .img_block_text + .img_block_text {
-        display: none;
-    }
-    .body + .body .img_block2:hover .img_block_text:not(:last-child) {
-        display: none;
-    }
-    .body + .body .img_block2:hover .img_block_text + .img_block_text {
-        display: block;
-    }
-
-    /* hide the spin buttons */
-    input[type='number']::-webkit-inner-spin-button { display: none; }
-`);
-if (SETTINGS.isThemeDark) {
+// if theme is dark
+if (SETTINGS.themeName === "second") {
     GM_addStyle(`
         textarea {
             border-color: #666;
@@ -2477,14 +3354,16 @@ if (SETTINGS.isThemeDark) {
 }
 if (SETTINGS.hideNewPostMessage) {
     GM_addStyle(`
-        #cont > .post_content:first-child[style="color: red;"] {
+        #content > .post_content:first-child[style="color: red;"] {
             display: none;
         }
     `);
 }
 
-document.addEventListener("keydown", onhotkey);
+document.addEventListener("keydown", onHotkeyPress);
 unsafeWindow.registerHotkey = registerHotkey;
+
+if (pageIs.chat) return;
 
 // make sidebar floating
 if (!pageIs.editTag && SETTINGS.floatingSidebar) {
@@ -2498,38 +3377,62 @@ if (pageIs.post && SETTINGS.wideLayout) {
     onready(makeLayoutWide);
 }
 
+if (SETTINGS.openLinkInNewTab) {
+    document.addEventListener("click", (ev) => {
+        if (ev.target.nodeName !== "IMG") return;
+        const a = ev.target.closest("a");
+        if (!a || a.onclick) return;
+        window.open(a.href);
+        ev.preventDefault();
+    });
+}
+
 onready(() => {
     /* eslint-disable camelcase */
-    // update some settings
+    // if user isn't logined, except edit tag page because there is no is_login variable
     if (!pageIs.editTag) {
-        if (lang !== SETTINGS.lang) SETTINGS.lang = lang;
-        if (is_moderator !== SETTINGS.isModerator) SETTINGS.isModerator = is_moderator;
-        if ((site_theme === "second") !== SETTINGS.isThemeDark) {
-            SETTINGS.isThemeDark = site_theme === "second";
+        if (!is_login) {
+            say(TEXT.isntLogined, "AP Enhancements for users");
+            return;
         }
+        // update `lang` and `themeName` settings immediately on change
+        getElem("#form_global_params").addEventListener("change", (ev) => {
+            SETTINGS.lang = ev.currentTarget.elements.language.value;
+            SETTINGS.themeName = ev.currentTarget.elements.theme.value;
+        });
     }
 
-    // show waiting cursor if some network request executes over 500ms
-    // let timer;
-    const origAjax = ajax_request2;
-    unsafeWindow.ajax_request2 = function newAjaxRequest2 (url, params, handler, method) {
-        // if (timer) clearTimeout(timer);
-        const timer = setTimeout(() => document.body.classList.add("waiting"), 500);
-        const newHandler = (...args) => {
-            /* if (timer) timer = */ clearTimeout(timer);
-            document.body.classList.remove("waiting");
-            handler(...args);
-        };
-        origAjax(url, params, newHandler, method);
-    };
+    // update some settings
+    if (!pageIs.editTag) {
+        if (SETTINGS.lang !== lang) SETTINGS.lang = lang;
+        if (SETTINGS.isModerator !== is_moderator) SETTINGS.isModerator = is_moderator;
+        if (SETTINGS.themeName !== site_theme) SETTINGS.themeName = site_theme;
+    }
     /* eslint-enable camelcase */
 
-    addOptionalHotkeys();
+    if (SETTINGS.isFirstRun) {
+        SETTINGS.isFirstRun = false;
+        window.location.reload();
+    }
+
+    addPaginationHotkeys();
+    makeLoadingCursor();
+    if (SETTINGS.alwaysLoadPreTags) getRecommendedTags();
 
     if (pageIs.post) {
         addNeighborPostsButtons();
 
         if (SETTINGS.foldSimilarBlock) makeSimilarBlockFoldable();
+        if (getElem("#add_pre_tag_form")) {
+            getElem("#add_pre_tag_form").addEventListener("submit", onTagRecommended);
+        }
+    }
+
+    if (pageIs.searchPosts) {
+        showHiddenSearchProps();
+        new MutationObserver(() => {
+            showHiddenSearchProps();
+        }).observe(getElem("#posts"), { childList: true });
     }
 
     // show AP Enhancements settings on the profile settings page
@@ -2550,9 +3453,17 @@ onready(() => {
 
     // on tag list change
     if (pageIs.post) {
+        const loadPreTags = SETTINGS.alwaysLoadPreTags
+            || pageIs(PAGES.yourPreTags, false, document.referrer)
+            || pageIs(PAGES.moderatePreTags, false, document.referrer);
+
         new MutationObserver(() => {
             makeTagsMeta();
+            highlightTagger();
+            if (loadPreTags) addRecommendedTags();
         }).observe(getElem("#post_tags"), { childList: true });
         makeTagsMeta();
+        highlightTagger();
+        if (loadPreTags) addRecommendedTags();
     }
 });
