@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.1.0
+// @version      1.2.0
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -14,11 +14,13 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_addValueChangeListener
+// @grant        GM.xmlHttpRequest
+// @connect      donmai.us
 // ==/UserScript==
 
 /* global GM_addValueChangeListener */
 /* global lang site_theme post_id ajax_request2 is_login is_moderator AnimePictures */
-/* eslint-disable sonarjs/no-duplicate-string, sonarjs/cognitive-complexity */
+/* eslint-disable sonarjs/no-duplicate-string, sonarjs/cognitive-complexity, max-classes-per-file */
 
 "use strict";
 
@@ -213,6 +215,12 @@ const TEXT = new Proxy(
         add: {
             en: "Add",
             ru: "Добавить",
+        },
+        aliasesTags: {
+            en: "Aliases tags",
+            ru: "Теги синонимы",
+            zh_CH: "标签别名",
+            it: "Tag alias",
         },
         availableHotkeys: {
             en: "Hotkeys available on this page",
@@ -507,6 +515,10 @@ const TEXT = new Proxy(
             en: "Open all links in new tab",
             ru: "Открывать все ссылки в новой вкладке",
         },
+        sPermRecTags: {
+            en: "Permanently recommended tags",
+            ru: "Постоянно рекомендуемые теги",
+        },
         sTagReplacingAction: {
             en: "What to do after the tag replacing",
             ru: "Что делать после замены тега",
@@ -577,6 +589,7 @@ const TEXT = new Proxy(
  * @property {?string} ruName - The Russian tag name
  * @property {?string} jpName - The Japanese tag name
  * @property {?number} alias - If it's an alias, id of the aliased tag
+ * @property {?number} parent - If it's an child, id of the parent tag
  * @property {number} type - The tag type
  * @property {number} count - The number of posts with this tag
  * @property {string} countStr - The number of posts with this tag
@@ -630,20 +643,29 @@ const SETTINGS = new Proxy({
     tagsCache: {
         descr: null,
         type: "cache",
-        defValue: { data: [], lastUpdate: 0 },
-        lifetime: 12 * 60 * 60 * 1000,
+        defValue: {
+            levels: [{}, {}, {}, {}],
+            lifetime: 30 * 24 * 60 * 60 * 1000, // 1 month
+            lastUpdate: 0,
+        },
     },
     userCache: {
         descr: null,
         type: "cache",
-        defValue: { data: [], lastUpdate: 0 },
-        lifetime: 7 * 24 * 60 * 60 * 1000,
+        defValue: {
+            levels: [{}, {}, {}, {}],
+            lifetime: 30 * 24 * 60 * 60 * 1000, // 1 month
+            lastUpdate: 0,
+        },
     },
     preTagsCache: {
         descr: null,
         type: "cache",
-        defValue: { data: {}, lastUpdate: 0 },
-        lifetime: 15 * 60 * 1000,
+        defValue: {
+            levels: [{}],
+            lifetime: 6 * 60 * 60 * 1000, // 6 hour
+            lastUpdate: 0,
+        },
     },
     // public settings
     wideLayout: {
@@ -725,16 +747,17 @@ const SETTINGS = new Proxy({
             case "boolean":  return typeof value === "boolean";
             case "object":   return value && typeof value === "object";
             case "list":     return value in setting.values;
-            case "tag-list": return Array.isArray(value) && value.every(Number.isFinite);
+            case "tag-list": return Array.isArray(value) && value.every((n) => Number.isFinite(n));
             case "tag":      return value
-                                    && typeof value === "object"
-                                    && "id" in value
-                                    && "enName" in value;
+                                && typeof value === "object"
+                                && "id" in value
+                                && "enName" in value;
             case "cache":    return value
-                                    && typeof value === "object"
-                                    && "data" in value
-                                    && "lastUpdate" in value
-                                    && value.lastUpdate + setting.lifetime > Date.now();
+                                && typeof value === "object"
+                                && Array.isArray(value.levels)
+                                && value.levels.every((obj) => typeof obj === "object")
+                                && typeof value.lifetime === "number"
+                                && typeof value.lastUpdate === "number";
             default:
                 console.error(`Unsupported type ${setting.type}`);
                 return null;
@@ -748,7 +771,6 @@ const SETTINGS = new Proxy({
         }
         if (!["descr", "type", "defValue"].every((field) => field in setting)
             || setting.type === "list" && !setting.values
-            || setting.type === "cache" && !setting.lifetime
         ) {
             console.error(`Setting lacks some field`, setting);
             return;
@@ -808,9 +830,9 @@ const SETTINGS = new Proxy({
                     elem.firstChild.value = "";
                     if (idList.find((id) => id === newTag.id)) return;
                     idList.push(newTag.id);
-                    // force update tag value in the tag cache
+                    // force update tag value in the tag cache to update its type
                     const cache = this.get(list, "tagsCache");
-                    cache.data.splice(cache.data.findIndex(({ id }) => id === newTag.id), 1);
+                    cache.remove(newTag.id);
                     this.set(list, "tagsCache", cache);
                     this.set(list, name, idList);
                     // display tags as sorted
@@ -827,37 +849,37 @@ const SETTINGS = new Proxy({
                     const idDel = +ev.target.parentNode.dataset.tagId;
                     ev.target.closest("li").remove();
                     idList.splice(idList.findIndex((id) => id === idDel), 1);
-                    // force update tag value in the tag cache
+                    // force update tag value in the tag cache to update its type
                     const cache = this.get(list, "tagsCache");
-                    cache.data.splice(cache.data.findIndex(({ id }) => id === idDel), 1);
+                    cache.remove(idDel);
                     this.set(list, "tagsCache", cache);
                     this.set(list, name, idList);
                 };
-                elem = newElem("form", {
-                    submit: (ev) => {
-                        addTagItem(ev);
-                        ev.preventDefault();
-                        ev.stopPropagation();
+                elem = newElem(
+                    "form",
+                    {
+                        submit: (ev) => {
+                            addTagItem(ev);
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                        },
                     },
-                    children: [
-                        newTagInput(NO_TAG, (tag) => { newTag = tag; }),
-                        newElem("input", {
-                            type: "submit",
-                            value: TEXT.add,
-                            css: { marginLeft: "5px" },
-                            click: addTagItem,
+                    newTagInput(NO_TAG, (tag) => { newTag = tag; }),
+                    newElem("input", {
+                        type: "submit",
+                        value: TEXT.add,
+                        css: { marginLeft: "5px" },
+                        click: addTagItem,
+                    }),
+                    newElem(
+                        "div",
+                        { css: { paddingRight: "100px" } },
+                        newElem("ul", {
+                            className: "tags",
+                            click: removeTagItem,
                         }),
-                        newElem("div", {
-                            css: { paddingRight: "100px" },
-                            children: [
-                                newElem("ul", {
-                                    className: "tags",
-                                    click: removeTagItem,
-                                }),
-                            ],
-                        }),
-                    ],
-                });
+                    ),
+                );
                 Promise.all(idList.map((id) => getTagInfo(id)))
                     .then((tags) => tags.sort((t1, t2) => t2 - t1))
                     .then((tags) => tags.map((tag) => newTagItem(tag)))
@@ -867,6 +889,7 @@ const SETTINGS = new Proxy({
 
             case "string":
             case "object":
+            case "cache":
                 console.error(`Unimplemented input field for ${setting.type} type`);
                 return null;
             default:
@@ -896,7 +919,10 @@ const SETTINGS = new Proxy({
             GM_setValue(name, setting.defValue);
             value = setting.defValue;
         }
-        if (setting.type === "cache") value = value.data;
+        if (setting.type === "cache") {
+            // eslint-disable-next-line no-use-before-define
+            value = new Cache(value.levels, value.lifetime, value.lastUpdate);
+        }
         this.cache[name] = value;
         return value;
     },
@@ -904,10 +930,8 @@ const SETTINGS = new Proxy({
     set (list, name, value) {
         const setting = this.find(list, name);
         if (!setting) return false;
-        if (setting.type === "cache") value = { data: value, lastUpdate: Date.now() };
         if (this.isValid(list, name, value)) {
             GM_setValue(name, value);
-            this.cache[name] = (setting.type === "cache") ? value.data : value;
             this.removeFromCacheOnChange(name);
             return true;
         }
@@ -948,7 +972,14 @@ const PAGES = {
     ],
 };
 
+// list of network methods and the site API
 const API = {
+    /**
+     * Wrapper for `fetch` to execute queries consequentially and show loading cursor for long ones.
+     * @param  {string} url - URL of the request
+     * @param  {object} options - The options of the query (method, body, etc)
+     * @return {Promise<Response>} - The parsed response
+     */
     ajax (url, body) {
         const timer = setTimeout(() => document.body.classList.add("waiting"), 500);
         const clearTimer = async (resp) => {
@@ -960,44 +991,88 @@ const API = {
         this.lastAjax.then(clearTimer);
         return this.lastAjax;
     },
+    /**
+     * Get and parse HTML page
+     * @param  {string} url - URL of the page
+     * @return {Promise<Document>} - The parsed page
+     */
     html (url) {
-        return this.ajax(url).then((resp) => {
+        const link = url.includes("lang=")
+            ? url
+            : url.concat(`${url.includes("?") ? "&" : "?"}lang=${SETTINGS.lang}`);
+        return this.ajax(link).then((resp) => {
             if (!resp.ok) throw resp;
             return resp.text().then((text) => new DOMParser().parseFromString(text, "text/html"));
         });
     },
+    /**
+     * Execute GET query with JSON response
+     * @param  {string} url - URL of query
+     * @param  {?Object} params - Parameters of the query
+     * @return {Promise<Object>} - The parsed JSON response
+     */
     get (url, params = null) {
         const fullParams = { ...params, lang: SETTINGS.lang };
         const fullUrl = url
             + (url.includes("?") ? "&" : "?")
-            + Object.entries(fullParams).map(([k, v]) => `${k}=${v}`).join("&");
+            + Object.entries(fullParams).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
         return this.ajax(fullUrl, { method: "GET" }).then((resp) => {
             if (!resp.ok) throw resp;
             return resp.json();
         });
     },
+    /**
+     * Execute POST query with JSON response
+     * @param  {string} url - URL of query
+     * @param  {?Object} params - Parameters of the query
+     * @return {Promise<Object>} - The parsed JSON response
+     */
     post (url, params = null) {
         const body = { method: "POST" };
         if (params) {
-            body.body = Object.entries(params)
-                .reduce((fd, [k, v]) => { fd.append(k, v); return fd; }, new FormData());
+            const fdata = new FormData();
+            Object.entries(params).forEach(([key, value]) => fdata.append(key, value));
+            body.body = fdata;
         }
         return this.ajax(url, body).then((resp) => {
             if (!resp.ok) throw resp;
             return resp.json();
         });
     },
+    /**
+     * Extract GET params from the URL
+     * @param  {(URL|string)} link - URL with the params
+     * @return {Object} - Extracted params
+     */
     extractParams (link) {
         const url = "searchParams" in link ? link : new URL(link);
-        return [...url.searchParams.entries()]
-            .reduce((params, [key, val]) => { params[key] = val; return params; }, {});
+        const params = {};
+        [...url.searchParams.entries()].forEach(([key, value]) => { params[key] = value; });
+        return params;
     },
 
+    /**
+     * Accept recommended tag, requires moderator rights
+     * @param  {(number|string)} preTagId - Id of recommendation
+     * @return {Promise<Object>} - JSON response
+     */
     acceptPreTag: (preTagId) => API.post(`/pictures/accept_pre_tag/${preTagId}`),
+    /**
+     * Add tags to a post
+     * @param  {string} tagNames - List of `||`-separated tags
+     * @param  {(number|string)} postId - Id of the post
+     * @param  {Boolean} createTags - Allow creating of new tags, requires moderator rights
+     * @return {Promise<Object>} - JSON response
+     */
     addTags: (tagNames, postId, createTags = false) => API.post(
         `/pictures/add_tag_to_post/${postId}`,
         { text: tagNames, add_new_tag: createTags.toString() },
     ),
+    /**
+     * Edit tag info, requires moderator rights
+     * @param  {RawTag} rawTag - updated tag info
+     * @return {Promise<Object>} - JSON response
+     */
     editTag: (rawTag) => API.post(
         `/pictures/edit_tag/${rawTag.id}`,
         {
@@ -1012,11 +1087,63 @@ const API = {
             description_jp: rawTag.description_jp ?? "",
         },
     ),
+    /**
+     * Decline recommended tag, requires moderator rights or being creator of the recommendation
+     * @param  {(number|string)} preTagId - Id of the recommendation
+     * @return {Promise<Object>} - JSON response
+     */
     declinePreTag: (preTagId) => API.post(`/pictures/del_pre_tag/${preTagId}`),
+    /**
+     * Get description of a post
+     * @param  {(number|string)} postId - Id of the post
+     * @return {Promise<Object>} - JSON response
+     */
     getPostInfo: (postId) => API.get(`${PAGES.post}${postId}?type=json`),
+    /**
+     * Get tags on a post
+     * @param  {(number|string)} postId - Id of the post
+     * @return {Promise<Object>} - JSON response
+     */
     getPostTags: (postId) => API.get(`/api/v2/posts/${postId}/tags`),
-    getPosts (pageNum, searchParams = {}) {
-        const params = { page: pageNum };
+    /**
+     * Get tag info by its Id
+     * @param  {(number|string)} tagId - Id of the tag
+     * @return {Promise<RawTag>} - JSON response
+     */
+    getTagById: (tagId) => API.get(`/api/v3/tags/${tagId}`),
+    /**
+     * Get tag info by its full name in any language
+     * @param  {string} tagName - The tag name
+     * @return {Promise<Object>} - JSON response
+     */
+    getTagsByName: (tagName) => API.get(`/api/v3/tags?tag:smart=${encodeURIComponent(tagName)}`),
+    /**
+     * Get user info by its Id
+     * @param  {(number|string)} userId - User If
+     * @return {Promise<Object>} - JSON response
+     */
+    getUserInfo: (userId) => API.get(`${PAGES.profile}${userId}?type=json`),
+    /**
+     * Delete a tag from a post, requires rights base on post status:
+     * NEW - uploader of moderator;
+     * PRE - any active member;
+     * Public, Banned - moderator only.
+     * @param  {(number|string)} tagId - Tag Id to remove
+     * @param  {(number|string)} postId - Post Id
+     * @return {Promise<Object>} - JSON response
+     */
+    removeTag: (tagId, postId) => API.post(
+        `/pictures/del_tag_from_post/${postId}`,
+        { tag_id: tagId },
+    ),
+    /**
+     * Search posts
+     * @param  {(number|string)} pageNum - Number of a page result
+     * @param  {Object} searchParams - Option of the search
+     * @return {Promise<Object>} - JSON response
+     */
+    searchPosts (pageNum, searchParams = {}) {
+        const params = { type: "json" };
         [
             "search_tag",
             "denied_tags",
@@ -1042,15 +1169,8 @@ const API = {
         ].forEach((name) => {
             if (name in searchParams) params[name] = searchParams[name];
         });
-        return this.post(PAGES.searchPosts, params);
+        return API.get(`${PAGES.searchPosts}${pageNum}`, params);
     },
-    getTagById: (tagId) => API.get(`/api/v3/tags/${tagId}`),
-    getTagsByName: (tagName) => API.get(`/api/v3/tags?tag:smart=${encodeURIComponent(tagName)}`),
-    getUserInfo: (userId) => API.get(`${PAGES.profile}${userId}?type=json`),
-    removeTag: (tagId, postId) => API.post(
-        `/pictures/del_tag_from_post/${postId}`,
-        { tag_id: tagId },
-    ),
 };
 
 // color-related stuff
@@ -1153,6 +1273,22 @@ const generalCSS = `
     .body + .body .img_block2:hover .img_block_text + .img_block_text {
         display: block;
     }
+    .body + .body .img_block2 a.hidden_img {
+        position: relative;
+    }
+    .body + .body .img_block2 a.hidden_img div {
+        height: 150px !important;
+        width: 150px !important;
+        position: absolute;
+    }
+    .body + .body .img_block2 a.hidden_img img {
+        opacity: 0;
+        transition: opacity 0.5s;
+    }
+    .body + .body .img_block2:hover a.hidden_img img {
+        opacity: 1;
+        transition: opacity 1.5s 0.5s;
+    }
 
     /* hide the spin buttons */
     input[type='number']::-webkit-inner-spin-button { display: none; }
@@ -1185,6 +1321,10 @@ const generalCSS = `
     }
     .tags li.preTag .icon_delete,
     .tags li.preTag .icon_frame,
+    .tags li.waiting .icon_delete,
+    .tags li.waiting .icon_frame,
+    .tags li.waiting .accept,
+    .tags li.waiting .decline,
     .tags li:not(.preTag) .accept,
     .tags li:not(.preTag) .decline {
         display: none;
@@ -1338,8 +1478,11 @@ const wideLayoutCSS = `
 `;
 
 const floatingSidebarCSS = `
+    header > nav {
+        box-sizing: border-box;
+    }
     #body_wrapper {
-        min-height: calc(100vh - 40px);
+        min-height: calc(100vh - 50px);
         margin: 10px 0 0 0;
     }
     div#content[id] {
@@ -1500,7 +1643,7 @@ const hotkeys = [
         pages: [PAGES.post],
         selectors: ["select[name='favorite_folder']"],
         action: (el) => {
-            el.value = "default"; // eslint-disable-line no-param-reassign
+            el.value = "Null"; // eslint-disable-line no-param-reassign
             el.dispatchEvent(new Event("change"));
         },
     },
@@ -1620,10 +1763,9 @@ const pageIs = new Proxy((path, strict = false, url = window.location) => {
             return false;
         }
     }
-    if (strict) {
-        return url.pathname === path;
-    }
-    return url.pathname.startsWith(path);
+    return strict
+        ? url.pathname === path
+        : url.pathname.startsWith(path);
 }, {
     get (pathIs, pageName) {
         if (PAGES.strictComparisonIsRequired.includes(pageName)) {
@@ -1632,6 +1774,116 @@ const pageIs = new Proxy((path, strict = false, url = window.location) => {
         return pathIs(PAGES[pageName]);
     },
 });
+
+/**
+ * Collection that automatically removes objects which weren't retrieved during `lifetime` time.
+ * The collection uses given levels (maps of objects).
+ * At creating collection the data can be moved from one level to next and remove from the last one.
+ * When an object get retrived it moves back to the first level.
+ */
+class Cache {
+    /**
+     * Creates a collection with given data and removes outdated objects
+     * @param  {Object[]} levels - Maps of data
+     * @param  {number} lifetime - Time after which obect will be removed if not used
+     * @param  {number} lastUpdate - When were last cleanin of the data
+     * @return {Cache}
+     */
+    constructor (levels, lifetime, lastUpdate) {
+        this.levels = levels;
+        this.lifetime = lifetime;
+        this.lastUpdate = lastUpdate;
+
+        if (lastUpdate + lifetime / levels.length < Date.now()) {
+            this.levels.pop();
+            this.levels.unshift({});
+            this.lastUpdate = Date.now();
+        }
+    }
+
+    get (id) {
+        for (let i = 0; i < this.levels.length; i++) {
+            const data = this.levels[i][id];
+            if (data) {
+                if (i > 0) {
+                    this.levels[0][id] = data;
+                    delete this.levels[i][id];
+                }
+                return data;
+            }
+        }
+        // eslint-disable-next-line unicorn/no-useless-undefined
+        return undefined;
+    }
+
+    getAll () {
+        return this.levels.flatMap((lvl) => Object.values(lvl));
+    }
+
+    find (fields, value) {
+        const finder = Array.isArray(fields)
+            ? (data) => fields.some((field) => data[field] === value)
+            : (data) => data[fields] === value;
+        for (let i = 0; i < this.levels.length; i++) {
+            // eslint-disable-next-line unicorn/no-fn-reference-in-iterator
+            const data = Object.values(this.levels[i]).find(finder);
+            if (data) {
+                if (i > 0) {
+                    this.levels[0][data.id] = this.levels[i][data.id];
+                    delete this.levels[i][data.id];
+                }
+                return data;
+            }
+        }
+        // eslint-disable-next-line unicorn/no-useless-undefined
+        return undefined;
+    }
+
+    findAll (fields, value) {
+        const finder = Array.isArray(fields)
+            ? (data) => fields.some((field) => data[field] === value)
+            : (data) => data[fields] === value;
+        const results = [];
+        for (let i = 0; i < this.levels.length; i++) {
+            // eslint-disable-next-line unicorn/no-fn-reference-in-iterator
+            const data = Object.values(this.levels[i]).filter(finder);
+            results.push(...data);
+            if (data.length > 0 && i > 0) {
+                data.forEach(({ id }) => {
+                    this.levels[0][id] = this.levels[i][id];
+                    delete this.levels[i][id];
+                });
+            }
+        }
+        return results;
+    }
+
+    remove (id) {
+        for (let i = 0; i < this.levels.length; i++) {
+            if (id in this.levels[i]) {
+                delete this.levels[i][id];
+                return true;
+            }
+        }
+        return false;
+    }
+
+    add (value) {
+        if (!("id" in value)) {
+            throw new TypeError("The value doesn't have property `id`");
+        }
+        if (typeof value.id !== "number" && typeof value.id !== "string") {
+            throw new TypeError("`id` of the value must be number or string");
+        }
+        this.remove(value.id);
+        this.levels[0][value.id] = value;
+    }
+
+    clear () {
+        this.levels = this.levels.map(() => ({}));
+        this.lastUpdate = Date.now();
+    }
+}
 
 /**
  * Wrapper for tag that adds some additional methods and protects from modifying
@@ -1644,13 +1896,14 @@ class Tag {
      */
     constructor (tag) {
         if (!tag) return NO_TAG;
-        if (new.target !== Tag) return new Tag(tag);
+        if (!new.target) return new Tag(tag);
 
         const isRawTag = "tag" in tag;
         this.data = {
             id: tag.id,
             type: tag.type,
             alias: tag.alias,
+            parent: tag.parent,
             enName: isRawTag ? tag.tag : tag.enName,
             ruName: isRawTag ? tag.tag_ru : tag.ruName,
             jpName: isRawTag ? tag.tag_jp : tag.jpName,
@@ -1675,6 +1928,8 @@ class Tag {
     get jpName () { return this.data.jpName; }
 
     get alias () { return this.data.alias; }
+
+    get parent () { return this.data.parent; }
 
     get type () { return this.data.type; }
 
@@ -1716,28 +1971,491 @@ class Tag {
     [Symbol.toPrimitive] (hint) {
         return hint === "number" ? this.data.count : this.toString();
     }
+
+    /**
+     * Remove this tag from the list of recommended and from page of recommede tags
+     * @return {Promise<undefined>}
+     */
+    async resolve () {
+        const tags = await getRecommendedTags();
+        const preTagIndex = tags.findIndex(({ preId }) => preId === this.preId);
+        if (preTagIndex < 0) return;
+        tags.splice(preTagIndex, 1);
+        if (tags.length === 0) {
+            const cache = SETTINGS.preTagsCache;
+            cache.remove(post_id);
+            SETTINGS.preTagsCache = cache;
+        }
+
+        if (window.opener) {
+            // remove the recommended tag in opener (if it's the moderate recommended tags page)
+            window.opener.postMessage({ cmd: "resolve_pretag", preTagId: this.preId });
+        }
+    }
+
+    /**
+     * Accept this recommeded tag
+     * @return {Promise<boolean>} - whether tag item should be removed from the page
+     */
+    async accept () {
+        if (!this.preId) {
+            console.error(`${this} isn't a recommended tags`);
+            return true;
+        }
+        this.pending = true;
+        this.resolve();
+        const { success, msg } = await API.acceptPreTag(this.preId);
+        this.pending = false;
+        if (!success) {
+            console.error(`Error of accepting of pretag ${this}:`, msg);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Decline this recommeded tag
+     * @return {Promise<boolean>} - whether tag item should be removed from the page
+     */
+    async decline () {
+        if (!this.preId) {
+            console.error(`${this} isn't a recommended tags`);
+            return true;
+        }
+        this.pending = true;
+        this.resolve();
+        const { success, msg } = await API.declinePreTag(this.preId);
+        this.pending = false;
+        if (!success) {
+            console.error(`Error of removing of pretag ${this}:`, msg);
+        }
+        return true;
+    }
 }
 
 /**
- * Executes `fn` when DOM is loaded
- * @param  {function} fn - A function to execute
+ * On post search page, adds Danbooru links to tags and
+ * exports Danbooru wiki if a tag doesn't have descriontion.
+ * @return {Promise<undefined>}
  */
-function onready (fn) {
-    if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", fn);
+async function addDanbooruTagDescription () {
+    if (!getElem(".posts_body_head h2")) return;
+    if (getElem(".posts_body_head.danboored")) return; // no self-triggering
+    getElem(".posts_body_head")?.classList.add("danboored");
+
+    const tagNodes = [getElem(".posts_body_head h2").firstChild];
+    const aliasesTextNode = [...getElem(".posts_body_head").childNodes]
+        .find((node) => node.textContent.startsWith(TEXT.aliasesTags));
+    if (aliasesTextNode) {
+        let node = aliasesTextNode.nextSibling;
+        while (node && node.nodeName !== "BR") {
+            if (node.nodeName === "A") {
+                tagNodes.push(node);
+            }
+            node = node.nextElementSibling;
+        }
+    }
+
+    if (tagNodes.length === 0) return;
+
+    const tags = await Promise.all(tagNodes.map((node) => getTagInfo(node.textContent)));
+
+    // eslint-disable-next-line unicorn/no-for-loop
+    for (let i = 0; i < tags.length; i++) {
+        // eslint-disable-next-line no-await-in-loop
+        const tag = (await GM.xmlHttpRequest({
+            url: `https://danbooru.donmai.us/tags.json?search[name_or_alias_matches]=${tags[i].name}&only=name,wiki_page,artist,artist[urls[url]]`,
+            responseType: "json",
+        })).response[0];
+        // eslint-disable-next-line no-continue
+        if (!tag) continue;
+
+        tagNodes[i].after(newElem(
+            "a",
+            {
+                href: `https://danbooru.donmai.us/wiki_pages/${tag.name}`,
+                css: {
+                    verticalAlign: "middle",
+                    marginLeft: "0.25ch",
+                },
+            },
+            newElem("img", { src: "https://danbooru.donmai.us/favicon.ico" }),
+        ));
+
+        // if no description yet
+        if (!getElem(".posts_body_head h2 + :not(br)")
+            && !getElem(".posts_body_head h2").nextSibling.textContent.trim()
+        ) {
+            if (tag.artist) {
+                getElem(".posts_body_head h2").after(newElem(
+                    "details",
+                    {},
+                    newElem("summary", {}, "Danbooru's links"),
+                    ...tag.artist.urls
+                        .flatMap(({ url }) => [newElem("a", { href: url }, url), newElem("br")]),
+                ));
+            }
+
+            if (tag.wiki_page?.body.length) {
+                getElem(".posts_body_head h2").after(newElem(
+                    "details",
+                    {},
+                    newElem("summary", {}, "Danbooru's description"),
+                    ...tag.wiki_page.body.split("\n").flatMap((s) => [s, newElem("br")]),
+                ));
+            }
+        }
+    }
+}
+
+/**
+ * Adds buttons to visit neighbor posts
+ */
+async function addNeighborPostsButtons (postsData) {
+    if (getElem(".chevron_left, .chevron_right")) return;
+
+    let data;
+    const toData = (resp, query) => ({
+        query,
+        page: resp.page_number,
+        lastPage: resp.max_pages,
+        // eslint-disable-next-line camelcase
+        pos: resp.posts.findIndex(({ id }) => id === post_id),
+        lastPos: resp.response_posts_count - 1,
+        postIds: resp.posts.map(({ id }) => id),
+    });
+    const getPage = (shift) => API.searchPosts(data.page + shift, data.query);
+
+    const sourceUrl = document.referrer ? new URL(document.referrer) : null;
+    const to = new URL(window.location).searchParams.get("to");
+
+    if (postsData) {
+        data = postsData;
+        data.pos = data.postIds.indexOf(post_id);
+        console.log(data);
+    // went to previous page
+    } else if (window.history.state) {
+        data = window.history.state;
+    // opened neighbor post in the same tab
+    } else if (sessionStorage.neighborPosts) {
+        data = JSON.parse(sessionStorage.neighborPosts);
+        delete sessionStorage.neighborPosts;
+        // eslint-disable-next-line camelcase
+        data.pos = data.postIds.indexOf(post_id);
+        if (data.pos < 0) {
+            if (to === "prev") {
+                data = toData(await getPage(-1), data.query);
+            } else if (to === "next") {
+                data = toData(await getPage(+1), data.query);
+            }
+        }
+    // opened neighbor post in new tab
+    } else if (to && pageIs(PAGES.post, false, sourceUrl)) {
+        if (window.opener?.history.state) {
+            data = window.opener.history.state;
+
+            // eslint-disable-next-line camelcase
+            data.pos = data.postIds.indexOf(post_id);
+            if (data.pos < 0) {
+                if (to === "prev") {
+                    data = toData(await getPage(-1), data.query);
+                } else if (to === "next") {
+                    data = toData(await getPage(+1), data.query);
+                }
+            }
+        }
+    // opened post from the search page
+    } else if (pageIs(PAGES.searchPosts, false, sourceUrl)
+            || pageIs(PAGES.moderatePreTags, false, sourceUrl)
+            || pageIs(PAGES.uploadPicture, false, sourceUrl)
+    ) {
+        window.opener?.postMessage({ cmd: "get_posts_data" }, PAGES.origin);
         return;
     }
-    fn();
+    if (!data) return;
+    if (data.pos < 0) {
+        console.warn("Post position was last", data, post_id);
+        return;
+    }
+    window.history.replaceState(data, document.title);
+    sessionStorage.neighborPosts = JSON.stringify(data);
+
+    // add button to prev post
+    let postId;
+    if (data.page === 0 && data.pos === 0) {
+        postId = null;
+    } else if (data.pos !== 0) {
+        postId = data.postIds[data.pos - 1];
+    } else {
+        const { posts } = await getPage(-1);
+        const pos = posts.indexOf(data.postIds[data.pos]) - 1;
+        postId = posts[pos >= 0 ? pos : posts.length - 1].id;
+    }
+    getElem(".post_vote_block").prepend(newElem("a", {
+        className: "chevron_left",
+        css: {
+            float: "left",
+            cursor: postId ? null : "not-allowed",
+        },
+        title: TEXT.hkPrevPost,
+        href: postId ? `${PAGES.post}${postId}?lang=${SETTINGS.lang}&to=prev` : null,
+        "click auxclick": onNewTabLinkClick,
+    }));
+    // add button to next post
+    if (data.page === data.lastPage && data.pos === data.lastPos) {
+        postId = null;
+    } else if (data.pos !== data.lastPos) {
+        postId = data.postIds[data.pos + 1];
+    } else {
+        const { posts } = await getPage(+1);
+        const pos = posts.indexOf(data.postIds[data.pos]) + 1;
+        postId = posts[pos < posts.length ? pos : 0].id;
+    }
+    getElem(".post_vote_block").append(newElem("a", {
+        className: "chevron_right",
+        css: {
+            float: "right",
+            cursor: postId ? null : "not-allowed",
+        },
+        title: TEXT.hkNextPost,
+        href: postId ? `${PAGES.post}${postId}?lang=${SETTINGS.lang}&to=next` : null,
+        "click auxclick": onNewTabLinkClick,
+    }));
 }
 
 /**
- * Returns first element matching given `selector`
- * @param  {string} selector - A selector for matching
- * @param  {HTMLElement} [container=document] - Where search the element
- * @return {HTMLElement} The found element or null
+ * Adds hotkeys for pagination if needed
  */
-function getElem (selector, container = document) {
-    return container.querySelector(selector);
+function addPaginationHotkeys () {
+    // there are too many pages with pagination to list them
+    if (pageIs.searchPosts || getElem(".numeric_pages a")) {
+        hotkeys.push(
+            {
+                hotkey: "Z",
+                descr: TEXT.hkNextPage,
+                pages: [PAGES.any],
+                selectors: [".numeric_pages a:first-child"],
+                action: (element) => element.click(),
+            },
+            {
+                hotkey: "X",
+                descr: TEXT.hkPrevPage,
+                pages: [PAGES.any],
+                selectors: [".numeric_pages a:last-child"],
+                action: (element) => element.click(),
+            },
+        );
+    }
+}
+
+/**
+ * Adds to post preview picture size, tag number, and status (new/pre/ban)
+ */
+function addPostStatus () {
+    const cache = addPostStatus.cahce || (addPostStatus.cache = {});
+    async function makeImgBlockTextElem (postId) {
+        if (!cache[postId]) {
+            cache[postId] = API.getPostInfo(postId);
+        }
+        const {
+            color,
+            width,
+            height,
+            erotics,
+            tags,
+            status,
+        } = await cache[postId];
+        const bg = `linear-gradient(to left, rgba(${color},0), rgba(${color},1), rgba(${color},0))`;
+        // eslint-disable-next-line unicorn/no-reduce
+        const textColor = color.reduce((sum, col) => sum + col) / 3 > 96 ? "black" : "white";
+        const link = `/pictures/view_posts/0?res_x=${width}&res_y=${height}&lang=${SETTINGS.lang}`;
+
+        return newElem(
+            "div",
+            {
+                className: "img_block_text",
+                css: {
+                    opacity: 1,
+                    background: bg,
+                    color: textColor,
+                },
+            },
+            newElem("a", {
+                href: link,
+                title: `${TEXT.pics} ${width}x${height}`,
+                onclick: "this.target='_blank';return true;",
+                css: { background: SETTINGS.isModerator ? COLORS.eroticLevel[erotics] : null },
+                text: `${width}x${height}`,
+            }),
+            " ",
+            newElem("span", {
+                title: "Tags Num",
+                text: `(${tags.length})`,
+            }),
+            TEXT.statuses[status] ? newElem("br") : "",
+            TEXT.statuses[status],
+        );
+    }
+
+    getAllElems("td:nth-child(3) a").forEach(async (a) => {
+        getElem("img", a).style.maxHeight = "150px";
+        const postId = a.href.match(/\d+/)[0];
+
+        a.after(newElem(
+            "div",
+            { className: "img_block2" },
+            await makeImgBlockTextElem(postId),
+        ));
+        a.nextElementSibling.prepend(a);
+    });
+
+    getAllElems(".body + .body > span > a").forEach(async (a) => {
+        let img = getElem("img", a);
+        if (img) img.style.maxHeight = "150px";
+        const postId = a.href.match(/\d+/)[0];
+
+        a.after(await makeImgBlockTextElem(postId));
+        if (img) return;
+        img = newElem("img", {
+            className: "img_sp",
+            src: (await cache[postId]).small_preview,
+        });
+        a.classList.add("hidden_img");
+        a.append(img);
+    });
+}
+
+/**
+ * Adds recommended tags to post
+ * @param {boolean} updatePreTags - whether the list of recommended tags may be updated
+ * @return {Promise<undefined>}
+ */
+async function addRecommendedTags (updatePreTags) {
+    let pretags = await getRecommendedTags(updatePreTags);
+    if (pretags.length <= 0 || getElem(".tags li span.accept")) return;
+
+    getAllElems(".tags li.preTag").forEach((li) => li.remove());
+    const presentedTags = new Set(getAllElems(".tags .edit_tag").map((el) => +el.dataset.tagId));
+
+    pretags = pretags.filter((tag, i, tags) => {
+        // decline presented tags and duplicated tags
+        if (presentedTags.has(tag.id) || tags.findIndex((t) => t.id === tag.id) < i) {
+            tag.decline();
+            return false;
+        }
+        return true;
+    });
+    if (pretags.length === 0) return;
+
+    const getTagTypeByPosition = (pos) => Object.keys(tagTypePosition)
+        .find((k) => tagTypePosition[k] === pos);
+    const getTagName = (tagItem) => (tagItem?.nodeName === "LI"
+        ? tagItem.firstElementChild.textContent.trim()
+        : null);
+
+    const types = new Set(pretags.map(({ type }) => type));
+    // eslint-disable-next-line no-restricted-syntax
+    for (const type of types) {
+        // find tag block of tags of current type
+        const spanText = TEXT.categories[type];
+        let span = getAllElems(".tags > span").find((el) => el.textContent === spanText);
+        // create tag block if there is no tags of current type
+        if (!span) {
+            const typeCount = TEXT.categories.length; // also includes "deleted by moderator"
+            let nextSpan;
+            for (let pos = tagTypePosition[type] + 1; !nextSpan && pos < typeCount; pos++) {
+                const nextSpanText = TEXT.categories[getTagTypeByPosition(pos)];
+                nextSpan = getAllElems(".tags > span")
+                    .find((el) => el.textContent === nextSpanText);
+            }
+            span = newElem("span", { text: TEXT.categories[type] });
+            if (nextSpan) {
+                nextSpan.before(span);
+            } else if (getElem(".tags > span")) {
+                getElem(".tags").append(span);
+            } else {
+                // site bug: no categories if there is only "tagme" tag
+                // also includes case when no tags at all
+                getElem(".tags").prepend(span, newElem("span", { text: TEXT.categories[9] }));
+            }
+        }
+        // get the recommended tags of the current type in order of usage count
+        const tags = pretags
+            .filter((tag) => tag.type === type)
+            .sort((t1, t2) => t2 - t1);
+        let currentElem = span.nextElementSibling;
+        let currentText = getTagName(currentElem);
+        // eslint-disable-next-line no-restricted-syntax
+        for (const tag of tags) {
+            // find a presented tag which has usage count bigger then the recommended tag
+            // eslint-disable-next-line no-await-in-loop
+            while (currentText && await getTagInfo(currentText, post_id) > tag) {
+                currentElem = currentElem.nextElementSibling;
+                currentText = getTagName(currentElem);
+            }
+            if (currentElem) {
+                // eslint-disable-next-line no-await-in-loop
+                if (currentText && await getTagInfo(currentText, post_id) > tag) {
+                    currentElem.after(newTagItem(tag));
+                } else {
+                    currentElem.before(newTagItem(tag));
+                }
+            } else {
+                getElem(".tags").append(newTagItem(tag));
+            }
+        }
+    }
+}
+
+/**
+ * Creates table with AP Enhancements settings
+ * @return {HTMLTableElement} Table with settings
+ */
+function buildSettings () {
+    return newElem(
+        "table",
+        {
+            id: "AP_Enhancements",
+            className: "form_table",
+        },
+        ...SETTINGS
+            .getAll()
+            .filter(({ descr }) => descr !== null)
+            .map(({ name }) => SETTINGS.getAsRow(name)),
+        newElem(
+            "tr",
+            {},
+            newElem(
+                "td",
+                {
+                    colSpan: "2",
+                    css: { textAlign: "center" },
+                },
+                newElem("input", {
+                    type: "button",
+                    value: "Clear all cache",
+                    click: () => {
+                        SETTINGS.getAll()
+                            .filter(({ type }) => type === "cache")
+                            .forEach(({ name, defValue: { levels, lifetime, lastUpdate } }) => {
+                                SETTINGS[name] = new Cache(levels, lifetime, lastUpdate);
+                            });
+                        window.location.reload();
+                    },
+                }),
+                " ",
+                newElem("input", {
+                    type: "button",
+                    value: "Clear recommended tags cache",
+                    click: () => {
+                        const cache = SETTINGS.preTagsCache;
+                        cache.clear();
+                        SETTINGS.preTagsCache = cache;
+                    },
+                }),
+            ),
+        ),
+    );
 }
 
 /**
@@ -1751,6 +2469,533 @@ function getAllElems (selector, container = document) {
 }
 
 /**
+ * Returns first element matching given `selector`
+ * @param  {string} selector - A selector for matching
+ * @param  {HTMLElement} [container=document] - Where search the element
+ * @return {HTMLElement} The found element or null
+ */
+function getElem (selector, container = document) {
+    return container.querySelector(selector);
+}
+
+/**
+ * Get list of tags recommended to current post
+ * @param {boolean} updatePreTags - whether the list of recommended tags may be updated
+ * @return {Promise<Array<Tag>>} Recommended tags
+ */
+function getRecommendedTags (updatePreTags = false) {
+    if (getRecommendedTags.result) return getRecommendedTags.result;
+    getRecommendedTags.result = (async () => {
+        const cache = SETTINGS.preTagsCache;
+        // return from cache
+        if (cache.getAll().length > 0) {
+            let tags = cache.get(post_id)?.tags || [];
+            // convert tags to advanced if needed
+            if (tags.length > 0 && !("name" in tags[0])) {
+                tags = tags.map((t) => new Tag(t));
+            }
+            return tags;
+        }
+
+        if (!updatePreTags) return [];
+
+        cache.clear();
+        document.body.classList.add("wait");
+        const { isModerator } = SETTINGS;
+        // get recommended tag from <tr>
+        const addPreTag = async (tr) => {
+            const tag = await getTagInfo(tr.children[isModerator ? 1 : 0].textContent.trim());
+            [tag.preId] = tr.id.match(/\d+/);
+            tag.by = isModerator
+                ? tr.children[0].querySelector("a").textContent
+                : getElem(".sidebar_login .title a").textContent;
+
+            const postId = tr.children[isModerator ? 2 : 1].querySelector("a").href.match(/\d+/)[0];
+            const post = cache.get(postId) || { id: postId, tags: [] };
+            post.tags.push(tag);
+
+            cache.add(post);
+        };
+
+        // get recommended tags from the first page
+        const page = isModerator ? PAGES.moderatePreTags : PAGES.yourPreTags;
+        const dom = await API.html(`${page}0`);
+        // eslint-disable-next-line unicorn/no-fn-reference-in-iterator
+        await Promise.all(getAllElems(".messages tr", dom).map(addPreTag));
+        // get recommended tags from other pages
+        const lastPage = getElem("table + div .numeric_pages a:nth-last-child(2)", dom);
+        if (lastPage) {
+            await Promise.all(
+                new Array(+lastPage.textContent)
+                    .fill(1)
+                    .map((_, i) => `${page}${i + 1}`)
+                    .map(async (link) => {
+                        const dom2 = await API.html(link);
+                        // eslint-disable-next-line unicorn/no-fn-reference-in-iterator
+                        await Promise.all(getAllElems(".messages tr", dom2).map(addPreTag));
+                    }),
+            );
+        }
+
+        // save cache and return
+        SETTINGS.preTagsCache = cache;
+        document.body.classList.remove("wait");
+        return cache.get(post_id)?.tags || [];
+    })();
+    return getRecommendedTags.result;
+}
+
+/**
+ * Get text selected by user
+ * @return {string} The selected by user
+ */
+function getSelText () {
+    if (window.getSelection) {
+        return window.getSelection().toString();
+    }
+    return document.selection.createRange().text;
+}
+
+/**
+ * Returns tag by its name or id
+ * @param  {(string|number)} tagName - The tag name (string) or id (number)
+ * @param  {(string|number)} [postId] - ID of a post where the will be search in the first order.
+ *                                    Use it if you going to get multiple tags from this post.
+ * @return {Promise<Tag>} Found tag or `NO_TAG`
+ */
+async function getTagInfo (tagName, postId) {
+    if (!tagName) return NO_TAG;
+    const cache = SETTINGS.tagsCache;
+
+    // cast raw tag to advanced one and cache it
+    // if the tag is alias, returns aliased tag
+    // the cache must be saved manually
+    const cacheTag = (rawTag) => {
+        if (!rawTag) return NO_TAG;
+        const tag = new Tag(rawTag);
+        cache.add(tag);
+        return tag.alias ? getTagInfo(tag.alias) : tag;
+    };
+    let tag;
+
+    // check in cache
+    if (typeof tagName === "number") {
+        const tagId = tagName;
+        tag = cache.get(tagId);
+    } else {
+        tag = cache.find(["enName", "ruName", "jpName"], tagName);
+    }
+
+    // if not tag then get it from post if it provided
+    if (!tag && postId) {
+        await Promise.all(
+            // eslint-disable-next-line unicorn/no-fn-reference-in-iterator
+            (await API.getPostTags(postId)).tags.map(cacheTag),
+        );
+        SETTINGS.tagsCache = cache;
+        return getTagInfo(tagName);
+    }
+
+    // if still no tag
+    if (!tag) {
+        if (typeof tagName === "number") {
+            const tagId = tagName;
+            tag = await cacheTag((await API.getTagById(tagId)).tag);
+        } else {
+            const { success, tags } = await API.getTagsByName(tagName);
+            if (!success || tags.length === 0) return NO_TAG;
+            if (tags.length > 2) {
+                console.warn("Name colision:", tags);
+            }
+            // eslint-disable-next-line no-restricted-syntax
+            for (const rawTag of tags) {
+                tag = await cacheTag(rawTag); // eslint-disable-line no-await-in-loop
+            }
+        }
+    }
+
+    SETTINGS.tagsCache = cache;
+    return new Tag(tag); // return copy
+}
+
+/**
+ * Returns user info by its name or id
+ * Search by name correctly works only for non-regular users.
+ * @param  {(string|number)} userName - The user name (string) or id (number)
+ * @return {Promise<Object>} Found user or null
+ */
+async function getUserInfo (userName) {
+    const cache = SETTINGS.userCache;
+    if (!userName) return null;
+    if (typeof userName === "string") {
+        // no site search by user name, + user names aren't unique
+        let userInfo = cache.find("name", userName);
+        if (userInfo === undefined) {
+            const dom = await API.html(PAGES.about);
+            getAllElems("a.user_link span", dom).forEach((span) => cache.add({
+                id: +span.parentNode.href.match(/\d+/)[0],
+                name: span.textContent,
+                level: span.style.color === "rgb(0, 0, 204)" ? 1 : 2,
+            }));
+            userInfo = cache.find("name", userName);
+            if (!userInfo) {
+                userInfo = { id: userName, name: userName, level: 0 };
+                cache.add(userInfo);
+            }
+            SETTINGS.userCache = cache;
+        }
+        return userInfo;
+    }
+
+    const userId = +userName;
+    let user = cache.get(userId);
+    if (!user) {
+        let userInfo;
+        try {
+            userInfo = await API.getUserInfo(userId);
+        } catch {
+            return null;
+        }
+        const userLvl = Math.max(
+            ...userInfo.groups.map((gr) => ["user", "commiter", "moderator", "admin"].indexOf(gr)),
+        );
+        user = {
+            id: userInfo.id,
+            name: userInfo.name,
+            level: userLvl,
+        };
+        cache.add(user);
+        SETTINGS.userCache = cache;
+    }
+    return user;
+}
+
+/**
+ * Highlights level of the tag adder and shows username of the tag remover
+ * @return {Promise<undefined>}
+ */
+async function highlightTagger () {
+    // change border color according to adder level
+    if (!highlightTagger.wasCssAdded) {
+        highlightTagger.wasCssAdded = true;
+        await getUserInfo(getElem(".sidebar_login .title a").textContent);
+
+        const makeCSS = (level) => SETTINGS.userCache
+            .findAll("level", level)
+            .map(({ name }) => `li[title="by ${name}"] a.not_my_tag_border`)
+            .join(",\n")
+            .concat(`\n{ border-left-color: ${COLORS.tagAdder[level]}; }`);
+
+        const css = [
+            `.tags a.not_my_tag_border { border-left-color: ${COLORS.tagAdder[0]}; }`,
+            makeCSS(1), // commiter
+            makeCSS(2), // moderator
+            `li[title="by ${getElem(".sidebar_login .title a").textContent}"]
+                a.not_my_tag_border { border-left-color: ${COLORS.tagAdder.curr}; }`,
+        ].join("\n");
+
+        GM_addStyle(css);
+    }
+
+    // replace remover id with name
+    getAllElems("#post_tags a.removed").forEach(async (a) => {
+        const tagRemoverId = a.title.match(/\d+$/);
+        if (!tagRemoverId) return;
+        const tagRemover = await getUserInfo(+tagRemoverId[0]);
+        if (!tagRemover) {
+            console.warn(`User with id ${tagRemoverId} was not found`);
+            return;
+        }
+        a.title = a.title.replace(/\d+$/, tagRemover.name);
+    });
+}
+
+/**
+ * Replace original upload form with drag'n'drop form
+ */
+function improveFileUploader () {
+    GM_addStyle(`
+        #posts .img_block_big {
+            box-sizing: border-box;
+        }
+        #posts .img_sp {
+            max-height: 100%;
+            max-width: 100%;
+        }
+        #posts .img_block_text {
+            background:rgba(128,128,128,0.7);
+            color:white;
+        }
+        #posts .progress {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            bottom: 0;
+            z-index: -1;
+        }
+        #posts .img_block_big.error {
+            border: red 2px solid;
+        }
+        #posts .img_block_big.error .status {
+            color: red;
+        }
+
+        #mfiles {
+            display: none;
+        }
+        #mfiles + label {
+            cursor: pointer;
+            text-cecoration: underline;
+        }
+
+        #dragndrop {
+            position: fixed;
+            width: calc(100% - 360px);
+            margin: 30px;
+            bottom: 0;
+            top: 46px;
+            box-sizing: border-box;
+            display: flex;
+            background: rgba(128,128,128,0.5);
+            border: rgba(128,128,128,0.8) 5px solid;
+            font-size: 5em;
+            justify-content: center;
+            text-align: center;
+            flex-direction: column;
+            opacity: 0;
+            transition: opacity 0.5s;
+            pointer-events: none;
+            z-index: 21;
+        }
+    `);
+    // replace "You have # unproven pictures you can still upload #." with editable version.
+    const [usedSlots, freeSlots] = getElem(".post_content .body div").textContent.match(/\d+/g);
+    const formBody = getElem(".post_content .body");
+    formBody.firstElementChild.remove();
+    formBody.prepend(newElem("span", {
+        id: "slot_status",
+        data: {
+            usedSlots,
+            totalSlots: +usedSlots + +freeSlots,
+        },
+        text: TEXT.slots(usedSlots, freeSlots),
+    }));
+
+    // replace old form with new one
+    const posts = newElem("div", {
+        id: "posts",
+        className: "posts_block",
+    });
+    const fileField = newElem("input", {
+        id: "mfiles",
+        type: "file",
+        multiple: true,
+        accept: "image/*",
+        // eslint-disable-next-line unicorn/no-fn-reference-in-iterator
+        change () { Array.from(this.files).forEach(uploadFile); },
+    });
+    const ffLabel = newElem("label", {
+        htmlFor: "mfiles",
+        text: TEXT.fileLabel,
+    });
+    document.forms[1].style.display = "none";
+    document.forms[1].parentElement.append(newElem("br"), fileField, ffLabel);
+    getElem("#content").append(posts);
+
+    // drag'n'drop label
+    const dnd = newElem("div", {
+        id: "dragndrop",
+        text: TEXT.dragndrop,
+    });
+    document.body.append(dnd);
+    document.addEventListener("scroll", (ev) => {
+        dnd.style.top = `${Math.max(0, 46 - document.scrollingElement.scrollTop)}px`;
+    }, false);
+    // drag'n'drop events
+    const cont = getElem("#content");
+    cont.style.minHeight = `${getElem("#body_wrapper").offsetHeight - 10}px`;
+    ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => cont.addEventListener(
+        eventName,
+        (ev) => { ev.preventDefault(); ev.stopPropagation(); },
+    ));
+    ["dragenter", "dragover"].forEach((eventName) => cont.addEventListener(
+        eventName,
+        (ev) => { dnd.style.opacity = 1; },
+    ));
+    ["dragleave", "drop"].forEach((eventName) => cont.addEventListener(
+        eventName,
+        (ev) => { dnd.style.opacity = 0; },
+    ));
+    cont.addEventListener(
+        "drop",
+        (ev) => Array.from(ev.dataTransfer.files).forEach((file) => {
+            if (file.type.startsWith("image/")) uploadFile(file);
+        }),
+    );
+
+    // warn about leaving the page during uploading
+    window.addEventListener("beforeunload", () => (getElem(".pending", posts) ? true : null));
+
+    // restore posts
+    const { state } = window.history;
+    if (!state) return;
+    Object.entries(state).forEach(([postId, { html, isPending, hasError }]) => {
+        uploadFile.maxID = Math.max(uploadFile.maxID ?? 0, postId);
+        // create post
+        const post = newElem("span", {
+            data: { id: postId },
+            className: "img_block_big",
+            html,
+        });
+        posts.append(post);
+        // update post status
+        if (isPending || !getElem("a", post).href) {
+            getElem(".status", post).textContent = TEXT.interrupted;
+            post.classList.add("error");
+        } else if (hasError) {
+            post.classList.add("error");
+        } else {
+            API.getPostInfo(getElem("a", post).href.match(/\d+/)[0]).then((postInfo) => {
+                const status = TEXT.statuses[postInfo.status];
+                getElem(".status", post).textContent = status;
+                if (!status) {
+                    getElem("br").style.display = "none";
+                }
+            });
+        }
+    });
+}
+
+/**
+ * Applies alternative wide layout
+ */
+function makeLayoutWide () {
+    getElem("#content > [itemscope]").id = "part0";
+    let div = getElem("#content > div[itemscope] > div:first-child");
+    const container1 = newElem("div", { id: "part1" });
+    const container2 = newElem("div", { id: "part2" });
+
+    do {
+        // skip block "Linked pictures"
+        if (div.nextElementSibling.matches(".post_content")
+            && div.nextElementSibling.children.length === 3) {
+            div = div.nextElementSibling;
+        } else {
+            container1.append(div.nextElementSibling);
+        }
+    } while (!div.nextElementSibling.lastElementChild.classList.contains("image_body"));
+
+    while (div.nextElementSibling) container2.append(div.nextElementSibling);
+    // comments block is added dynamically
+
+    getElem("#content").append(container1, container2);
+
+    const animImg = getElem("#big_preview_cont video");
+    if (animImg) { // video stops after moving it in the DOM so start it play
+        animImg.play();
+    }
+}
+
+/**
+ * Shows waiting cursor if some network request executes over 500ms
+ */
+function makeLoadingCursor () {
+    const origAjax = ajax_request2; // eslint-disable-line camelcase
+    unsafeWindow.ajax_request2 = function newAjaxRequest2 (url, params, handler, method) {
+        const timer = setTimeout(() => document.body.classList.add("waiting"), 500);
+        const newHandler = (...args) => {
+            clearTimeout(timer);
+            document.body.classList.remove("waiting");
+            handler(...args);
+        };
+        origAjax(url, params, newHandler, method);
+    };
+}
+
+/**
+ * Makes sidebar float, be always visible
+ */
+function makeSidebarFloating () {
+    if (getElem("#sidebar_last_scores_body")) {
+        getElem("#sidebar_last_scores_body").parentElement.id = "sidebar_last_scores";
+    }
+
+    const sidebar = getElem("#sidebar");
+    function alignSidebar (ev) {
+        const {
+            scrollTop,
+            clientHeight,
+        } = document.scrollingElement;
+        const top = Math.max(0, 50 - scrollTop);
+        const maxHeight = sidebar.parentElement.clientHeight;
+        sidebar.style.height = `${Math.min(maxHeight, clientHeight - top)}px`;
+
+        // adjust position of the Autocomplete if needed
+        const field = document.activeElement;
+        const autocomplite = getElem(".autocomplite[style*='visibility: visible;']");
+        if (autocomplite
+            && sidebar.contains(field)
+            && field.nodeName === "INPUT"
+            && (field.type === "text" || field.type === "search")
+        ) {
+            autocomplite.style.top = `${field.offsetTop + top + scrollTop + field.offsetHeight}px`;
+        }
+    }
+
+    document.addEventListener("scroll", alignSidebar);
+    window.addEventListener("resize", alignSidebar);
+    window.addEventListener("load", alignSidebar);
+    alignSidebar();
+    setTimeout(alignSidebar, 100);
+}
+
+/**
+ * Makes block with similar images foldeable and fold it
+ */
+function makeSimilarBlockFoldable () {
+    const block = getElem("#part2>.post_content, #big_preview_cont+.post_content+.post_content");
+    getElem(".title a", block).before(newElem("img", {
+        src: "/static/styles/icons/menu-icon.png",
+        title: TEXT.showImages,
+        click: () => getElem(".image_body", block).classList.toggle("hidden"),
+    }));
+    getElem(".image_body", block).classList.add("hidden");
+}
+
+/**
+ * Adds support of meta tags
+ */
+function makeTagsMeta () {
+    function tagCount (li) {
+        const count = li.lastElementChild.textContent;
+        if (count.includes("K")) {
+            return Number.parseInt(count, 10) * 1000;
+        }
+        return Number.parseInt(count, 10);
+    }
+
+    let tags = getAllElems(SETTINGS.metaTags.map((id) => `#tag_li_${id}`).join(","));
+    tags = getAllElems("#post_tags li[class=' ']")
+        .filter((li) => li.textContent.includes("(cosplay)"))
+        // filter out tags with unknown type
+        .filter((li) => li.lastElementChild.textContent.trim() !== "1"
+                || li.previousElementSibling.nodeName === "LI")
+        .concat(tags)
+        .filter((li) => {
+            li.classList.add("purple"); // eslint-disable-line no-param-reassign
+            li.firstElementChild.classList.add("big_tag"); // eslint-disable-line no-param-reassign
+            return !li.firstElementChild.classList.contains("removed");
+        })
+        .sort((t1, t2) => tagCount(t2) - tagCount(t1));
+    if (tags.length <= 0) return;
+
+    const span = getElem("#post_tags li[class=' ']")?.previousElementSibling;
+    if (!span) return;
+    span.insertAdjacentHTML("beforeBegin", `<span>${TEXT.categories[8]}</span>`);
+    tags.forEach((tag) => span.before(tag));
+}
+
+/**
  * Creates new HTMLElement and set given properties.
  * If (sub)property value is `null` it's ignored.
  * Prop `css` - object of CSS properties.
@@ -1761,9 +3006,10 @@ function getAllElems (selector, container = document) {
  * Other props - regular properties (not attributes).
  * @param  {string} tagName - Name of the element
  * @param  {object=} props - Properties of the element
+ * @param  {HTMLElement} children - Child elements
  * @return {HTMLElement} The created element
  */
-function newElem (tagName, props = {}) {
+function newElem (tagName, props = {}, ...children) {
     const elem = document.createElement(tagName);
     Object.entries(props).forEach(([prop, value]) => {
         if (value === null) return;
@@ -1793,6 +3039,7 @@ function newElem (tagName, props = {}) {
                 }
         }
     });
+    elem.append(...children);
     return elem;
 }
 
@@ -1853,7 +3100,7 @@ function newTagInput (tag, onTagChange) {
  */
 function newTagItem (tag) {
     // eslint-disable-next-line object-curly-newline
-    const { id, preId, name, type, countStr, by } = new Tag(tag);
+    const { id, preId, name, type, countStr, by, pending } = new Tag(tag);
     const uploaderName = (getElem(".post_content_avatar a") || {}).textContent;
     const ownPost = by === uploaderName;
     const buttons = [];
@@ -1874,403 +3121,43 @@ function newTagItem (tag) {
         buttons.push(newElem("span", { id: `edit_span_tag_${id}`, className: "icon_edit" }));
     }
 
-    return newElem("li", {
-        id: `tag_li_${id}`,
-        className: `${COLORS.tagTypeColor[type]} ${preId ? "preTag" : ""}`,
-        title: by ? `${TEXT.by} ${by}` : null,
-        children: [
-            newElem("a", {
-                href: `/pictures/view_posts/0?search_tag=${encodeURIComponent(name)}`,
-                title: `${TEXT.picsWithTag} ${name}`,
-                className: `
-                    ${COLORS.tagTypeClass[type]}
-                    ${COLORS.tagTypeClass[type] ? "big_tag" : ""}
-                    ${ownPost ? "" : "not_my_tag_border"}
-                `,
-                text: name,
-            }),
-            newElem("span", {
-                children: [newElem("span", {
+    // remove all buttons
+    if (pending) {
+        buttons.splice(0, buttons.length);
+    }
+
+    return newElem(
+        "li",
+        {
+            id: `tag_li_${id}`,
+            className: `${COLORS.tagTypeColor[type]} ${preId ? "preTag" : ""}`,
+            title: by ? `${TEXT.by} ${by}` : null,
+            click: preId ? onPreTagClick : null,
+        },
+        newElem("a", {
+            href: `/pictures/view_posts/0?search_tag=${encodeURIComponent(name)}`,
+            title: `${TEXT.picsWithTag} ${name}`,
+            className: `
+                ${COLORS.tagTypeClass[type]}
+                ${COLORS.tagTypeClass[type] ? "big_tag" : ""}
+                ${ownPost ? "" : "not_my_tag_border"}
+            `,
+            text: name,
+        }),
+        newElem(
+            "span",
+            {},
+            newElem(
+                "span",
+                {
                     className: "edit_tag",
                     data: { tagId: id, preTagId: preId },
                     text: countStr,
-                    children: [" ", ...buttons],
-                })],
-            }),
-        ],
-    });
-}
-
-/**
- * Executes network request and automatically parses response as HTML or JSON
- * @param  {string}  url - URL of the request
- * @param  {object}  [params=null] - The request params
- * @param  {string}  [method="POST"] - method of request executing
- * @return {Promise<(object|Document)>} - The parsed response
- * @throws {Exception} - Network or parsing exception
- */
-
-/**
- * Returns tag by its name or id
- * @param  {(string|number)} tagName - The tag name (string) or id (number)
- * @param  {(string|number)} [postId] - ID of a post where the will be search in the first order.
- *                                    Use it if you going to get multiple tags from this post.
- * @return {Promise<Tag>} Found tag or `NO_TAG`
- */
-async function getTagInfo (tagName, postId) {
-    if (!tagName) return NO_TAG;
-    const cache = SETTINGS.tagsCache;
-
-    // cast raw tag to advanced one and cache it
-    // if the tag is alias, returns aliased tag
-    // the cache must be saved manually
-    const cacheTag = (rawTag) => {
-        if (!rawTag) return NO_TAG;
-        const tag = new Tag(rawTag);
-        const tagPos = cache.findIndex(({ id }) => id === rawTag.id);
-        if (tagPos < 0) {
-            cache.push(tag);
-        } else {
-            cache.splice(tagPos, 1, tag);
-        }
-        return tag.alias ? getTagInfo(tag.alias) : tag;
-    };
-    let tag;
-
-    // check in cache
-    if (typeof tagName === "number") {
-        const tagId = tagName;
-        tag = cache.find(({ id }) => id === tagId);
-    } else {
-        tag = cache.find(({ enName, ruName, jpName }) => (
-            enName === tagName || ruName === tagName || jpName === tagName
-        ));
-    }
-
-    // if not tag then get it from post if it provided
-    if (!tag && postId) {
-        await Promise.all(
-            (await API.getPostTags(postId)).tags.map(cacheTag),
-        );
-        SETTINGS.tagsCache = cache;
-        return getTagInfo(tagName);
-    }
-
-    // if still no tag
-    if (!tag) {
-        if (typeof tagName === "number") {
-            const tagId = tagName;
-            tag = await cacheTag((await API.getTagById(tagId)).tag);
-        } else {
-            const { success, tags } = await API.getTagsByName(tagName);
-            if (!success || tags.length === 0) return NO_TAG;
-            if (tags.length > 2) {
-                console.warn("Name colision:", tags);
-            }
-            // eslint-disable-next-line no-restricted-syntax
-            for (const rawTag of tags) {
-                tag = await cacheTag(rawTag); // eslint-disable-line no-await-in-loop
-            }
-        }
-    }
-
-    SETTINGS.tagsCache = cache;
-    return new Tag(tag); // return copy
-}
-
-/**
- * Returns user info by its name or id
- * Search by name correctly works only for non-regular users.
- * @param  {(string|number)} userName - The user name (string) or id (number)
- * @return {Promise<Object>} Found user or null
- */
-async function getUserInfo (userName) {
-    let cache = SETTINGS.userCache;
-    // add to cache the moderators and commiters
-    if (cache.length === 0) {
-        const dom = await API.html(PAGES.about);
-        cache = getAllElems("a.user_link span", dom).map((span) => ({
-            id: span.parentNode.href.match(/\d+/)[0],
-            name: span.textContent,
-            level: span.style.color === "rgb(0, 0, 204)" ? 1 : 2,
-        }));
-        cache.unshift({
-            id: getElem(".sidebar_login .title a").href.match(/\d+/)[0],
-            name: getElem(".sidebar_login .title a").textContent,
-            level: "curr",
-        });
-        SETTINGS.userCache = cache;
-    }
-
-    if (!userName) return null;
-    if (typeof userName === "string") {
-        // no site search by user name, + user names aren't unique
-        return cache.find(({ name }) => name === userName) || null;
-    }
-    const userId = userName;
-    let user = cache.find(({ id }) => id === userId);
-    if (!user) {
-        let userInfo;
-        try {
-            userInfo = await API.getUserInfo(userId);
-        } catch {
-            return null;
-        }
-        const userLvl = Math.max(
-            ...userInfo.groups.map((gr) => ["user", "commiter", "moderator", "admin"].indexOf(gr)),
-        );
-        user = {
-            id: userInfo.id,
-            name: userInfo.name,
-            level: userLvl,
-        };
-        cache.push(user);
-        SETTINGS.userCache = cache;
-    }
-    return user;
-}
-
-/**
- * Removes recommended tag from cache and moderating page
- * @param  {Tag} tag - The recommended tag
- * @return {Promise<undefined>}
- */
-async function resolvePreTag (tag) {
-    const tags = await getRecommendedTags();
-    const preTagIndex = tags.findIndex(({ preId }) => preId === tag.preId);
-    if (preTagIndex < 0) return;
-    tags.splice(preTagIndex, 1);
-
-    if (window.opener) {
-        // remove the recommended tag in opener (if it's moderate recommended tags page)
-        window.opener.postMessage({ cmd: "resolve_pretag", preTagId: tag.preId });
-    }
-}
-
-/**
- * Accept the recommended tag
- * @param  {Tag} preTag - Recommend tag (with `preId`)
- * @return {Promise<undefined>}
- */
-async function acceptPreTag (tag) {
-    resolvePreTag(tag);
-    const { success, msg } = await API.acceptPreTag(tag.preId);
-    if (!success) {
-        console.error(`Error of accepting of pretag ${tag}:`, msg);
-        const editTag = getElem(`span[data-pre-tag-id="${tag.preId}"]`);
-        if (editTag) { // the pretag presented on the page
-            const li = editTag.parentNode.parentNode;
-            // if it's last tag of this type
-            if (li.previousElementSibling.nodeName === "SPAN"
-                && li.nextElementSibling?.nodeName === "SPAN") {
-                li.previousElementSibling.remove();
-            }
-            li.remove();
-        }
-    } else {
-        const editTag = getElem(`span[data-pre-tag-id="${tag.preId}"]`);
-        if (!editTag) return; // no pretag on the page
-        editTag.closest("li").classList.remove("waiting");
-    }
-}
-
-/**
- * Decline the recommended tag
- * @param  {Tag} preTag - Recommend tag (with `preId`)
- * @return {Promise<undefined>}
- */
-async function declinePreTag (tag) {
-    resolvePreTag(tag);
-    const { success, msg } = await API.declinePreTag(tag.preId);
-    if (!success) {
-        console.error(`Error of removing of pretag ${tag}:`, msg);
-    }
-    const editTag = getElem(`span[data-pre-tag-id="${tag.preId}"]`);
-    if (!editTag) return; // no pretag on the page
-    const li = editTag.closest("li");
-    // if it's last tag of this type
-    if (li.previousElementSibling.nodeName === "SPAN"
-        && (li.nextElementSibling == null
-            || li.nextElementSibling.nodeName === "SPAN")
-    ) {
-        li.previousElementSibling.remove();
-    }
-    li.remove();
-}
-
-/**
- * Get list of tags recommended to current post
- * @return {Promise<Array<Tag>>} Recommended tags
- */
-async function getRecommendedTags () {
-    const currPostId = unsafeWindow.post_id;
-    let cache = SETTINGS.preTagsCache;
-    // return from cache
-    if (cache.notEmpty) {
-        let tags = cache[currPostId] || [];
-        // convert tags to advanced if needed
-        if (tags.length > 0 && !("name" in tags[0])) {
-            tags = tags.map((t) => new Tag(t));
-            cache[currPostId] = tags;
-        }
-        return tags;
-    }
-
-    cache = {};
-    document.body.classList.add("wait");
-    const { isModerator } = SETTINGS;
-    // get recommended tag from <tr>
-    const getPreTag = async (tr) => {
-        const tag = await getTagInfo(tr.children[isModerator ? 1 : 0].textContent.trim());
-        [tag.preId] = tr.id.match(/\d+/);
-        tag.by = isModerator
-            ? tr.children[0].querySelector("a").textContent
-            : getElem(".sidebar_login .title a").textContent;
-        const postId = tr.children[isModerator ? 2 : 1].querySelector("a").href.match(/\d+/);
-        if (!cache[postId]) {
-            cache[postId] = [tag];
-        } else {
-            cache[postId].push(tag);
-        }
-    };
-
-    // get recommended tags from the first page
-    const page = isModerator ? PAGES.moderatePreTags : PAGES.yourPreTags;
-    const dom = await API.html(`${page}0`);
-    await Promise.all(getAllElems(".messages tr", dom).map(getPreTag));
-    // get recommended tags from other pages
-    const lastPage = getElem("table + div .numeric_pages a:nth-last-child(2)", dom);
-    if (lastPage) {
-        await Promise.all(
-            new Array(+lastPage.textContent)
-                .fill(1)
-                .map((_, i) => `${page}${i + 1}`)
-                .map(async (link) => {
-                    const dom2 = await API.html(link);
-                    await Promise.all(getAllElems(".messages tr", dom2).map(getPreTag));
-                }),
-        );
-    }
-
-    // save cache and return
-    cache.notEmpty = true;
-    SETTINGS.preTagsCache = cache;
-    document.body.classList.remove("wait");
-    return cache[currPostId] || [];
-}
-
-/**
- * Get text selected by user
- * @return {string} The selected by user
- */
-function getSelText () {
-    if (window.getSelection) {
-        return window.getSelection().toString();
-    }
-    return document.selection.createRange().text;
-}
-
-/**
- * Inserts BB tag to the <textarea>
- * 1. It doesn't corrupt history of the field changes
- * 2. It supports asking of a tag param
- * 3. It either folds a selected text with the tag and put the cursor after it
- *    or inserts the empty tag and put the cursor inside it
- * @param  {HTMLTextareaElement} textarea - The textarea for tag inserting
- * @param  {string} bbtag - The tag name
- * @param  {string=} askParam - Text for asking a user type the tag parameter
- * @param  {string=} param - The tag parameter
- */
-function pasteBBTag (textarea, bbtag, askParam, param = "") {
-    let text = getSelText();
-    textarea.focus();
-    if (!text) text = getSelText();
-
-    let tagParam = param;
-    if (askParam) {
-        // eslint-disable-next-line no-alert
-        tagParam = prompt(askParam, param);
-        if (tagParam === null) return;
-    }
-    tagParam = tagParam ? `=${tagParam}` : "";
-
-    // set the cursor after the bbtag if any text was selected, otherwise - inside the bbtag
-    const cursorPos = textarea.selectionStart + (text
-        ? 2 * bbtag.length + tagParam.length + text.length + 5
-        : bbtag.length + tagParam.length + 2);
-    document.execCommand("insertText", false, `[${bbtag}${tagParam}]${text}[/${bbtag}]`);
-    // eslint-disable-next-line no-param-reassign, no-multi-assign
-    textarea.selectionStart = textarea.selectionEnd = cursorPos;
-}
-
-/**
- * Displays or updates a dialog with given content
- * @param  {string|HTMLElement}  text - Displaying message
- * @param  {string}  title - Title of the dialog
- * @param  {boolean} [modal=false] - Is dialog modal
- */
-function say (text, title, modal = false) {
-    let dialog = getElem("#dialog");
-    if (!dialog) {
-        dialog = newElem("div", {
-            id: "dialog",
-            className: "post_content",
-            children: [newElem("div", {
-                modal: modal ? "" : null,
-                children: [
-                    newElem("div", {
-                        className: "title",
-                        text: title,
-                    }),
-                    newElem("div", {
-                        className: "post_content body",
-                        html: typeof text === "string" ? text : null,
-                        children: typeof text !== "string" ? [text] : null,
-                    }),
-                ],
-            })],
-            click: (ev) => {
-                if (ev.target === dialog && !dialog.hasAttribute("modal")) {
-                    dialog.remove();
-                }
-            },
-        });
-        document.body.append(dialog);
-
-        return;
-    }
-
-    if (text) {
-        if (text === "string") {
-            getElem(".body", dialog).innerHTML = text;
-        } else {
-            getElem(".body", dialog).innerHTML = "";
-            getElem(".body", dialog).append(text);
-        }
-        dialog.style.display = "flex";
-        if (modal === true) {
-            dialog.setAttribute("modal", "");
-        } else if (modal === false) {
-            dialog.removeAttribute("modal");
-        }
-    } else {
-        dialog.style.display = "none";
-    }
-}
-
-/**
- * Displays a dialog with hotkeys available on current page
- */
-function showAvailableHotkeys () {
-    say(
-        [
-            "<table>",
-            ...hotkeys
-                .filter((hk) => hk.pages.some((url) => pageIs(url)))
-                .map((hk) => `<tr><td>${hk.hotkey}&nbsp;</td><td>&nbsp;${hk.descr}</td></tr>`),
-            "</table>",
-        ].join(""),
-        TEXT.availableHotkeys,
+                },
+                " ",
+                ...buttons,
+            ),
+        ),
     );
 }
 
@@ -2304,7 +3191,7 @@ function onHotkeyPress (ev) {
     }
     // return if it is just text typing
     if (!controlHotKey
-        && ((focusElem.tagName === "TEXTAREA")
+        && ((focusElem?.tagName === "TEXTAREA")
             || (focusElem.tagName === "INPUT"
                 && focusElem.type !== "button"
                 && focusElem.type !== "submit"))
@@ -2351,7 +3238,7 @@ async function onPreTagClick (ev) {
     // -1 - temporal preId => force update preTags and re-add them to the page
     if (preTagId === "-1") {
         const cache = SETTINGS.preTagsCache;
-        cache.notEmpty = false; // invalidate cache
+        cache.clear();
         SETTINGS.preTagsCache = cache;
         addRecommendedTags();
         return;
@@ -2359,19 +3246,40 @@ async function onPreTagClick (ev) {
     const preTag = (await getRecommendedTags()).find((tag) => tag.preId === preTagId);
     if (!preTag) return;
 
+    let removeItem = false;
     if (ev.target.classList.contains("accept")) {
         tagElem.classList.replace("preTag", "waiting");
-        acceptPreTag(preTag).then(() => {
-            console.log(`${preTag} %caccepted`, "color: green;");
-            // scrollTop = document.getElementById("post_tags").scrollTop;
-            AnimePictures.post.refresh_tags();
-        });
+        removeItem = await preTag.accept();
+        if (preTag.parent) AnimePictures.post.refresh_tags();
     } else if (ev.target.classList.contains("decline")) {
         tagElem.classList.replace("preTag", "waiting");
-        declinePreTag(preTag).then(() => {
-            console.log(`${preTag} %cdeclined`, "color: orange;");
-        });
+        removeItem = await preTag.decline();
     }
+
+    if (removeItem) {
+        // if it's last tag of this type
+        if (tagElem.previousElementSibling.nodeName === "SPAN"
+            && (tagElem.nextElementSibling == null
+                || tagElem.nextElementSibling.nodeName === "SPAN")
+        ) {
+            tagElem.previousElementSibling.remove();
+        }
+        tagElem.remove();
+    } else {
+        tagElem.classList.remove("waiting");
+    }
+}
+
+/**
+ * Executes `fn` when DOM is loaded
+ * @param  {function} fn - A function to execute
+ */
+function onready (fn) {
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", fn);
+        return;
+    }
+    fn();
 }
 
 /**
@@ -2390,21 +3298,50 @@ async function onTagRecommended (ev) {
         .filter(({ id }) => id);
     tags.forEach((tag) => {
         tag.by = by;
-        tag.preId = -1; // no way to get preId without (re)parsing page with recommended tags
+        tag.preId = -1; // no way to get preId without (re)parsing pages with recommended tags
     });
 
     const cache = SETTINGS.preTagsCache;
-    const currPostId = unsafeWindow.post_id;
-    if (!cache[currPostId]) {
-        cache[currPostId] = [];
-    }
-    cache[currPostId].push(...tags);
+    cache.set({ id: unsafeWindow.post_id, tags });
     SETTINGS.preTagsCache = cache;
     addRecommendedTags();
 }
 
 /**
- * Registers a hotkey
+ * Inserts BB tag to the <textarea>
+ * 1. It doesn't corrupt history of the field changes
+ * 2. It supports asking of a tag param
+ * 3. It either folds a selected text with the tag and put the cursor after it
+ *    or inserts the empty tag and put the cursor inside it
+ * @param  {HTMLTextareaElement} textarea - The textarea for tag inserting
+ * @param  {string} bbtag - The tag name
+ * @param  {string=} askParam - Text for asking a user type the tag parameter
+ * @param  {string=} param - The tag parameter
+ */
+function pasteBBTag (textarea, bbtag, askParam, param = "") {
+    let text = getSelText();
+    textarea.focus();
+    if (!text) text = getSelText();
+
+    let tagParam = param;
+    if (askParam) {
+        // eslint-disable-next-line no-alert
+        tagParam = prompt(askParam, param);
+        if (tagParam === null) return;
+    }
+    tagParam = tagParam ? `=${tagParam}` : "";
+
+    // set the cursor after the bbtag if any text was selected, otherwise - inside the bbtag
+    const cursorPos = textarea.selectionStart + (text
+        ? 2 * bbtag.length + tagParam.length + text.length + 5
+        : bbtag.length + tagParam.length + 2);
+    document.execCommand("insertText", false, `[${bbtag}${tagParam}]${text}[/${bbtag}]`);
+    // eslint-disable-next-line no-param-reassign, no-multi-assign
+    textarea.selectionStart = textarea.selectionEnd = cursorPos;
+}
+
+/**
+ * Registers a hotkey (for backward compatibility)
  * @param {string} hotkey - The hotkey, e.g. `Ctrl+Shift+R`
  * @param {string} descr - Description of the hotkey
  * @param {string[]=} pages - List of pages where the hotkey can be triggered
@@ -2427,427 +3364,121 @@ function registerHotkey (hotkey, descr, pages, selectors, action) {
 }
 
 /**
- * Adds hotkeys for pagination if needed
+ * Displays or updates a dialog with given content
+ * @param  {string|HTMLElement}  text - Displaying message
+ * @param  {string}  title - Title of the dialog
+ * @param  {boolean} [modal=false] - Is dialog modal
  */
-function addPaginationHotkeys () {
-    // there are too many pages with pagination to list them
-    if (pageIs.searchPosts || getElem(".numeric_pages a")) {
-        hotkeys.push(
+function say (text, title, modal = false) {
+    let dialog = getElem("#dialog");
+    if (!dialog) {
+        dialog = newElem(
+            "div",
             {
-                hotkey: "Z",
-                descr: TEXT.hkNextPage,
-                pages: [PAGES.any],
-                selectors: [".numeric_pages a:first-child"],
-                action: (element) => element.click(),
+                id: "dialog",
+                className: "post_content",
+                click: (ev) => {
+                    if (ev.target === dialog && !dialog.hasAttribute("modal")) {
+                        dialog.remove();
+                    }
+                },
             },
-            {
-                hotkey: "X",
-                descr: TEXT.hkPrevPage,
-                pages: [PAGES.any],
-                selectors: [".numeric_pages a:last-child"],
-                action: (element) => element.click(),
-            },
+            newElem(
+                "div",
+                { modal: modal ? "" : null },
+                newElem("div", {
+                    className: "title",
+                    text: title,
+                }),
+                newElem("div", { className: "post_content body" }, text),
+            ),
         );
-    }
-}
+        document.body.append(dialog);
 
-/**
- * Applies alternative wide layout
- */
-function makeLayoutWide () {
-    getElem("#content > [itemscope]").id = "part0";
-    let div = getElem("#content > div[itemscope] > div:first-child");
-    const container1 = newElem("div", { id: "part1" });
-    const container2 = newElem("div", { id: "part2" });
-
-    do {
-        // skip block "Linked pictures"
-        if (div.nextElementSibling.matches(".post_content")
-            && div.nextElementSibling.children.length === 3) {
-            div = div.nextElementSibling;
-        } else {
-            container1.append(div.nextElementSibling);
-        }
-    } while (!div.nextElementSibling.lastElementChild.classList.contains("image_body"));
-
-    while (div.nextElementSibling) container2.append(div.nextElementSibling);
-    // comments block is added dynamically
-
-    getElem("#content").append(container1, container2);
-
-    const animImg = getElem("#big_preview_cont video");
-    if (animImg) { // video stops after moving it in the DOM so start it play
-        animImg.play();
-    }
-}
-
-/**
- * Makes sidebar float, be always visible
- */
-function makeSidebarFloating () {
-    if (getElem("#sidebar_last_scores_body")) {
-        getElem("#sidebar_last_scores_body").parentElement.id = "sidebar_last_scores";
-    }
-
-    const sidebar = getElem("#sidebar");
-    function alignSidebar (ev) {
-        const {
-            scrollTop,
-            clientHeight,
-        } = document.scrollingElement;
-        const top = Math.max(0, 50 - scrollTop);
-        const maxHeight = sidebar.parentElement.clientHeight;
-        sidebar.style.height = `${Math.min(maxHeight, clientHeight - top)}px`;
-
-        // adjust position of the Autocomplete if needed
-        const field = document.activeElement;
-        const autocomplite = getElem(".autocomplite[style*='visibility: visible;']");
-        if (autocomplite
-            && sidebar.contains(field)
-            && field.nodeName === "INPUT"
-            && (field.type === "text" || field.type === "search")
-        ) {
-            autocomplite.style.top = `${field.offsetTop + top + scrollTop + field.offsetHeight}px`;
-        }
-    }
-
-    document.addEventListener("scroll", alignSidebar);
-    window.addEventListener("resize", alignSidebar);
-    window.addEventListener("load", alignSidebar);
-    alignSidebar();
-    setTimeout(alignSidebar, 100);
-}
-
-/**
- * Makes block with similar images foldeable and fold it
- */
-function makeSimilarBlockFoldable () {
-    const block = getElem("#part2>.post_content, #big_preview_cont+.post_content+.post_content");
-    getElem(".title a", block).before(newElem("img", {
-        src: "/static/styles/icons/menu-icon.png",
-        title: TEXT.showImages,
-        click: () => getElem(".image_body", block).classList.toggle("hidden"),
-    }));
-    getElem(".image_body", block).classList.add("hidden");
-}
-
-/**
- * Adds support of meta tags
- */
-function makeTagsMeta () {
-    function tagCount (li) {
-        const count = li.lastElementChild.textContent;
-        if (count.includes("K")) {
-            return parseInt(count, 10) * 1000;
-        }
-        return parseInt(count, 10);
-    }
-
-    let tags = getAllElems(SETTINGS.metaTags.map((id) => `#tag_li_${id}`).join(","));
-    tags = getAllElems("#post_tags li[class=' ']")
-        .filter((li) => li.textContent.includes("(cosplay)"))
-        // filter out tags with unknown type
-        .filter((li) => li.lastElementChild.textContent.trim() !== "1"
-                || li.previousElementSibling.nodeName === "LI")
-        .concat(tags)
-        .filter((li) => {
-            li.classList.add("purple"); // eslint-disable-line no-param-reassign
-            li.firstElementChild.classList.add("big_tag"); // eslint-disable-line no-param-reassign
-            return !li.firstElementChild.classList.contains("removed");
-        })
-        .sort((t1, t2) => tagCount(t2) - tagCount(t1));
-    if (tags.length <= 0) return;
-
-    const span = getElem("#post_tags li[class=' ']")?.previousElementSibling;
-    if (!span) return;
-    span.insertAdjacentHTML("beforeBegin", `<span>${TEXT.categories[8]}</span>`);
-    tags.forEach((tag) => span.before(tag));
-}
-
-/**
- * Shows waiting cursor if some network request executes over 500ms
- */
-function makeLoadingCursor () {
-    const origAjax = ajax_request2; // eslint-disable-line camelcase
-    unsafeWindow.ajax_request2 = function newAjaxRequest2 (url, params, handler, method) {
-        const timer = setTimeout(() => document.body.classList.add("waiting"), 500);
-        const newHandler = (...args) => {
-            clearTimeout(timer);
-            document.body.classList.remove("waiting");
-            handler(...args);
-        };
-        origAjax(url, params, newHandler, method);
-    };
-}
-
-/**
- * Adds buttons to visit neighbor posts
- */
-async function addNeighborPostsButtons () {
-    if (getElem(".chevron_left, .chevron_right")) return;
-
-    const toData = (resp, query) => ({
-        query,
-        page: resp.page_number,
-        lastPage: resp.max_pages,
-        // eslint-disable-next-line camelcase
-        pos: resp.posts.findIndex(({ id }) => id === post_id),
-        lastPos: resp.response_posts_count - 1,
-        postIds: resp.posts.map(({ id }) => id),
-    });
-    let data;
-    const getPage = (shift) => API.getPosts(data.page + shift, data.query);
-
-    const sourceUrl = document.referrer ? new URL(document.referrer) : null;
-    const to = new URL(window.location).searchParams.get("to");
-    // went to previous page
-    if (window.history.state) {
-        data = window.history.state;
-    // opened neighbor post in the same tab
-    } else if (to && sessionStorage.neighborPosts) {
-        data = JSON.parse(sessionStorage.neighborPosts);
-        delete sessionStorage.neighborPosts;
-
-        // eslint-disable-next-line camelcase
-        data.pos = data.postIds.indexOf(post_id);
-        if (data.pos < 0) {
-            if (to === "prev") {
-                data = toData(await getPage(-1), data.query);
-            } else if (to === "next") {
-                data = toData(await getPage(+1), data.query);
-            }
-        }
-    // opened neighbor post in new tab
-    } else if (to && pageIs(PAGES.post, false, sourceUrl)) {
-        if (window.opener?.history.state) {
-            data = window.opener.history.state;
-
-            // eslint-disable-next-line camelcase
-            data.pos = data.postIds.indexOf(post_id);
-            if (data.pos < 0) {
-                if (to === "prev") {
-                    data = toData(await getPage(-1), data.query);
-                } else if (to === "next") {
-                    data = toData(await getPage(+1), data.query);
-                }
-            }
-        }
-    // opened post from the search page
-    } else if (pageIs(PAGES.searchPosts, false, sourceUrl)) {
-        const query = API.extractParams(sourceUrl);
-        const page = sourceUrl.pathname.match(/\d+/)[0];
-        const resp = await API.getPosts(page, query);
-        data = toData(resp, query);
-    }
-    if (!data) return;
-    if (data.pos < 0) {
-        console.warn("Post position was last");
         return;
     }
-    window.history.replaceState(data, document.title);
-    sessionStorage.neighborPosts = JSON.stringify(data);
 
-    // add button to prev post
-    let postId = (data.page === 0 && data.pos === 0)
-        ? null
-        : (data.pos !== 0
-            ? data.postIds[data.pos - 1]
-            : (await getPage(-1)).posts.pop().id);
-    getElem(".post_vote_block").prepend(newElem("a", {
-        className: "chevron_left",
-        css: {
-            float: "left",
-            cursor: postId ? "pointer" : "not-allowed",
-        },
-        title: TEXT.hkPrevPost,
-        href: postId ? `${PAGES.post}${postId}?lang=${SETTINGS.lang}&to=prev` : null,
-        "click auxclick": onNewTabLinkClick,
-    }));
-    // add button to next post
-    postId = (data.page === data.lastPage && data.pos === data.lastPos)
-        ? null
-        : (data.pos !== data.lastPos
-            ? data.postIds[data.pos + 1]
-            : (await getPage(+1)).posts[0].id);
-    getElem(".post_vote_block").append(newElem("a", {
-        className: "chevron_right",
-        css: {
-            float: "right",
-            cursor: postId ? "pointer" : "not-allowed",
-        },
-        title: TEXT.hkNextPost,
-        href: postId ? `${PAGES.post}${postId}?lang=${SETTINGS.lang}&to=next` : null,
-        "click auxclick": onNewTabLinkClick,
-    }));
+    if (text) {
+        if (text === "string") {
+            getElem(".body", dialog).innerHTML = text;
+        } else {
+            getElem(".body", dialog).innerHTML = "";
+            getElem(".body", dialog).append(text);
+        }
+        dialog.style.display = "flex";
+        if (modal === true) {
+            dialog.setAttribute("modal", "");
+        } else if (modal === false) {
+            dialog.removeAttribute("modal");
+        }
+    } else {
+        dialog.style.display = "none";
+    }
 }
 
 /**
- * Adds to post preview picture size, tag number, and status (new/pre/ban)
+ * Displays a dialog with hotkeys available on current page
  */
-function addPostStatus () {
-    const cache = addPostStatus.cahce || (addPostStatus.cache = {});
-    async function makeImgBlockTextElem (postId) {
-        if (!cache[postId]) {
-            cache[postId] = API.getPostInfo(postId);
-        }
-        const {
-            color,
-            width,
-            height,
-            erotics,
-            tags,
-            status,
-        } = await cache[postId];
-        const bg = `linear-gradient(to left, rgba(${color},0), rgba(${color},1), rgba(${color},0))`;
-        const textColor = color.reduce((s, c) => s + c) / 3 > 96 ? "black" : "white";
-        const link = `/pictures/view_posts/0?res_x=${width}&res_y=${height}&lang=${SETTINGS.lang}`;
-
-        return newElem("div", {
-            className: "img_block_text",
-            css: {
-                opacity: 1,
-                background: bg,
-                color: textColor,
+function showAvailableHotkeys () {
+    say(
+        newElem(
+            "table",
+            {
+                innerHTML: hotkeys.filter((hk) => hk.pages.some((url) => pageIs(url)))
+                    .map((hk) => `<tr><td>${hk.hotkey}&nbsp;</td><td>&nbsp;${hk.descr}</td></tr>`)
+                    .join(""),
             },
-            children: [
-                newElem("a", {
-                    href: link,
-                    title: `${TEXT.pics} ${width}x${height}`,
-                    onclick: "this.target='_blank';return true;",
-                    css: { background: SETTINGS.isModerator ? COLORS.eroticLevel[erotics] : null },
-                    text: `${width}x${height}`,
-                }),
-                " ",
-                newElem("span", {
-                    title: "Tags Num",
-                    text: `(${tags.length})`,
-                }),
-                TEXT.statuses[status] ? newElem("br") : "",
-                TEXT.statuses[status],
-            ],
-        });
-    }
-
-    getAllElems("td:nth-child(3) a").forEach(async (a) => {
-        getElem("img", a).style.maxHeight = "150px";
-        const postId = a.href.match(/\d+/)[0];
-
-        a.after(newElem("div", {
-            className: "img_block2",
-            children: [await makeImgBlockTextElem(postId)],
-        }));
-        a.nextElementSibling.prepend(a);
-    });
-
-    getAllElems(".body + .body > span > a").forEach(async (a) => {
-        getElem("img", a).style.maxHeight = "150px";
-        const postId = a.href.match(/\d+/)[0];
-
-        a.after(await makeImgBlockTextElem(postId));
-    });
+        ),
+        TEXT.availableHotkeys,
+    );
 }
 
 /**
- * Adds recommended tags to post
- * @return {Promise<undefined>}
+ * Adds text about applying some "hidden" search option
  */
-async function addRecommendedTags () {
-    let pretags = await getRecommendedTags();
-    if (pretags.length <= 0 || getElem(".tags li span.accept")) return;
+function showHiddenSearchProps () {
+    if (getElem(".hidden_search_props")) return; // no self-triggering
+    const urlParams = new URL(window.location).searchParams;
 
-    // add accept/decline handler if it wasn't added yet
-    if (!addRecommendedTags.wereHandlersAdded) {
-        addRecommendedTags.wereHandlersAdded = true;
-        getElem("#post_tags").addEventListener("click", onPreTagClick);
-        window.addEventListener("unload", () => {
-            // save modified cache
-            // eslint-disable-next-line no-self-assign
-            SETTINGS.preTagsCache = SETTINGS.preTagsCache;
-        });
+    const showParam = async (param, text) => {
+        if (!urlParams.has(param)) return;
+        const user = await getUserInfo(+urlParams.get(param));
+        getElem("#posts > [style]").before(newElem(
+            "div",
+            { className: "posts_body_head hidden_search_props" },
+            text,
+            newElem("a", {
+                href: `${PAGES.profile}${user.id}`,
+                css: {
+                    color: COLORS.userName[user.level],
+                    fontWeight: user.level === 2 ? "bold" : null,
+                },
+                text: user.name,
+            }),
+        ));
+    };
+
+    showParam("user", TEXT.pUserPics);
+    showParam("stars_by", TEXT.pUserStars);
+    showParam(
+        "favorite_by",
+        urlParams.has("favorite_folder")
+            ? TEXT.pUserFavorited.replace("%s", urlParams.get("favorite_folder"))
+            : TEXT.pUserAllFav,
+    );
+
+    if (urlParams.has("view_after")) {
+        const date = new Date(urlParams.get("view_after") * 1000).toLocaleString(SETTINGS.lang);
+        getElem("#posts > [style]").before(newElem("div", {
+            className: "posts_body_head hidden_search_props",
+            text: `${TEXT.pPicsAfter}${date}`,
+        }));
     }
-
-    getAllElems(".tags li.preTag").forEach((li) => li.remove());
-    const presentedTags = getAllElems(".tags .edit_tag").map((el) => +el.dataset.tagId);
-
-    console.log("presented tags:", presentedTags);
-    console.log("recommended tags:", pretags.map((tag) => tag.toString()));
-
-    pretags = pretags.filter((tag, i, tags) => {
-        // accepted presented tags
-        if (presentedTags.includes(tag.id)) {
-            acceptPreTag(tag).then(() => {
-                console.log(`${tag} %cautoaccepted`, "color: mediumseagreen;");
-            });
-            return false;
-        }
-        // decline double tags
-        if (tags.findIndex((t) => t.id === tag.id) < i) {
-            declinePreTag(tag).then(() => {
-                console.log(`${tag} %cautodeclined`, "color: brown;");
-            });
-            return false;
-        }
-        return true;
-    });
-    if (pretags.length === 0) return;
-
-    const getTagTypeByPosition = (pos) => Object.keys(tagTypePosition)
-        .find((k) => tagTypePosition[k] === pos);
-    const getTagName = (tagItem) => (tagItem?.nodeName === "LI"
-        ? tagItem.firstElementChild.textContent.trim()
-        : null);
-
-    const types = pretags.reduce((set, { type }) => set.add(type), new Set());
-    // eslint-disable-next-line no-restricted-syntax
-    for (const type of types) {
-        // find tag block of tags of current type
-        const spanText = TEXT.categories[type];
-        let span = getAllElems(".tags > span").find((el) => el.textContent === spanText);
-        // create tag block if there is no tags of current type
-        if (!span) {
-            const typeCount = TEXT.categories.length; // also includes "deleted by moderator"
-            let nextSpan;
-            for (let pos = tagTypePosition[type] + 1; !nextSpan && pos < typeCount; pos++) {
-                const nextSpanText = TEXT.categories[getTagTypeByPosition(pos)];
-                nextSpan = getAllElems(".tags > span")
-                    .find((el) => el.textContent === nextSpanText);
-            }
-            span = newElem("span", { text: TEXT.categories[type] });
-            if (nextSpan) {
-                nextSpan.before(span);
-            } else if (getElem(".tags > span")) {
-                getElem(".tags").append(span);
-            } else {
-                // site bug: no categories if there is only "tagme" tag
-                // also includes case when no tags at all
-                getElem(".tags").prepend(span, newElem("span", { text: TEXT.categories[9] }));
-            }
-        }
-        // get the recommended tags of the current type in order of usage count
-        const tags = pretags
-            .filter((tag) => tag.type === type)
-            .sort((t1, t2) => t2 - t1);
-        let currentElem = span.nextElementSibling;
-        let currentText = getTagName(currentElem);
-        // eslint-disable-next-line no-restricted-syntax
-        for (const tag of tags) {
-            // find a presented tag which has usage count bigger then the recommended tag
-            // eslint-disable-next-line no-await-in-loop
-            while (currentText && await getTagInfo(currentText, post_id) > tag) {
-                currentElem = currentElem.nextElementSibling;
-                currentText = getTagName(currentElem);
-            }
-            if (currentElem) {
-                // eslint-disable-next-line no-await-in-loop
-                if (currentText && await getTagInfo(currentText, post_id) > tag) {
-                    currentElem.after(newTagItem(tag));
-                } else {
-                    currentElem.before(newTagItem(tag));
-                }
-            } else {
-                getElem(".tags").append(newTagItem(tag));
-            }
-        }
+    if (urlParams.has("status")) {
+        getElem("#posts > [style]").before(newElem("div", {
+            className: "posts_body_head hidden_search_props",
+            text: TEXT.pPrePics,
+        }));
     }
 }
 
@@ -2869,30 +3500,31 @@ async function uploadFile (file) {
     let color = { r: 128, g: 128, b: 128 };
 
     // make post preview
-    const post = newElem("span", {
-        data: { id },
-        className: "img_block_big pending",
-        children: [
-            newElem("a", {
-                target: "_blank",
-                children: [newElem("img", {
-                    className: "img_sp",
-                    title: file.name,
-                    alt: file.name,
-                    src: trasnparentImage,
-                })],
+    const post = newElem(
+        "span",
+        {
+            data: { id },
+            className: "img_block_big pending",
+        },
+        newElem(
+            "a",
+            { target: "_blank" },
+            newElem("img", {
+                className: "img_sp",
+                title: file.name,
+                alt: file.name,
+                src: trasnparentImage,
             }),
-            newElem("div", {
-                className: "img_block_text",
-                children: [
-                    newElem("strong", { className: "dim" }),
-                    newElem("br"),
-                    newElem("span", { className: "status", text: TEXT.reading }),
-                    newElem("div", { className: "progress" }),
-                ],
-            }),
-        ],
-    });
+        ),
+        newElem(
+            "div",
+            { className: "img_block_text" },
+            newElem("strong", { className: "dim" }),
+            newElem("br"),
+            newElem("span", { className: "status", text: TEXT.reading }),
+            newElem("div", { className: "progress" }),
+        ),
+    );
     getElem("#posts").append(post);
 
     // save the post in history
@@ -3051,285 +3683,6 @@ async function uploadFile (file) {
         }));
 }
 
-/**
- * Replace original upload form with drag'n'drop form
- */
-function improveFileUploader () {
-    GM_addStyle(`
-        #posts .img_block_big {
-            box-sizing: border-box;
-        }
-        #posts .img_sp {
-            max-height: 100%;
-            max-width: 100%;
-        }
-        #posts .img_block_text {
-            background:rgba(128,128,128,0.7);
-            color:white;
-        }
-        #posts .progress {
-            width: 100%;
-            height: 100%;
-            position: absolute;
-            bottom: 0;
-            z-index: -1;
-        }
-        #posts .img_block_big.error {
-            border: red 2px solid;
-        }
-        #posts .img_block_big.error .status {
-            color: red;
-        }
-
-        #mfiles {
-            display: none;
-        }
-        #mfiles + label {
-            cursor: pointer;
-            text-cecoration: underline;
-        }
-
-        #dragndrop {
-            position: fixed;
-            width: calc(100% - 360px);
-            margin: 30px;
-            bottom: 0;
-            top: 46px;
-            box-sizing: border-box;
-            display: flex;
-            background: rgba(128,128,128,0.5);
-            border: rgba(128,128,128,0.8) 5px solid;
-            font-size: 5em;
-            justify-content: center;
-            text-align: center;
-            flex-direction: column;
-            opacity: 0;
-            transition: opacity 0.5s;
-            pointer-events: none;
-            z-index: 21;
-        }
-    `);
-    // replace "You have # unproven pictures you can still upload #." with editable version.
-    const [usedSlots, freeSlots] = getElem(".post_content .body div").textContent.match(/\d+/g);
-    const formBody = getElem(".post_content .body");
-    formBody.firstElementChild.remove();
-    formBody.prepend(newElem("span", {
-        id: "slot_status",
-        data: {
-            usedSlots,
-            totalSlots: +usedSlots + +freeSlots,
-        },
-        text: TEXT.slots(usedSlots, freeSlots),
-    }));
-
-    // replace old form with new one
-    const posts = newElem("div", {
-        id: "posts",
-        className: "posts_block",
-    });
-    const fileField = newElem("input", {
-        id: "mfiles",
-        type: "file",
-        multiple: true,
-        accept: "image/*",
-        change () { Array.from(this.files).forEach(uploadFile); },
-    });
-    const ffLabel = newElem("label", {
-        htmlFor: "mfiles",
-        text: TEXT.fileLabel,
-    });
-    document.forms[1].style.display = "none";
-    document.forms[1].parentElement.append(newElem("br"), fileField, ffLabel);
-    getElem("#content").append(posts);
-
-    // drag'n'drop label
-    const dnd = newElem("div", {
-        id: "dragndrop",
-        text: TEXT.dragndrop,
-    });
-    document.body.append(dnd);
-    document.addEventListener("scroll", (ev) => {
-        dnd.style.top = `${Math.max(0, 46 - document.scrollingElement.scrollTop)}px`;
-    }, false);
-    // drag'n'drop events
-    const cont = getElem("#content");
-    cont.style.minHeight = `${getElem("#body_wrapper").offsetHeight - 10}px`;
-    ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => cont.addEventListener(
-        eventName,
-        (ev) => { ev.preventDefault(); ev.stopPropagation(); },
-    ));
-    ["dragenter", "dragover"].forEach((eventName) => cont.addEventListener(
-        eventName,
-        (ev) => { dnd.style.opacity = 1; },
-    ));
-    ["dragleave", "drop"].forEach((eventName) => cont.addEventListener(
-        eventName,
-        (ev) => { dnd.style.opacity = 0; },
-    ));
-    cont.addEventListener(
-        "drop",
-        (ev) => Array.from(ev.dataTransfer.files).forEach((file) => {
-            if (file.type.startsWith("image/")) uploadFile(file);
-        }),
-    );
-
-    // warn about leaving the page during uploading
-    window.addEventListener("beforeunload", () => (getElem(".pending", posts) ? true : null));
-
-    // restore posts
-    const { state } = window.history;
-    if (!state) return;
-    Object.entries(state).forEach(([postId, { html, isPending, hasError }]) => {
-        uploadFile.maxID = Math.max(uploadFile.maxID ?? 0, postId);
-        // create post
-        const post = newElem("span", {
-            data: { id: postId },
-            className: "img_block_big",
-            html,
-        });
-        posts.append(post);
-        // update post status
-        if (isPending || !getElem("a", post).href) {
-            getElem(".status", post).textContent = TEXT.interrupted;
-            post.classList.add("error");
-        } else if (hasError) {
-            post.classList.add("error");
-        } else {
-            API.getPostInfo(getElem("a", post).href.match(/\d+/)[0]).then((postInfo) => {
-                const status = TEXT.statuses[postInfo.status];
-                getElem(".status", post).textContent = status;
-                if (!status) {
-                    getElem("br").style.display = "none";
-                }
-            });
-        }
-    });
-}
-
-/**
- * Creates table with AP Enhancements settings
- * @return {HTMLTableElement} Table with settings
- */
-function buildSettings () {
-    return newElem("table", {
-        id: "AP_Enhancements",
-        className: "form_table",
-        children: [
-            ...SETTINGS
-                .getAll()
-                .filter(({ descr }) => descr !== null)
-                .map(({ name }) => SETTINGS.getAsRow(name)),
-            newElem("tr", {
-                children: [newElem("td", {
-                    colSpan: "2",
-                    css: { textAlign: "center" },
-                    children: [newElem("input", {
-                        type: "button",
-                        value: "Clear cache",
-                        click: () => {
-                            SETTINGS.getAll()
-                                .filter(({ type }) => type === "cache")
-                                .forEach(({ name, defValue }) => {
-                                    SETTINGS[name] = defValue.data;
-                                });
-                            window.location.reload();
-                        },
-                    })],
-                })],
-            }),
-        ],
-    });
-}
-
-/**
- * Highlights level of the tag adder and shows username of the tag remover
- * @return {Promise<undefined>}
- */
-async function highlightTagger () {
-    // change border color according to adder level
-    if (!highlightTagger.wasCssAdded) {
-        highlightTagger.wasCssAdded = true;
-        await getUserInfo(); // update cache if needed
-
-        const makeCSS = (level) => SETTINGS.userCache
-            .filter((user) => user.level === level)
-            .map(({ name }) => `li[title="by ${name}"] a.not_my_tag_border`)
-            .join(",\n")
-            .concat(`\n{ border-left-color: ${COLORS.tagAdder[level]}; }`);
-
-        const css = [
-            `.tags a.not_my_tag_border { border-left-color: ${COLORS.tagAdder[0]}; }`,
-            makeCSS(1), // commiter
-            makeCSS(2), // moderator
-            makeCSS("curr"), // current user
-        ].join("\n");
-
-        GM_addStyle(css);
-    }
-
-    // replace remover id with name
-    getAllElems("#post_tags a.removed").forEach(async (a) => {
-        const tagRemoverId = a.title.match(/\d+$/);
-        if (!tagRemoverId) return;
-        const tagRemover = await getUserInfo(+tagRemoverId[0]);
-        if (!tagRemover) {
-            console.warn(`User with id ${tagRemoverId} was not found`);
-            return;
-        }
-        a.title = a.title.replace(/\d+$/, tagRemover.name);
-    });
-}
-
-/**
- * Adds text about applying some "hidden" search option
- */
-function showHiddenSearchProps () {
-    if (getElem(".hidden_search_props")) return; // no self-triggering
-    const urlParams = new URL(window.location).searchParams;
-
-    const showParam = async (param, text) => {
-        if (!urlParams.has(param)) return;
-        const user = await getUserInfo(+urlParams.get(param));
-        getElem("#posts > [style]").before(newElem("div", {
-            className: "posts_body_head hidden_search_props",
-            children: [
-                text,
-                newElem("a", {
-                    href: `${PAGES.profile}${user.id}`,
-                    css: {
-                        color: COLORS.userName[user.level],
-                        fontWeight: user.level === 2 ? "bold" : null,
-                    },
-                    text: user.name,
-                }),
-            ],
-        }));
-    };
-
-    showParam("user", TEXT.pUserPics);
-    showParam("stars_by", TEXT.pUserStars);
-    showParam(
-        "favorite_by",
-        urlParams.has("favorite_folder")
-            ? TEXT.pUserFavorited.replace("%s", urlParams.get("favorite_folder"))
-            : TEXT.pUserAllFav,
-    );
-
-    if (urlParams.has("view_after")) {
-        const date = new Date(urlParams.get("view_after") * 1000).toLocaleString(SETTINGS.lang);
-        getElem("#posts > [style]").before(newElem("div", {
-            className: "posts_body_head hidden_search_props",
-            text: `${TEXT.pPicsAfter}${date}`,
-        }));
-    }
-    if (urlParams.has("status")) {
-        getElem("#posts > [style]").before(newElem("div", {
-            className: "posts_body_head hidden_search_props",
-            text: TEXT.pPrePics,
-        }));
-    }
-}
-
 // TODO list
 // SPA
 
@@ -3387,6 +3740,56 @@ if (SETTINGS.openLinkInNewTab) {
     });
 }
 
+window.addEventListener("message", ({ data, source }) => {
+    switch (data.cmd) {
+        case "resolve_pretag":
+            getElem(`#pre_tag_${data.preTagId}`)?.remove();
+            break;
+        case "get_posts_data": {
+            delete sessionStorage.neighborPosts;
+            let postsData = null;
+            if (pageIs.searchPosts) {
+                postsData = {
+                    query: API.extractParams(window.location),
+                    page: +window.location.pathname.match(/\d+/)[0],
+                    lastPage: +getAllElems("#posts .numeric_pages :nth-last-child(-n+2)")
+                        .filter((elem) => elem.textContent !== ">")
+                        .reverse()[0]?.textContent ?? 0,
+                    postIds: getAllElems("#posts > div > span > a")
+                        .map((a) => +a.href.match(/\d+/)[0]),
+                };
+                postsData.lastPost = postsData.postIds.length - 1;
+            } else if (pageIs.moderatePreTags || pageIs.yourPreTags) {
+                postsData = {
+                    query: null,
+                    page: 0,
+                    lastPage: 0,
+                    postIds: SETTINGS.preTagsCache
+                        .getAll()
+                        .map(({ id }) => +id)
+                        .sort((a, b) => b - a),
+                };
+                postsData.lastPost = postsData.postIds.length - 1;
+            } else if (pageIs.uploadPicture) {
+                postsData = {
+                    query: null,
+                    page: 0,
+                    lastPage: 0,
+                    postIds: getAllElems("#posts > span > a")
+                        .map((a) => +a.href.match(/\d+/)[0]),
+                };
+                postsData.lastPost = postsData.postIds.length - 1;
+            }
+            source.postMessage({ cmd: "posts_data", postsData }, PAGES.origin);
+            break;
+        }
+        case "posts_data":
+            addNeighborPostsButtons(data.postsData);
+            break;
+        default: break;
+    }
+});
+
 onready(() => {
     /* eslint-disable camelcase */
     // if user isn't logined, except edit tag page because there is no is_login variable
@@ -3417,7 +3820,12 @@ onready(() => {
 
     addPaginationHotkeys();
     makeLoadingCursor();
-    if (SETTINGS.alwaysLoadPreTags) getRecommendedTags();
+    if (SETTINGS.alwaysLoadPreTags && !pageIs.editTag
+        || pageIs.yourPreTags
+        || pageIs.moderatePreTags
+    ) {
+        getRecommendedTags(true);
+    }
 
     if (pageIs.post) {
         addNeighborPostsButtons();
@@ -3430,8 +3838,10 @@ onready(() => {
 
     if (pageIs.searchPosts) {
         showHiddenSearchProps();
+        addDanbooruTagDescription();
         new MutationObserver(() => {
             showHiddenSearchProps();
+            addDanbooruTagDescription();
         }).observe(getElem("#posts"), { childList: true });
     }
 
@@ -3453,17 +3863,19 @@ onready(() => {
 
     // on tag list change
     if (pageIs.post) {
-        const loadPreTags = SETTINGS.alwaysLoadPreTags
+        const updatePreTags = SETTINGS.alwaysLoadPreTags
             || pageIs(PAGES.yourPreTags, false, document.referrer)
-            || pageIs(PAGES.moderatePreTags, false, document.referrer);
+            || pageIs(PAGES.moderatePreTags, false, document.referrer)
+            || pageIs(PAGES.yourPreTags, false, window.opener?.location)
+            || pageIs(PAGES.moderatePreTags, false, window.opener?.location);
 
         new MutationObserver(() => {
             makeTagsMeta();
             highlightTagger();
-            if (loadPreTags) addRecommendedTags();
+            addRecommendedTags(updatePreTags);
         }).observe(getElem("#post_tags"), { childList: true });
         makeTagsMeta();
         highlightTagger();
-        if (loadPreTags) addRecommendedTags();
+        addRecommendedTags(updatePreTags);
     }
 });

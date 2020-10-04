@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for moderators
 // @namespace    7nik@anime-pictures.net
-// @version      1.1.0
+// @version      1.2.0
 // @description  Makes everything great! Moderator edition
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -15,6 +15,8 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_addValueChangeListener
+// @grant        GM.xmlHttpRequest
+// @connect      donmai.us
 // @require      https://github.com/7nik/userscripts/raw/master/AP%20Enhancements%20for%20users.user.js
 // ==/UserScript==
 
@@ -23,8 +25,8 @@
 
 // variables of the AP Enhancements for users
 /* global NO_TAG PAGES SETTINGS TEXT API hotkeys pageIs Tag
-    onNewTabLinkClick getElem getAllElems getTagInfo newElem newTagInput
-    onready say */
+    getElem getAllElems getRecommendedTags getTagInfo newElem newTagInput
+    onNewTabLinkClick onready say */
 
 /* eslint-disable sonarjs/no-duplicate-string, sonarjs/cognitive-complexity */
 
@@ -32,6 +34,11 @@
 
 // moderator only settings
 const MOD_SETTIGNS = {
+    permRecTags: {
+        descr: TEXT.sPermRecTags,
+        type: "tag-list",
+        defValue: [],
+    },
     tagReplacingAddButton: {
         descr: TEXT.sTagReplacingAddButton,
         type: "boolean",
@@ -61,48 +68,36 @@ const MOD_SETTIGNS = {
 };
 
 /**
- * Sets to the field number type and int pattern
- * @param {HTMLElement} el - <input> to set type number
+ * Special class that allows create recommeded tags that aren't in the site's DB
  */
-function setNumType (el) {
-    if (!el) return;
-    el.setAttribute("type", "number");
-    el.setAttribute("pattern", "\\d+");
-    if (el.name === "from_post" || el.name === "rel_post") {
-        el.setAttribute("required", "");
+class PermanentlyRecommendedTag extends Tag {
+    constructor (tag) {
+        super(tag);
+        // preId -1 already reserved
+        PermanentlyRecommendedTag.maxPreId = (PermanentlyRecommendedTag.maxPreId || -1) - 1;
+        this.data.preId = PermanentlyRecommendedTag.maxPreId.toString();
+        this.data.by = getElem(".sidebar_login .title a")?.textContent;
     }
-    if (!el.hasAttribute("placeholder")) {
-        el.setAttribute("placeholder", TEXT.sourceID);
-    }
-}
 
-/**
- * Requests adding a tags to a post
- * @param {Tag} tag - The tag to add
- * @param {(number|string)} postId - The post id to which add the tag
- * @return {Promise<undefined>}
- */
-async function addTag (tag, postId) {
-    if (!tag.id) return;
-    const { success, errormsg } = await API.addTags(tag.enName, postId);
-    if (!success) {
-        getElem("#add_tag_status").innerHTML = errormsg;
-        console.log("Error:", errormsg, tag, postId);
+    // eslint-disable-next-line class-methods-use-this
+    async resolve () {
+        const tags = await getRecommendedTags();
+        const preTagIndex = tags.findIndex(({ preId }) => preId === this.preId);
+        if (preTagIndex < 0) return;
+        tags.splice(preTagIndex, 1);
     }
-}
 
-/**
- * Requests removing a tag from a post
- * @param  {Tag} tag - The tag to remove
- * @param  {(number|string)} postId - The post id from which remove the tag
- * @return {Promise<undefined>}
- */
-async function removeTag (tag, postId) {
-    if (!tag.id) return;
-    const { success, errormsg } = await API.removeTag(tag.id, postId);
-    if (!success) {
-        say(errormsg, TEXT.error);
-        console.error("Error:", errormsg, tag, postId);
+    // eslint-disable-next-line class-methods-use-this
+    async accept () {
+        const res = await addTag(this, post_id);
+        await this.resolve();
+        return !res;
+    }
+
+    // eslint-disable-next-line class-methods-use-this
+    async decline () {
+        await this.resolve();
+        return true;
     }
 }
 
@@ -269,27 +264,19 @@ function addReplaceTagButton () {
 }
 
 /**
- * Opens tag editor of tags created just now
+ * Requests adding a tags to a post
+ * @param {Tag} tag - The tag to add
+ * @param {(number|string)} postId - The post id to which add the tag
+ * @return {Promise<boolean>} - Whether tag was added to the post
  */
-function openNewTags () {
-    const tabs = openNewTags.tabs ?? (openNewTags.tabs = {});
-    // get span for unknow tags
-    const span = getAllElems("#post_tags span")
-        .filter((sp) => sp.textContent === TEXT.categories[0])[0];
-    if (!span) return;
-
-    for (let li = span.nextElementSibling; li && li.nodeName === "LI"; li = li.nextElementSibling) {
-        const { tagId } = li.lastElementChild.firstElementChild.dataset;
-        if (li.lastElementChild.textContent.trim() === "1"
-            && (!tabs[tagId] || tabs[tagId].closed)
-        ) {
-            tabs[tagId] = window.open(
-                `${PAGES.editTag}${tagId}`,
-                `${TEXT.editTag} ${li.firstElementChild.textContent}`,
-                "width=500,height=700",
-            );
-        }
+async function addTag (tag, postId) {
+    if (!tag.id) return false;
+    const { success, errormsg } = await API.addTags(tag.enName, postId);
+    if (!success) {
+        getElem("#add_tag_status").innerHTML = errormsg;
+        console.log("Error:", errormsg, tag, postId);
     }
+    return success;
 }
 
 /**
@@ -314,8 +301,11 @@ function improveTagEditor () {
             "anidb.info": "aniDB",
             "myanimelist.net": "MAL",
             "www.world-art.ru": "World-Art",
+            "shikimori.one": "Shikimori",
             "vndb.org": "VNDB",
             "www.mangaupdates.com": "Baka-Updates",
+            "www.doujinshi.org": "Doujinshi DB",
+            "www.imdb.com": "IMDb",
             "en.wikipedia.org": "eng",
             "ru.wikipedia.org": "rus",
             "ja.wikipedia.org": "jap",
@@ -325,13 +315,17 @@ function improveTagEditor () {
             "anidb.net",
             "anidb.info",
             "myanimelist.net",
-            "mangaupdates.com",
             "world-art.ru",
+            "shikimori.one",
             "vndb.org",
+            "mangaupdates.com",
+            "doujinshi.org",
+            "imdb.com",
             "en.wikipedia.org",
             "ru.wikipedia.org",
             "ja.wikipedia.org",
             "atwiki.jp",
+
             "pixiv.net",
             "deviantart.com",
             "artstation.com",
@@ -472,8 +466,9 @@ function improveTagEditor () {
             return;
         }
 
+        const tagId = window.location.pathname.match(/\d+/)[0];
         const { success, errormsg } = await API.editTag({
-            id: window.location.pathname.match(/\d+/)[0],
+            id: tagId,
             type: getElem("#tag_type").value,
             alias: getElem("#alias").value,
             parent: getElem("#parent").value,
@@ -490,6 +485,9 @@ function improveTagEditor () {
             if (window.opener) {
                 window.opener.postMessage({ cmd: "update_tags" }, PAGES.origin);
             }
+            // update this tag in the cache if needed
+            const cache = SETTINGS.tagsCache;
+            if (cache.remove(tagId)) SETTINGS.tagsCache = cache;
             window.close();
         } else {
             getElem("#edit_error").innerHTML = errormsg;
@@ -541,9 +539,64 @@ function improveTagEditor () {
     }
 }
 
+/**
+ * Opens tag editor of tags created just now
+ */
+function openNewTags () {
+    const tabs = openNewTags.tabs ?? (openNewTags.tabs = {});
+    // get span for unknow tags
+    const span = getAllElems("#post_tags span")
+        .find((sp) => sp.textContent === TEXT.categories[0]);
+    if (!span) return;
+
+    for (let li = span.nextElementSibling; li && li.nodeName === "LI"; li = li.nextElementSibling) {
+        const { tagId } = li.lastElementChild.firstElementChild.dataset;
+        if (li.lastElementChild.textContent.trim() === "1"
+            && (!tabs[tagId] || tabs[tagId].closed)
+        ) {
+            tabs[tagId] = window.open(
+                `${PAGES.editTag}${tagId}`,
+                `${TEXT.editTag} ${li.firstElementChild.textContent}`,
+                "width=500,height=700",
+            );
+        }
+    }
+}
+
+/**
+ * Requests removing a tag from a post
+ * @param  {Tag} tag - The tag to remove
+ * @param  {(number|string)} postId - The post id from which remove the tag
+ * @return {Promise<boolean>} - Whether tag was removed from the post
+ */
+async function removeTag (tag, postId) {
+    if (!tag.id) return false;
+    const { success, errormsg } = await API.removeTag(tag.id, postId);
+    if (!success) {
+        say(errormsg, TEXT.error);
+        console.error("Error:", errormsg, tag, postId);
+    }
+    return success;
+}
+
+/**
+ * Sets to the field number type and int pattern
+ * @param {HTMLElement} el - <input> to set type number
+ */
+function setNumType (el) {
+    if (!el) return;
+    el.setAttribute("type", "number");
+    el.setAttribute("pattern", "\\d+");
+    if (el.name === "from_post" || el.name === "rel_post") {
+        el.setAttribute("required", "");
+    }
+    if (!el.hasAttribute("placeholder")) {
+        el.setAttribute("placeholder", TEXT.sourceID);
+    }
+}
+
 // TODO list
 // related posts editor
-// lock updating of recommended tags
 
 // =============================================================================
 //                         Program execution start
@@ -557,13 +610,25 @@ if (!SETTINGS.isModerator) {
 // add moderator settings
 Object.entries(MOD_SETTIGNS).forEach(([name, setting]) => SETTINGS.append(name, setting));
 
+const origGetRecommededTags = getRecommendedTags;
+getRecommendedTags = (...args) => {
+    if (getRecommendedTags.result) return getRecommendedTags.result;
+    getRecommendedTags.result = (async () => {
+        const tags = await origGetRecommededTags(...args);
+        let permRecTags = await Promise.all(SETTINGS.permRecTags.map((id) => getTagInfo(id)));
+        permRecTags = permRecTags.map((tag) => new PermanentlyRecommendedTag(tag));
+        return tags.concat(permRecTags);
+    })();
+    return getRecommendedTags.result;
+};
+
 onready(() => {
     addModeratorHotkeys();
 
     if (pageIs.post) {
         // fix fields that accept a post ID
         setNumType(getElem("[name=redirect_id]"));
-        getAllElems("[name=from_post]").forEach(setNumType);
+        getAllElems("[name=from_post]").forEach((el) => setNumType(el));
     }
 
     if (pageIs.moderatePreTags) {
@@ -571,13 +636,6 @@ onready(() => {
         getAllElems(".messages td:nth-child(3) a").forEach((a) => {
             a.addEventListener("auxclick", onNewTabLinkClick);
             a.addEventListener("click", onNewTabLinkClick);
-        });
-        // remove resolved recommended tags
-        window.addEventListener("message", ({ data: { cmd, preTagId } }) => {
-            if (cmd === "resolve_pretag") {
-                const elem = getElem(`#pre_tag_${preTagId}`);
-                if (elem) elem.remove();
-            }
         });
     }
 
