@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.2.1
+// @version      1.2.2
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -1319,7 +1319,7 @@ const generalCSS = `
     /* for recommended tags */
     #post_tags .tags li.waiting a,
     #post_tags .tags li.preTag a {
-        border-left: 2px solid aqua;
+        border-left: 2px solid black;
     }
     .tags li.preTag .icon_delete,
     .tags li.preTag .icon_frame,
@@ -1338,6 +1338,19 @@ const generalCSS = `
     }
     #AP_Enhancements .tags a {
         border-left: none;
+    }
+`;
+
+const darkThemeCSS = `
+    textarea {
+        border-color: #666;
+    }
+    ul.autocomplite li {
+        border-color: #666;
+    }
+    #post_tags .tags li.waiting a,
+    #post_tags .tags li.preTag a {
+        border-left: 2px solid aqua;
     }
 `;
 
@@ -2328,18 +2341,17 @@ function addPostStatus () {
 }
 
 /**
- * Adds recommended tags to post
- * @param {boolean} updatePreTags - whether the list of recommended tags may be updated
+ * Adds given recommended tags to post
+ * @param {Tags[]} recommendedTags - tags to add
  * @return {Promise<undefined>}
  */
-async function addRecommendedTags (updatePreTags) {
-    let pretags = await getRecommendedTags(updatePreTags);
-    if (pretags.length <= 0 || getElem(".tags li span.accept")) return;
+async function addRecommendedTags (recommendedTags) {
+    if (recommendedTags.length <= 0 || getElem(".tags li span.accept")) return;
 
     getAllElems(".tags li.preTag").forEach((li) => li.remove());
     const presentedTags = new Set(getAllElems(".tags .edit_tag").map((el) => +el.dataset.tagId));
 
-    pretags = pretags.filter((tag, i, tags) => {
+    const tagsToAdd = recommendedTags.filter((tag, i, tags) => {
         // decline presented tags and duplicated tags
         if (presentedTags.has(tag.id) || tags.findIndex((t) => t.id === tag.id) < i) {
             tag.decline();
@@ -2347,7 +2359,7 @@ async function addRecommendedTags (updatePreTags) {
         }
         return true;
     });
-    if (pretags.length === 0) return;
+    if (tagsToAdd.length === 0) return;
 
     const getTagTypeByPosition = (pos) => Object.keys(tagTypePosition)
         .find((k) => tagTypePosition[k] === pos);
@@ -2355,7 +2367,7 @@ async function addRecommendedTags (updatePreTags) {
         ? tagItem.firstElementChild.textContent.trim()
         : null);
 
-    const types = new Set(pretags.map(({ type }) => type));
+    const types = new Set(tagsToAdd.map(({ type }) => type));
     // eslint-disable-next-line no-restricted-syntax
     for (const type of types) {
         // find tag block of tags of current type
@@ -2382,7 +2394,7 @@ async function addRecommendedTags (updatePreTags) {
             }
         }
         // get the recommended tags of the current type in order of usage count
-        const tags = pretags
+        const tags = tagsToAdd
             .filter((tag) => tag.type === type)
             .sort((t1, t2) => t2 - t1);
         let currentElem = span.nextElementSibling;
@@ -3698,14 +3710,7 @@ GM_addStyle(generalCSS);
 
 // if theme is dark
 if (SETTINGS.themeName === "second") {
-    GM_addStyle(`
-        textarea {
-            border-color: #666;
-        }
-        ul.autocomplite li {
-            border-color: #666;
-        }
-    `);
+    GM_addStyle(darkThemeCSS);
 }
 if (SETTINGS.hideNewPostMessage) {
     GM_addStyle(`
@@ -3836,6 +3841,22 @@ onready(() => {
         if (getElem("#add_pre_tag_form")) {
             getElem("#add_pre_tag_form").addEventListener("submit", onTagRecommended);
         }
+
+        // on tag list change
+        const updatePreTags = SETTINGS.alwaysLoadPreTags
+            || pageIs(PAGES.yourPreTags, false, document.referrer)
+            || pageIs(PAGES.moderatePreTags, false, document.referrer)
+            || pageIs(PAGES.yourPreTags, false, window.opener?.location)
+            || pageIs(PAGES.moderatePreTags, false, window.opener?.location);
+
+        new MutationObserver(() => {
+            makeTagsMeta();
+            highlightTagger();
+            getRecommendedTags(updatePreTags).then(addRecommendedTags);
+        }).observe(getElem("#post_tags"), { childList: true });
+        makeTagsMeta();
+        highlightTagger();
+        getRecommendedTags(updatePreTags).then(addRecommendedTags);
     }
 
     if (pageIs.searchPosts) {
@@ -3861,23 +3882,5 @@ onready(() => {
 
     if (pageIs.uploadPicture) {
         improveFileUploader();
-    }
-
-    // on tag list change
-    if (pageIs.post) {
-        const updatePreTags = SETTINGS.alwaysLoadPreTags
-            || pageIs(PAGES.yourPreTags, false, document.referrer)
-            || pageIs(PAGES.moderatePreTags, false, document.referrer)
-            || pageIs(PAGES.yourPreTags, false, window.opener?.location)
-            || pageIs(PAGES.moderatePreTags, false, window.opener?.location);
-
-        new MutationObserver(() => {
-            makeTagsMeta();
-            highlightTagger();
-            addRecommendedTags(updatePreTags);
-        }).observe(getElem("#post_tags"), { childList: true });
-        makeTagsMeta();
-        highlightTagger();
-        addRecommendedTags(updatePreTags);
     }
 });

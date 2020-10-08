@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for moderators
 // @namespace    7nik@anime-pictures.net
-// @version      1.2.0
+// @version      1.2.1
 // @description  Makes everything great! Moderator edition
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -26,7 +26,7 @@
 // variables of the AP Enhancements for users
 /* global NO_TAG PAGES SETTINGS TEXT API hotkeys pageIs Tag
     getElem getAllElems getRecommendedTags getTagInfo newElem newTagInput
-    onNewTabLinkClick onready say */
+    onNewTabLinkClick onready say addRecommendedTags */
 
 /* eslint-disable sonarjs/no-duplicate-string, sonarjs/cognitive-complexity */
 
@@ -233,13 +233,16 @@ function addReplaceTagButton () {
         .then(() => removeTag(tagToRemove, post_id))
         .then(finish);
 
-    if (!getElem(`#tag_li_${tagToRemove.id}`)) { // the tag already removed
+    // if the tag is already removed
+    if (!getElem(`#tag_li_${tagToRemove.id}:not(.preTag)`)) {
         tagToRemove = NO_TAG;
     }
-    if (getElem(`#tag_li_${tagToAdd.id}`)) { // the tag already added
+    // if the tag is already added
+    if (getElem(`#tag_li_${tagToAdd.id}:not(.preTag)`)) {
         tagToAdd = NO_TAG;
     }
-    if (!tagToRemove.id && !tagToAdd.id) return; // nothing to add or remove
+    // if nothing to add or remove
+    if (!tagToRemove.id && !tagToAdd.id) return;
 
     getElem("#add_tag_submit").before(newElem("input", {
         type: "button",
@@ -277,6 +280,19 @@ async function addTag (tag, postId) {
         console.log("Error:", errormsg, tag, postId);
     }
     return success;
+}
+
+/**
+ * Returns list of permanently recommended tags
+ * @return {Promise<PermanentlyRecommendedTags[]>}
+ */
+function getPermanentlyRecommendedTags () {
+    if (getPermanentlyRecommendedTags.result) return getPermanentlyRecommendedTags.result;
+    getPermanentlyRecommendedTags.result = (async () => {
+        const tags = await Promise.all(SETTINGS.permRecTags.map((id) => getTagInfo(id)));
+        return tags.map((tag) => new PermanentlyRecommendedTag(tag));
+    })();
+    return getPermanentlyRecommendedTags.result;
 }
 
 /**
@@ -610,18 +626,6 @@ if (!SETTINGS.isModerator) {
 // add moderator settings
 Object.entries(MOD_SETTIGNS).forEach(([name, setting]) => SETTINGS.append(name, setting));
 
-const origGetRecommededTags = getRecommendedTags;
-getRecommendedTags = (...args) => {
-    if (getRecommendedTags.result) return getRecommendedTags.result;
-    getRecommendedTags.result = (async () => {
-        const tags = await origGetRecommededTags(...args);
-        let permRecTags = await Promise.all(SETTINGS.permRecTags.map((id) => getTagInfo(id)));
-        permRecTags = permRecTags.map((tag) => new PermanentlyRecommendedTag(tag));
-        return tags.concat(permRecTags);
-    })();
-    return getRecommendedTags.result;
-};
-
 onready(() => {
     addModeratorHotkeys();
 
@@ -629,6 +633,14 @@ onready(() => {
         // fix fields that accept a post ID
         setNumType(getElem("[name=redirect_id]"));
         getAllElems("[name=from_post]").forEach((el) => setNumType(el));
+        // on tag list change
+        new MutationObserver(() => {
+            openNewTags();
+            getPermanentlyRecommendedTags().then(addRecommendedTags);
+        }).observe(getElem("#post_tags"), { childList: true });
+        getPermanentlyRecommendedTags().then(addRecommendedTags);
+
+        if (SETTINGS.tagReplacingAddButton) addReplaceTagButton();
     }
 
     if (pageIs.moderatePreTags) {
@@ -639,14 +651,6 @@ onready(() => {
         });
     }
 
-    // on tag list change
-    if (pageIs.post) {
-        new MutationObserver(() => {
-            openNewTags();
-        }).observe(getElem("#post_tags"), { childList: true });
-    }
-
     if (pageIs.searchPosts) addRemoveTagsButton();
-    if (pageIs.post && SETTINGS.tagReplacingAddButton) addReplaceTagButton();
     if (pageIs.editTag) improveTagEditor();
 });
