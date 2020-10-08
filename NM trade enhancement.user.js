@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      1.3.1
+// @version      1.3.2
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -922,27 +922,6 @@ function addCollectionProgress (you, partner, card) {
 }
 
 /**
- * Turns name of sett to link to user's collection
- * @param {UserData} user1 - User1 data
- * @param {UserData} user2 - User2 data
- * @param {HTMLElement} card - <li.trade--item>
- */
-function addLinkToSett (user1, user2, card) {
-    const dd = card.querySelector("dd:nth-of-type(2)");
-    const settName = dd.firstChild.textContent.trim();
-    const sett = user1.setts[settName] || user2.setts[settName];
-    if (!sett) {
-        console.error(`Error: series not found: ${settName}`);
-        return;
-    }
-    const a = document.createElement("a");
-    a.href = sett.links.permalink;
-    a.textContent = settName;
-    a.addEventListener("click", (ev) => ev.stopPropagation(), true);
-    dd.firstChild.replaceWith(a);
-}
-
-/**
  * Apply enhancement to the trade window
  * @param {HTMLElement} tradeWindow - <div.nm-modal.trade>
  */
@@ -957,7 +936,6 @@ async function addEnhancements (tradeWindow) {
     // add info to cards
     forAllElements(tradeWindow, ".trade--item", (card) => {
         addCollectionProgress(you, partner, card);
-        addLinkToSett(you, partner, card);
     });
 }
 
