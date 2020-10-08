@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      1.3.0
+// @version      1.3.1
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -96,9 +96,6 @@ GM_addStyle(`
         display: none;
     }
 
-    .trade--item a:link, .trade--item a:visited {
-        color: #5f5668;
-    }
     .trade--item a:link:hover, .trade--item a:visited:hover {
         color: #085b85;
     }
@@ -883,7 +880,8 @@ function getCollectionStats (user, card) {
         return span;
     }
     const a = document.createElement("a");
-    a.href = sett.links.permalink.replace("/series", `${user.link}/collection`);
+    a.classList.add("href-link");
+    a.href = sett.links.permalink.concat(`/user/${user.link}/cards/`);
     a.textContent = `
         ${(owned("core") + owned("chase") + owned("variant") + owned("legendary"))}
         /
