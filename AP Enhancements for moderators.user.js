@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for moderators
 // @namespace    7nik@anime-pictures.net
-// @version      1.2.1
+// @version      1.2.2
 // @description  Makes everything great! Moderator edition
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -25,7 +25,7 @@
 
 // variables of the AP Enhancements for users
 /* global NO_TAG PAGES SETTINGS TEXT API hotkeys pageIs Tag
-    getElem getAllElems getRecommendedTags getTagInfo newElem newTagInput
+    getElem getAllElems getTagInfo newElem newTagInput
     onNewTabLinkClick onready say addRecommendedTags */
 
 /* eslint-disable sonarjs/no-duplicate-string, sonarjs/cognitive-complexity */
@@ -81,10 +81,11 @@ class PermanentlyRecommendedTag extends Tag {
 
     // eslint-disable-next-line class-methods-use-this
     async resolve () {
-        const tags = await getRecommendedTags();
+        const tags = await getPermanentlyRecommendedTags();
         const preTagIndex = tags.findIndex(({ preId }) => preId === this.preId);
         if (preTagIndex < 0) return;
         tags.splice(preTagIndex, 1);
+        sessionStorage[post_id] = tags.map(({ id }) => id);
     }
 
     // eslint-disable-next-line class-methods-use-this
@@ -289,7 +290,10 @@ async function addTag (tag, postId) {
 function getPermanentlyRecommendedTags () {
     if (getPermanentlyRecommendedTags.result) return getPermanentlyRecommendedTags.result;
     getPermanentlyRecommendedTags.result = (async () => {
-        const tags = await Promise.all(SETTINGS.permRecTags.map((id) => getTagInfo(id)));
+        const tags = await Promise.all(
+            (sessionStorage[post_id]?.split(",") ?? SETTINGS.permRecTags)
+                .map((id) => getTagInfo(+id)),
+        );
         return tags.map((tag) => new PermanentlyRecommendedTag(tag));
     })();
     return getPermanentlyRecommendedTags.result;

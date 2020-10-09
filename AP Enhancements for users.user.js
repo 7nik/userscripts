@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.2.3
+// @version      1.2.4
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -3257,10 +3257,14 @@ async function onPreTagClick (ev) {
         const cache = SETTINGS.preTagsCache;
         cache.clear();
         SETTINGS.preTagsCache = cache;
-        addRecommendedTags();
+        getRecommendedTags(true).then(addRecommendedTags);
         return;
     }
-    const preTag = (await getRecommendedTags()).find((tag) => tag.preId === preTagId);
+    const preTag = (preTagId < -1
+        // eslint-disable-next-line no-undef
+        ? await getPermanentlyRecommendedTags?.()
+        : await getRecommendedTags()
+    ).find((tag) => tag.preId === preTagId);
     if (!preTag) return;
 
     let removeItem = false;
@@ -3724,7 +3728,6 @@ if (SETTINGS.hideNewPostMessage) {
 }
 
 document.addEventListener("keydown", onHotkeyPress);
-unsafeWindow.registerHotkey = registerHotkey;
 
 if (pageIs.chat) return;
 
