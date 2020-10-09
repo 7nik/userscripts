@@ -663,7 +663,7 @@ const SETTINGS = new Proxy({
         type: "cache",
         defValue: {
             levels: [{}],
-            lifetime: 6 * 60 * 60 * 1000, // 6 hour
+            lifetime: 1 * 60 * 60 * 1000, // 1 hour
             lastUpdate: 0,
         },
     },
@@ -2550,6 +2550,9 @@ function getRecommendedTags (updatePreTags = false) {
                     }),
             );
         }
+
+        // ensure that cache won't empty until timeout
+        cache.add({ id: -1, tags: [] });
 
         // save cache and return
         SETTINGS.preTagsCache = cache;
