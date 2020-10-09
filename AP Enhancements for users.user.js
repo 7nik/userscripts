@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.2.2
+// @version      1.2.3
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -1623,7 +1623,7 @@ const hotkeys = [
     },
     {
         hotkey: "S",
-        descr: Text.hkStar,
+        descr: TEXT.hkStar,
         pages: [PAGES.post],
         selectors: ["span.star_it"],
         action: (element) => element.click(),
