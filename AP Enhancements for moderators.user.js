@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for moderators
 // @namespace    7nik@anime-pictures.net
-// @version      1.2.2
+// @version      1.2.3
 // @description  Makes everything great! Moderator edition
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -34,6 +34,11 @@
 
 // moderator only settings
 const MOD_SETTIGNS = {
+    enablePermRecTags: {
+        descr: TEXT.sEnablePermRecTags,
+        type: "boolean",
+        defValue: false,
+    },
     permRecTags: {
         descr: TEXT.sPermRecTags,
         type: "tag-list",
@@ -634,15 +639,16 @@ onready(() => {
     addModeratorHotkeys();
 
     if (pageIs.post) {
+        const addPermRecTags = SETTINGS.enablePermRecTags;
         // fix fields that accept a post ID
         setNumType(getElem("[name=redirect_id]"));
         getAllElems("[name=from_post]").forEach((el) => setNumType(el));
         // on tag list change
         new MutationObserver(() => {
             openNewTags();
-            getPermanentlyRecommendedTags().then(addRecommendedTags);
+            if (addPermRecTags) getPermanentlyRecommendedTags().then(addRecommendedTags);
         }).observe(getElem("#post_tags"), { childList: true });
-        getPermanentlyRecommendedTags().then(addRecommendedTags);
+        if (addPermRecTags) getPermanentlyRecommendedTags().then(addRecommendedTags);
 
         if (SETTINGS.tagReplacingAddButton) addReplaceTagButton();
     }

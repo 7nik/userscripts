@@ -495,6 +495,10 @@ const TEXT = new Proxy(
             en: "Always load recommended tags",
             ru: "Всегда загружать рекомендованные теги",
         },
+        sEnablePermRecTags: {
+            en: "add to post the permanently recommended tags",
+            ru: "добавлять к посту постоянно рекомендуемые теги",
+        },
         sFloatingSidebar: {
             en: "Make the sidebar floating",
             ru: "Сделать сайдбар плавающим",
