@@ -496,8 +496,8 @@ const TEXT = new Proxy(
             ru: "Всегда загружать рекомендованные теги",
         },
         sEnablePermRecTags: {
-            en: "add to post the permanently recommended tags",
-            ru: "добавлять к посту постоянно рекомендуемые теги",
+            en: "Add to post the permanently recommended tags",
+            ru: "Добавлять к посту постоянно рекомендуемые теги",
         },
         sFloatingSidebar: {
             en: "Make the sidebar floating",
@@ -2507,7 +2507,7 @@ function getRecommendedTags (updatePreTags = false) {
         const cache = SETTINGS.preTagsCache;
         // return from cache
         if (cache.getAll().length > 0) {
-            let tags = cache.get(post_id)?.tags || [];
+            let tags = cache.get(window.post_id)?.tags ?? [];
             // convert tags to advanced if needed
             if (tags.length > 0 && !("name" in tags[0])) {
                 tags = tags.map((t) => new Tag(t));
