@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      1.3.2.1
+// @version      1.3.3
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -420,9 +420,14 @@ class CardFilter {
         });
 
         // add them for the document
-        this.side.querySelector(".trade--side--header select + span")
-            .textContent += ", use filter set";
-        this.side.querySelector(".trade--side--header").append(filterSetSelect, delFiltSetBtn);
+        const header = this.side.querySelector(".trade--side--header");
+        // remove text nodes with no text
+        header.childNodes.forEach((node) => {
+            if (node.nodeName === "#text" && node.textContent.trim().length === 0) {
+                node.remove();
+            }
+        });
+        header.append(", use filter set ", filterSetSelect, delFiltSetBtn);
         // reset selector when some filter was changed
         this.side.querySelector(".trade--add-items--filters").addEventListener("change", () => {
             delFiltSetBtn.style.display = "none";
