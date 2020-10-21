@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.2.4
+// @version      1.2.5
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -2507,7 +2507,7 @@ function getRecommendedTags (updatePreTags = false) {
         const cache = SETTINGS.preTagsCache;
         // return from cache
         if (cache.getAll().length > 0) {
-            let tags = cache.get(window.post_id)?.tags ?? [];
+            let tags = cache.get(unsafeWindow.post_id)?.tags ?? [];
             // convert tags to advanced if needed
             if (tags.length > 0 && !("name" in tags[0])) {
                 tags = tags.map((t) => new Tag(t));
@@ -3363,29 +3363,6 @@ function pasteBBTag (textarea, bbtag, askParam, param = "") {
     document.execCommand("insertText", false, `[${bbtag}${tagParam}]${text}[/${bbtag}]`);
     // eslint-disable-next-line no-param-reassign, no-multi-assign
     textarea.selectionStart = textarea.selectionEnd = cursorPos;
-}
-
-/**
- * Registers a hotkey (for backward compatibility)
- * @param {string} hotkey - The hotkey, e.g. `Ctrl+Shift+R`
- * @param {string} descr - Description of the hotkey
- * @param {string[]=} pages - List of pages where the hotkey can be triggered
- * @param {string[]=} selectors - List of element selectors, first found will be passed to `action`
- * @param {function(HTMLElement?):void} action - The hotkey handler
- */
-function registerHotkey (hotkey, descr, pages, selectors, action) {
-    /* eslint-disable no-param-reassign */
-    if (typeof pages === "function") [pages, action] = [null, pages];
-    if (typeof selectors === "function") [selectors, action] = [null, selectors];
-    if (pages?.[0] && pages[0] !== "/") [pages, selectors] = [selectors, pages];
-    /* eslint-enable no-param-reassign */
-    hotkeys.push({
-        descr,
-        hotkey,
-        pages: pages || [PAGES.any],
-        selectors: selectors || [],
-        action,
-    });
 }
 
 /**

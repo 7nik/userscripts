@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for moderators
 // @namespace    7nik@anime-pictures.net
-// @version      1.3.0
+// @version      1.3.1
 // @description  Makes everything great! Moderator edition
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -240,7 +240,7 @@ function addReplaceTagButton () {
         .then(finish);
 
     // if the tag is already removed
-    if (!getElem(`#tag_li_${tagToRemove.id}:not(.preTag)`)) {
+    if (!getElem(`#tag_li_${tagToRemove.id}:not(.preTag):not(.removed)`)) {
         tagToRemove = NO_TAG;
     }
     // if the tag is already added
@@ -296,7 +296,7 @@ function getPermanentlyRecommendedTags () {
     if (getPermanentlyRecommendedTags.result) return getPermanentlyRecommendedTags.result;
     getPermanentlyRecommendedTags.result = (async () => {
         const tags = await Promise.all(
-            (sessionStorage[post_id]?.split(",") ?? SETTINGS.permRecTags)
+            (sessionStorage[post_id]?.split(",").filter((id) => id) ?? SETTINGS.permRecTags)
                 .map((id) => getTagInfo(+id)),
         );
         return tags.map((tag) => new PermanentlyRecommendedTag(tag));
