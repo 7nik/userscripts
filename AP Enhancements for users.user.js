@@ -568,12 +568,14 @@ const TEXT = new Proxy(
  * @property {string} tag_ru - The Russian tag name
  * @property {string} tag_jp - The Japanese tag name
  * @property {number} num - The number of posts with this tag
+ * @property {number} num_pub - The number of published posts with this tag
  * @property {number} type - The tag type
  * @property {string} description_en - The English description of the tag
  * @property {string} description_ru - The Russian description of the tag
  * @property {string} description_jp - The Japanese description of the tag
  * @property {number} alias - Id of the aliased tag or null
  * @property {number} parent - Id of the parent tag or null
+ * @property {number} views - How many users viewed this tag (now counting is stopped)
  */
 /**
  * Presented tag - site's object that descripes a tag added to a post
@@ -982,7 +984,7 @@ const API = {
      * Wrapper for `fetch` to execute queries consequentially and show loading cursor for long ones.
      * @param  {string} url - URL of the request
      * @param  {object} options - The options of the query (method, body, etc)
-     * @return {Promise<Response>} - The parsed response
+     * @return {Promise<Response>} - The Response object
      */
     ajax (url, body) {
         const timer = setTimeout(() => document.body.classList.add("waiting"), 500);
@@ -2102,24 +2104,22 @@ async function addDanbooruTagDescription () {
         ));
 
         // if no description yet
-        if (!getElem(".posts_body_head h2 + :not(br)")
-            && !getElem(".posts_body_head h2").nextSibling.textContent.trim()
-        ) {
+        if (!getElem(".posts_body_head .description").textContent.trim()) {
             if (tag.artist) {
-                getElem(".posts_body_head h2").after(newElem(
+                getElem(".posts_body_head .description").append(newElem(
                     "details",
                     {},
-                    newElem("summary", {}, "Danbooru's links"),
+                    newElem("summary", { css: { outline: "none", cursor: "pointer" } }, "Danbooru's links"),
                     ...tag.artist.urls
                         .flatMap(({ url }) => [newElem("a", { href: url }, url), newElem("br")]),
                 ));
             }
 
             if (tag.wiki_page?.body.length) {
-                getElem(".posts_body_head h2").after(newElem(
+                getElem(".posts_body_head .description").append(newElem(
                     "details",
                     {},
-                    newElem("summary", {}, "Danbooru's description"),
+                    newElem("summary", { css: { outline: "none", cursor: "pointer" } }, "Danbooru's description"),
                     ...tag.wiki_page.body.split("\n").flatMap((s) => [s, newElem("br")]),
                 ));
             }
@@ -2561,7 +2561,7 @@ function getRecommendedTags (updatePreTags = false) {
         // save cache and return
         SETTINGS.preTagsCache = cache;
         document.body.classList.remove("wait");
-        return cache.get(post_id)?.tags || [];
+        return cache.get(unsafeWindow.post_id)?.tags || [];
     })();
     return getRecommendedTags.result;
 }
@@ -2736,6 +2736,10 @@ async function highlightTagger () {
  */
 function improveFileUploader () {
     GM_addStyle(`
+        div#content[id] {
+            overflow: initial;
+        }
+
         #posts .img_block_big {
             box-sizing: border-box;
         }
