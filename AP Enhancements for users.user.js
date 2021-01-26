@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.2.5
+// @version      1.3.0
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -12,13 +12,10 @@
 // @run-at       document-start
 // @grant        GM_addStyle
 // @grant        GM_getValue
-// @grant        GM_setValue
-// @grant        GM_addValueChangeListener
 // @grant        GM.xmlHttpRequest
 // @connect      donmai.us
 // ==/UserScript==
 
-/* global GM_addValueChangeListener */
 /* global lang site_theme post_id ajax_request2 is_login is_moderator AnimePictures */
 /* eslint-disable sonarjs/no-duplicate-string, sonarjs/cognitive-complexity, max-classes-per-file */
 
@@ -553,7 +550,9 @@ const TEXT = new Proxy(
         },
     },
     {
-        lang: new URL(window.location.href).searchParams.get("lang") || GM_getValue("lang", "en"),
+        lang: new URL(window.location.href).searchParams.get("lang")
+            || localStorage.AP_Enhancements_lang
+            || "en",
         get (dictinary, name) {
             return dictinary[name][this.lang] || dictinary[name].en;
         },
@@ -724,15 +723,15 @@ const SETTINGS = new Proxy({
         ],
     },
 }, {
-    cache: {},
-    listeners: {},
-    // remove a setting value from the cache when it was changed in another tab
-    removeFromCacheOnChange (name) {
-        if (name in this.listeners) return;
-        this.listeners[name] = GM_addValueChangeListener(name, (name2, oldVal, newVal, remote) => {
-            if (remote) delete this.cache[name];
+    prefix: "AP_Enhancements_",
+    cache: (() => {
+        const cache = {};
+        window.addEventListener("storage", ({ key, storageArea }) => {
+            const name = key.slice(16);
+            if (storageArea === localStorage && name in cache) delete cache[name];
         });
-    },
+        return cache;
+    })(),
     // find a setting object, not a setting value
     find (list, name) {
         if (name in list) {
@@ -917,18 +916,21 @@ const SETTINGS = new Proxy({
         // if is's method of SETTINGS
         if (name in this) return (...args) => this[name](list, ...args);
         if (name in this.cache) return this.cache[name];
+
         const setting = this.find(list, name);
         if (!setting) return null;
-        this.removeFromCacheOnChange(name);
-        let value = GM_getValue(name);
+
+        let value = JSON.parse(localStorage.getItem(this.prefix + name) ?? "null");
         if (!this.isValid(list, name, value)) {
-            GM_setValue(name, setting.defValue);
+            localStorage.setItem(this.prefix + name, JSON.stringify(setting.defValue));
             value = setting.defValue;
         }
+
         if (setting.type === "cache") {
             // eslint-disable-next-line no-use-before-define
             value = new Cache(value.levels, value.lifetime, value.lastUpdate);
         }
+
         this.cache[name] = value;
         return value;
     },
@@ -936,9 +938,10 @@ const SETTINGS = new Proxy({
     set (list, name, value) {
         const setting = this.find(list, name);
         if (!setting) return false;
+
         if (this.isValid(list, name, value)) {
-            GM_setValue(name, value);
-            this.removeFromCacheOnChange(name);
+            localStorage.setItem(this.prefix + name, JSON.stringify(value));
+            this.cache[name] = value;
             return true;
         }
         console.error(`The value ${value} cannot be set to ${name}.`);
@@ -3813,6 +3816,13 @@ onready(() => {
 
     if (SETTINGS.isFirstRun) {
         SETTINGS.isFirstRun = false;
+        // import settings
+        if (GM_getValue("isFirstRun", false)) {
+            SETTINGS.getAll().forEach(({ name }) => {
+                const value = GM_getValue(name);
+                if (value) SETTINGS[name] = value;
+            });
+        }
         window.location.reload();
     }
 
