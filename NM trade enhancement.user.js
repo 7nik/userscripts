@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      1.3.3
+// @version      1.3.4
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -459,6 +459,9 @@ class CardFilter {
             state: this.currentState,
             hiddenSeries: { ...this.hiddenSeries },
         };
+        if (filterSet.settName === false && filterSet.state === CardFilter.STATES.certainSeries) {
+            filterSet.state = CardFilter.STATES.allSeries;
+        }
         CardFilter.filterSets[name] = filterSet;
         GM_setValue("filter_sets", CardFilter.filterSets);
 
