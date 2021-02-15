@@ -3841,7 +3841,7 @@ onready(() => {
 
     if (SETTINGS.isFirstRun) {
         SETTINGS.isFirstRun = false;
-        // import settings
+        // import settings (26.01.2021)
         if (GM_getValue("isFirstRun", false)) {
             SETTINGS.getAll().forEach(({ name }) => {
                 const value = GM_getValue(name);
