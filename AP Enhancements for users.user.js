@@ -1902,7 +1902,7 @@ class Cache {
         return false;
     }
 
-    add (value) {
+    add (value, life = 1) {
         if (!("id" in value)) {
             throw new TypeError("The value doesn't have property `id`");
         }
@@ -1910,7 +1910,7 @@ class Cache {
             throw new TypeError("`id` of the value must be number or string");
         }
         this.remove(value.id);
-        this.levels[0][value.id] = value;
+        this.levels[Math.round((1 - life) * (this.levels.length - 1))][value.id] = value;
     }
 
     clear () {
@@ -2607,7 +2607,8 @@ async function getTagInfo (tagName, postId) {
     const cacheTag = (rawTag) => {
         if (!rawTag) return NO_TAG;
         const tag = new Tag(rawTag);
-        cache.add(tag);
+        // if it's artist keep less time
+        cache.add(tag, tag.type === 4 ? 0.1 : 1);
         return tag.alias ? getTagInfo(tag.alias) : tag;
     };
     let tag;
