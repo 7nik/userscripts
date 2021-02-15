@@ -2364,7 +2364,10 @@ function addPostStatus () {
  * @return {Promise<undefined>}
  */
 async function addRecommendedTags (recommendedTags) {
-    if (recommendedTags.length <= 0 || getElem(".tags li span.accept")) return;
+    if (recommendedTags.length <= 0 || getElem(".tags li span.accept")) {
+        document.body.classList.remove("wait");
+        return;
+    }
 
     getAllElems(".tags li.preTag").forEach((li) => li.remove());
     const presentedTags = new Set(getAllElems(".tags .edit_tag").map((el) => +el.dataset.tagId));
@@ -2377,7 +2380,10 @@ async function addRecommendedTags (recommendedTags) {
         }
         return true;
     });
-    if (tagsToAdd.length === 0) return;
+    if (tagsToAdd.length === 0) {
+        document.body.classList.remove("wait");
+        return;
+    }
 
     const getTagTypeByPosition = (pos) => Object.keys(tagTypePosition)
         .find((k) => tagTypePosition[k] === pos);
@@ -2437,6 +2443,8 @@ async function addRecommendedTags (recommendedTags) {
             }
         }
     }
+
+    document.body.classList.remove("wait");
 }
 
 /**
@@ -3291,13 +3299,20 @@ async function onPreTagClick (ev) {
     if (!preTag) return;
 
     let removeItem = false;
+    document.body.classList.add("wait");
+
     if (ev.target.classList.contains("accept")) {
         tagElem.classList.replace("preTag", "waiting");
         removeItem = await preTag.accept();
-        if (preTag.parent) AnimePictures.post.refresh_tags();
+        if (preTag.parent) {
+            AnimePictures.post.refresh_tags();
+        } else {
+            document.body.classList.remove("wait");
+        }
     } else if (ev.target.classList.contains("decline")) {
         tagElem.classList.replace("preTag", "waiting");
         removeItem = await preTag.decline();
+        document.body.classList.remove("wait");
     }
 
     if (removeItem) {
