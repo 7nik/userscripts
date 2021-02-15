@@ -2200,6 +2200,7 @@ async function addNeighborPostsButtons (postsData) {
     } else if (pageIs(PAGES.searchPosts, false, sourceUrl)
             || pageIs(PAGES.moderatePreTags, false, sourceUrl)
             || pageIs(PAGES.uploadPicture, false, sourceUrl)
+            || pageIs(PAGES.comments, false, sourceUrl)
     ) {
         window.opener?.postMessage({ cmd: "get_posts_data" }, PAGES.origin);
         return;
@@ -3770,7 +3771,6 @@ window.addEventListener("message", ({ data, source }) => {
                     postIds: getAllElems("#posts > div > span > a")
                         .map((a) => +a.href.match(/\d+/)[0]),
                 };
-                postsData.lastPost = postsData.postIds.length - 1;
             } else if (pageIs.moderatePreTags || pageIs.yourPreTags) {
                 postsData = {
                     query: null,
@@ -3781,7 +3781,6 @@ window.addEventListener("message", ({ data, source }) => {
                         .map(({ id }) => +id)
                         .sort((a, b) => b - a),
                 };
-                postsData.lastPost = postsData.postIds.length - 1;
             } else if (pageIs.uploadPicture) {
                 postsData = {
                     query: null,
@@ -3790,8 +3789,16 @@ window.addEventListener("message", ({ data, source }) => {
                     postIds: getAllElems("#posts > span > a")
                         .map((a) => +a.href.match(/\d+/)[0]),
                 };
-                postsData.lastPost = postsData.postIds.length - 1;
+            } else if (pageIs.comments) {
+                postsData = {
+                    query: null,
+                    page: 0,
+                    lastPage: 0,
+                    postIds: getAllElems("#comments td:last-child a:not([title])")
+                        .map((a) => +a.href.match(/\d+/)[0]),
+                };
             }
+            postsData.lastPost = postsData.postIds.length - 1;
             source.postMessage({ cmd: "posts_data", postsData }, PAGES.origin);
             break;
         }
