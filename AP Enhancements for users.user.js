@@ -2477,9 +2477,7 @@ function buildSettings () {
                     click: () => {
                         SETTINGS.getAll()
                             .filter(({ type }) => type === "cache")
-                            .forEach(({ name, defValue: { levels, lifetime, lastUpdate } }) => {
-                                SETTINGS[name] = new Cache(levels, lifetime, lastUpdate);
-                            });
+                            .forEach(({ name }) => SETTINGS.reset(name));
                         window.location.reload();
                     },
                 }),
@@ -2487,11 +2485,7 @@ function buildSettings () {
                 newElem("input", {
                     type: "button",
                     value: "Clear recommended tags cache",
-                    click: () => {
-                        const cache = SETTINGS.preTagsCache;
-                        cache.clear();
-                        SETTINGS.preTagsCache = cache;
-                    },
+                    click: () => SETTINGS.reset("preTagsCache"),
                 }),
             ),
         ),
@@ -3285,9 +3279,7 @@ async function onPreTagClick (ev) {
     if (!tagElem || !preTagId) return;
     // -1 - temporal preId => force update preTags and re-add them to the page
     if (preTagId === "-1") {
-        const cache = SETTINGS.preTagsCache;
-        cache.clear();
-        SETTINGS.preTagsCache = cache;
+        SETTINGS.reset("preTagsCache");
         getRecommendedTags(true).then(addRecommendedTags);
         return;
     }
