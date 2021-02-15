@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.3.0
+// @version      1.3.1
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
