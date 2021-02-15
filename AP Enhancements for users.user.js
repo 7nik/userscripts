@@ -668,7 +668,7 @@ const SETTINGS = new Proxy({
         type: "cache",
         defValue: {
             levels: [{}],
-            lifetime: 1 * 60 * 60 * 1000, // 1 hour
+            lifetime: 24 * 60 * 60 * 1000, // 1 day
             lastUpdate: 0,
         },
     },
@@ -909,6 +909,13 @@ const SETTINGS = new Proxy({
         const row = newElem("tr", { html: `<td>${setting.descr}</td><td></td>` });
         row.lastChild.append(this.getAsElement(list, name));
         return row;
+    },
+    // reset value to defaul one
+    reset (list, name) {
+        const setting = this.find(list, name);
+        if (!setting) return;
+        this.set(list, name, setting.defValue);
+        delete this.cache[name]; // due to cache
     },
 
     // get a setting value
