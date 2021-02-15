@@ -2514,10 +2514,10 @@ function getElem (selector, container = document) {
 
 /**
  * Get list of tags recommended to current post
- * @param {boolean} updatePreTags - whether the list of recommended tags may be updated
+ * @param {boolean} mayUpdatePreTags - whether the list of recommended tags may be updated
  * @return {Promise<Array<Tag>>} Recommended tags
  */
-function getRecommendedTags (updatePreTags = false) {
+function getRecommendedTags (mayUpdatePreTags = false) {
     if (getRecommendedTags.result) return getRecommendedTags.result;
     getRecommendedTags.result = (async () => {
         const cache = SETTINGS.preTagsCache;
@@ -2531,7 +2531,7 @@ function getRecommendedTags (updatePreTags = false) {
             return tags;
         }
 
-        if (!updatePreTags) return [];
+        if (!mayUpdatePreTags) return [];
 
         cache.clear();
         document.body.classList.add("wait");
