@@ -3857,6 +3857,22 @@ onready(() => {
         || pageIs.yourPreTags
         || pageIs.moderatePreTags
     ) {
+        // reset pretags cache if there are missing ones on the page
+        if (pageIs.yourPreTags || pageIs.moderatePreTags) {
+            const { isModerator, preTagsCache } = SETTINGS;
+            const preTagsCached = getAllElems(".messages tr").every((tr) => {
+                const [preId] = tr.id.match(/\d+/);
+                const postId = tr.children[isModerator ? 2 : 1]
+                    .querySelector("a").href.match(/\d+/)[0];
+                const tags = preTagsCache.get(postId)?.tags ?? [];
+                // whether the recommended tag is in the cache
+                return tags.some((tag) => tag.preId === preId);
+            });
+            if (!preTagsCached) {
+                SETTINGS.reset("preTagsCache");
+            }
+        }
+        // update pretags if they are outdated
         getRecommendedTags(true);
     }
 
