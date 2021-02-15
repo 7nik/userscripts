@@ -3881,6 +3881,12 @@ onready(() => {
         addPostStatus();
     }
 
+    // highlight comment language filter
+    if (pageIs.comments) {
+        const all = new URLSearchParams(window.location.search).get("clang") === "all";
+        getElem(`#content .title a${all ? "[href*='clang=all']" : ""}`).style.fontWeight = "bold";
+    }
+
     if (pageIs.uploadPicture) {
         improveFileUploader();
     }
