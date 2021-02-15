@@ -1129,10 +1129,13 @@ const API = {
     getTagById: (tagId) => API.get(`/api/v3/tags/${tagId}`),
     /**
      * Get tag info by its full name in any language
+     * Here is 4 possible params: `tag`, `tag_ru`, `tag_jp`, and `tag:smart`.
      * @param  {string} tagName - The tag name
      * @return {Promise<Object>} - JSON response
      */
-    getTagsByName: (tagName) => API.get(`/api/v3/tags?tag:smart=${encodeURIComponent(tagName)}`),
+    getTagsByName: (tagName) => (
+        API.get(`/api/v3/tags?tag:smart=${encodeURIComponent(tagName.toLowerCase())}`)
+    ),
     /**
      * Get user info by its Id
      * @param  {(number|string)} userId - User If
