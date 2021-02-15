@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for moderators
 // @namespace    7nik@anime-pictures.net
-// @version      1.3.1
+// @version      1.3.2
 // @description  Makes everything great! Moderator edition
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -13,8 +13,6 @@
 // @run-at       document-start
 // @grant        GM_addStyle
 // @grant        GM_getValue
-// @grant        GM_setValue
-// @grant        GM_addValueChangeListener
 // @grant        GM.xmlHttpRequest
 // @connect      donmai.us
 // @require      https://github.com/7nik/userscripts/raw/master/AP%20Enhancements%20for%20users.user.js
