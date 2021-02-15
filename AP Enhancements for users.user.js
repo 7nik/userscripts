@@ -3233,8 +3233,8 @@ function onHotkeyPress (ev) {
     }
     // return if it is just text typing
     if (!controlHotKey
-        && ((focusElem?.tagName === "TEXTAREA")
-            || (focusElem.tagName === "INPUT"
+        && (focusElem?.tagName === "TEXTAREA"
+            || (focusElem?.tagName === "INPUT"
                 && focusElem.type !== "button"
                 && focusElem.type !== "submit"))
     ) {
