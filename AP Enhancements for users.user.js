@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.3.2
+// @version      1.3.3
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -2716,7 +2716,7 @@ async function highlightTagger () {
     // change border color according to adder level
     if (!highlightTagger.wasCssAdded) {
         highlightTagger.wasCssAdded = true;
-        await getUserInfo(getElem(".sidebar_login .title a").textContent);
+        const self = await getUserInfo(+getElem(".icon_login + a")?.href.match(/\d+/));
 
         const makeCSS = (level) => SETTINGS.userCache
             .findAll("level", level)
@@ -2728,7 +2728,7 @@ async function highlightTagger () {
             `.tags a.not_my_tag_border { border-left-color: ${COLORS.tagAdder[0]}; }`,
             makeCSS(1), // commiter
             makeCSS(2), // moderator
-            `li[title="by ${getElem(".sidebar_login .title a").textContent}"]
+            `li[title="by ${self.name}"]
                 a.not_my_tag_border { border-left-color: ${COLORS.tagAdder.curr}; }`,
         ].join("\n");
 
