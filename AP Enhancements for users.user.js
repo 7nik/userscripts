@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.3.3
+// @version      1.3.4
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -551,7 +551,7 @@ const TEXT = new Proxy(
     },
     {
         lang: new URL(window.location.href).searchParams.get("lang")
-            || localStorage.AP_Enhancements_lang
+            || localStorage.AP_Enhancements_lang?.slice(1, -1)
             || "en",
         get (dictinary, name) {
             return dictinary[name][this.lang] || dictinary[name].en;
