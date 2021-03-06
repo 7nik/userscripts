@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      1.3.4
+// @version      1.4.0
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -11,12 +11,18 @@
 // @match        https://www.neonmob.com/*
 // @grant        GM_addStyle
 // @grant        GM_getValue
-// @grant        GM_setValue
+// @run-at       document-start
 // @require      https://github.com/rafaelw/mutation-summary/raw/master/src/mutation-summary.js
+// @require      https://cdnjs.cloudflare.com/ajax/libs/qtip2/3.0.3/jquery.qtip.js
 // ==/UserScript==
 
-/* globals MutationSummary NM angular */
-/* eslint-disable sonarjs/no-duplicate-string */
+/* globals MutationSummary NM angular io */
+/* eslint-disable
+    max-classes-per-file,
+    sonarjs/cognitive-complexity,
+    sonarjs/no-duplicate-string,
+    unicorn/no-fn-reference-in-iterator
+ */
 
 "use strict";
 
@@ -40,9 +46,9 @@ GM_addStyle(`
         color: #085b85;
     }
 
-    .trade--add-items--filters .search,
-    .trade--add-items--filters .series,
-    .trade--add-items--filters .customSeries {
+    .trade--add-items--filters input.search,
+    .trade--add-items--filters select.series,
+    .trade--add-items--filters select.customSeries {
         width: 47.8%;
     }
     .trade--add-items--filters .customSeries {
@@ -108,6 +114,12 @@ GM_addStyle(`
     .trade--item:hover a.icon-button {
         opacity: 1;
     }
+    .trade--item .card-trading {
+        font-size: 13px;
+        position: absolute;
+        top: 15px;
+        right: 20px;
+    }
 
     #trade--search--empty {
         animation: fadeIn 0s 0.15s backwards;
@@ -120,20 +132,78 @@ GM_addStyle(`
         to {opacity: 1;}
     }
 
-    .tooltip .tooltip-inner {
+    #qtip-container {
+        position: fixed;
+        width: 100vw;
+        height: 100vh;
+        top: 0;
+        pointer-events: none;
+        z-index: 15000;
+    }
+    #qtip-container > * {
+        pointer-events: all;
+    }
+
+    #qtip-container .qtip-tip {
+        border-color: #efefef;
+    }
+    #qtip-container .qtip-trade {
+        background: #efefef;
+        border-radius: 5px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, .15);
+        width: 300px;
+        max-width: 300px;
+    }
+    #qtip-container .qtip-trade header {
+        padding: 7px;
+        border-bottom: 1px solid rgba(0,0,0,.1);
+        text-align: center;
+        user-select: none;
+    }
+    #qtip-container .qtip-trade header a {
+        cursor: pointer;
+        font-weight: 500;
+        padding: 1px 4px;
+        border-radius: 7px;
+    }
+    #qtip-container .qtip-trade header a.off {
+        color: #888;
+        cursor: initial;
+    }
+    #qtip-container .qtip-trade header a:not(.off):hover {
+        background: rgba(0,0,0,.15);
+    }
+    #qtip-container .qtip-trade .trade-preview {
+        max-width: 270px;
+    }
+    #qtip-container .qtip-trade.sidebar {
+        box-shadow: 1px 1px 7px rgba(0, 0, 0, .15);
+    }
+    #qtip-container .qtip-trade.sidebar .btn {
+        display: none;
+    }
+
+    #qtip-container .tooltip .qtip-tip {
+        opacity: 0;
+    }
+    #qtip-container .tooltip .qtip-content {
+        font-size: 13px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, .15);
+    }
+    #qtip-container .tooltip .tooltip-inner {
         max-width: 250px;
     }
-    .tooltip .i {
+    #qtip-container .tooltip .i {
         width: 18px;
         height: 15px;
         margin: 0 0 3px 2px;
     }
-    .tooltip .i.core {
+    #qtip-container .tooltip .i.core {
         background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA8AAAAMCAYAAAC9QufkAAACTUlEQVQoU3VRW0iTYRh+3m/7928rt9LNZaZzSzecCzNqDDWEKAqFyEpZrMPwVDCCIOh610HSTRB0oAPdBNkBlKLb8CK6KDqAGUROiqw128G5/fv/r2/LiV303Hx87/s+PM/7vIQVDNznusJ8sjfgMl5yO6TIsU5putI7fjPV6XdIt4JO4/mFD5gaHCS11KPKwJHLif2qyq52e2Snv1F+m8iop8Jdhtfn7mW2L2n8ttcubevYIn8R82f2+OnZCpnT0fFkd1HDpChUdXmN6GiSUVTxc+ZHPjr3S73CCTZ3tQSfQy5x0oyhr8eHF9Q/nuzhGq4BvMViZvA1GtBWZ4DJQIgn1dzcomIq2ZP1BK/dAItRV7I7y/UYpYGz0w+UbK5fp2fUGvTAVl8NsyA6q/VIZDUspMvrlSFrGtbnFUEmDkYPaWjosTe9uHSnqKiBKpsVO/oCsNqtMAglSUfI5rUyURWv8j0LFMSf4SXXs5MEzilyesqfS2buFpaVdovNgu5DQdRs2gAS/jgX8zkVv+ez0PIqiOENSdKJsfDGd6tpj45OeBYT+QnhoM3RUIPe8G6Y1xlRFEl+/ZRCPquCMfaeTDg8FrJ//OdUXDgYiTzpTGdyN5RC0bvZacPeg7uQSgJLmSKYnmZ0Oj48HK6dJhI7r71zJZRodNKz8C31VDhwtfia4fK4hCJ9tpqMB0IhS1mxglXblULJwXDk0b50avm6s7mpodm3NS5JfGQoXPu8ovhfcqkRi8VYPN6+01FXf9Hd6r4wP1vzKhajv7GvwR8AsNgcRdQufwAAAABJRU5ErkJggg==);
         background-size: auto;
         width: 15px;
     }
-    .tooltip .pipe {
+    #qtip-container .tooltip .pipe {
         margin-bottom: 4px;
     }
 
@@ -165,6 +235,8 @@ GM_addStyle(`
     }
 `);
 
+const cardsInTrades = { receive: {}, give: {}, ready: false };
+
 /**
  * Adds card fitlers to one side of the trade window
  */
@@ -178,7 +250,8 @@ class CardFilter {
         if (new.target !== CardFilter) return null; // if called without `new`
 
         this.side = side;
-        this.scope = angular.element(side).scope();
+        this.isMySide = side.closest(".trade--side").matches(".trade--you");
+        this.scope = getScope(side);
         this.currentState = CardFilter.STATES.allSeries;
         this.hiddenSeries = {};
         this.hiddenSeriesElem = document.createElement("div");
@@ -287,7 +360,6 @@ class CardFilter {
         });
         origSeriesList.before(newSeriesList);
     }
-
 
     /**
      * Adds button before the series list to resets it
@@ -409,7 +481,7 @@ class CardFilter {
             ) {
                 const name = filterSetSelect.value;
                 delete CardFilter.filterSets[name];
-                GM_setValue("filter_sets", CardFilter.filterSets);
+                saveValue("filter_sets", CardFilter.filterSets);
                 document.querySelectorAll("select.filter-sets").forEach((sel) => {
                     [...sel.options].find((option) => option.textContent === name).remove();
                     sel.value = "";
@@ -463,7 +535,7 @@ class CardFilter {
             filterSet.state = CardFilter.STATES.allSeries;
         }
         CardFilter.filterSets[name] = filterSet;
-        GM_setValue("filter_sets", CardFilter.filterSets);
+        saveValue("filter_sets", CardFilter.filterSets);
 
         // add new filter set to all selectors
         document.querySelectorAll("select.filter-sets").forEach((sel) => {
@@ -572,7 +644,7 @@ class CardFilter {
                 break;
             }
             case CardFilter.STATES.freePackAvailable: {
-                const scope = angular.element(card.closest("li")).scope();
+                const scope = getScope(card.closest("li"));
                 getSeriesInfo((scope.print || scope.$parent.print).sett_id)
                     .then(({ discontinue_date: oopDate, freebies_discontinued: freeEnds }) => {
                         if (
@@ -586,7 +658,7 @@ class CardFilter {
                 break;
             }
             case CardFilter.STATES.anyPackAvailable: {
-                const scope = angular.element(card.closest("li")).scope();
+                const scope = getScope(card.closest("li"));
                 getSeriesInfo((scope.print || scope.$parent.print).sett_id)
                     .then(({ discontinue_date: oopDate }) => {
                         if (new Date(oopDate) < Date.now()) {
@@ -597,7 +669,7 @@ class CardFilter {
                 break;
             }
             case CardFilter.STATES.outOfPrint: {
-                const scope = angular.element(card.closest("li")).scope();
+                const scope = getScope(card.closest("li"));
                 getSeriesInfo((scope.print || scope.$parent.print).sett_id)
                     .then(({ discontinue_date: oopDate }) => {
                         if (new Date(oopDate) > Date.now()) {
@@ -649,14 +721,9 @@ class CardFilter {
             !list.querySelector(".trade--item:not(.hidden-item)")
             && !list.querySelector(".trade--search--empty")
         ) {
-            const name = list.closest(".trade--side").matches(".trade--you")
+            const name = this.isMySide
                 ? "You don't"
-                : `${angular
-                        .element(list.closest(".trade--add-items"))
-                        .scope()
-                        .partner
-                        .first_name
-                    } doesn't`;
+                : `${getScope(list.closest(".trade--add-items")).partner.first_name} doesn't`;
 
             const div = document.createElement("div");
             div.id = "trade--search--empty";
@@ -738,7 +805,7 @@ class CardFilter {
     }
 
     // map of filter sets
-    static filterSets = GM_getValue("filter_sets", {})
+    static filterSets = loadValue("filter_sets", {})
 
     // states and labels of the card filter
     static STATE_LABELS = {
@@ -753,7 +820,205 @@ class CardFilter {
 
     static STATES = Reflect
         .ownKeys(CardFilter.STATE_LABELS)
+        // eslint-disable-next-line unicorn/no-reduce
         .reduce((states, name) => { states[name] = name; return states; }, {})
+}
+
+/**
+ * Wrapper of trade object
+ */
+class Trade {
+    /**
+     * Wrapper for trade info object
+     * @param  {Object} trade - Trade info object
+     */
+    constructor (trade) {
+        this.id = trade.id;
+        this.state = trade.state;
+        const youAreBidder = trade.bidder.id === NM.you.attributes.id;
+        this.you = youAreBidder ? trade.bidder : trade.responder;
+        this.yourOffer = youAreBidder ? trade.bidder_offer.prints : trade.responder_offer.prints;
+        this.partner = youAreBidder ? trade.responder : trade.bidder;
+        this.parnerOffer = youAreBidder ? trade.responder_offer.prints : trade.bidder_offer.prints;
+    }
+
+    /**
+     * Creates the trade preview
+     * @return {HTMLElement} Element with trade preview
+     */
+    makeTradePreview () {
+        const a = document.createElement("a");
+        a.className = "trade-preview";
+        a.href = `?view-trade=${this.id}`;
+        a.innerHTML = `
+            <div class="trade-preview--give">
+                <div class="trade-preview--heading small-caps">You will give</div>
+                ${this.yourOffer.map(Trade.makeThumb).join("")}
+            </div>
+            <div class="trade-preview--get">
+                <div class="trade-preview--heading small-caps">${this.partner.name} will give</div>
+                ${this.parnerOffer.map(Trade.makeThumb).join("")}
+            </div>
+            <div class="btn small trade-preview--action">View Trade</div>`;
+        a.addEventListener("click", () => $(a).closest(".qtip").qtip("hide"));
+
+        return a;
+    }
+
+    /**
+     * Creates small thumbnail of a print
+     * @param  {Object} print - Print for thumbnailing
+     * @return {string} HTML code of the thumbnail
+     */
+    static makeThumb (print) {
+        return `
+        <span class="trade-preview--print">
+            <div class="piece small fluid">
+                <figure class="front">
+                    <img class="asset" src="${print.piece_assets.image.small.url}">
+                    <span class="piece-info">
+                        <i class="i tip ${print.rarity.class}"></i>
+                    </span>
+                </figure>
+            </div>
+        </span>`;
+    }
+
+    /**
+     * Gets and caches info about a trade by its id
+     * @param  {number|string} tradeId - Trade id
+     * @param  {boolean} [useCache=true] - May use cache or forcely do request
+     * @return {Promise<Trade>} trade info
+     */
+    static async get (tradeId, useCache = true) {
+        if (!Trade.cache[tradeId] || !useCache) {
+            Trade.cache[tradeId] = await api("api", `/trades/${tradeId}/`);
+            saveValue("tradesCache", Trade.cache);
+        }
+        return new Trade(Trade.cache[tradeId]);
+    }
+
+    static cache = (() => {
+        const trades = loadValue("tradesCache", { minDate: 0 });
+        // remove outdated trades
+        Reflect.ownKeys(trades).forEach((id) => {
+            if (new Date(trades[id].expire_date) < Date.now()) {
+                delete trades[id];
+            }
+        });
+        return trades;
+    })()
+}
+
+/**
+ * A collection of items with property id
+ */
+class Collection {
+    /**
+     * Constructor.
+     * @param  {string} name - Name loading and saving the collection
+     * @param  {?object[]} items - The collection.
+     *                            If not provided, will be loaded from `localStoreage`.
+     */
+    constructor (name, items) {
+        this.name = name;
+        if (items) {
+            this.items = items;
+            this.save();
+        } else {
+            this.items = loadValue(name, []);
+        }
+    }
+
+    /**
+     * Save the collection to `localStorage` if name provided.
+     */
+    save () { if (this.name) saveValue(this.name, this.items); }
+
+    /**
+     * Adds items to the collection with overwriting existing one and saves the collection.
+     * @param {object|object[]|Collection} items - Item(s) to add.
+     */
+    add (items) {
+        if (items.trades) items = items.trades;
+        if (!Array.isArray(items)) items = [items];
+        this.items = this.items.filter((item) => !items.find(({ id }) => id === item.id));
+        this.items.unshift(...items);
+        this.save();
+    }
+
+    /**
+     * Removes given items from the collection or, if provided function, filters them and saves.
+     * @param  {object|object[]|Collection|function} items - Items to remove or, if it's function,
+     *                                                  uses it find items for removing.
+     */
+    remove (items) {
+        if (typeof items === "function") {
+            this.items = this.items.filter((item) => !items(item));
+        } else {
+            if (items.trades) items = items.trades;
+            if (!Array.isArray(items)) items = [items];
+            items.forEach((item) => {
+                const index = this.items.findIndex(({ id }) => id === item.id);
+                if (index >= 0) this.items.splice(index, 1);
+            });
+        }
+        this.save();
+    }
+
+    /**
+     * Applies given function to every item.
+     * @param {function} fn - Function to apply to a item.
+     */
+    forEach (fn) {
+        // eslint-disable-next-line unicorn/no-fn-reference-in-iterator
+        this.items.forEach(fn);
+    }
+
+    /**
+     * Applies given function to every item and returns arrays of results.
+     * @param {function} fn - Function to apply to a item.
+     * @return {any[]} Array of results.
+     */
+    map (fn) {
+        // eslint-disable-next-line unicorn/no-fn-reference-in-iterator
+        return this.items.map(fn);
+    }
+
+    /**
+     * Get number of items in the collection.
+     * @return {number} - Number of items in the collection.
+     */
+    get count () { return this.items.length; }
+
+    /**
+     * Make the collection iterable
+     */
+    * [Symbol.iterator] () {
+        yield* this.items;
+    }
+}
+
+/**
+ * Reads a saved value from `localStorage` if presented, otherwise - default value
+ * @param  {string} name - Name of the value
+ * @param  {?any} defValue - Default value of the value
+ * @return {any} Saved or default value
+ */
+function loadValue (name, defValue) {
+    if (name in localStorage) {
+        return JSON.parse(localStorage[name]);
+    }
+    return GM_getValue(name, defValue);
+}
+
+/**
+ * Saves a value to `localStorage`
+ * @param  {string} name - Name of the value
+ * @param  {any} value - Value to save
+ */
+function saveValue (name, value) {
+    localStorage[name] = JSON.stringify(value);
 }
 
 /**
@@ -771,6 +1036,15 @@ function toPascalCase (str) {
 }
 
 /**
+ * Returns a scope binded to the element
+ * @param  {HTMLElement} element - Element
+ * @return {Object} Binded scope
+ */
+function getScope (element) {
+    return angular.element(element).scope();
+}
+
+/**
  * API call to server
  * @param  {("api"|"napi"|"root")} type - Which API scheme use
  * @param  {string} url - Relative URL to API
@@ -784,7 +1058,11 @@ function api (type, url) {
         case "root": fullUrl = `https://www.neonmob.com${url}`;     break;
         default:     fullUrl = url;
     }
-    return fetch(fullUrl).then((res) => res.json());
+    // forbid parallel requests
+    this.lastRequest = (this.lastRequest ?? Promise.resolve())
+        .then(() => fetch(fullUrl), () => fetch(fullUrl))
+        .then((res) => res.json());
+    return this.lastRequest;
 }
 
 /**
@@ -794,7 +1072,7 @@ function api (type, url) {
  * @param  {function(HTMLElement): undefined} callback - Callback applied to the elements
  */
 function forAllElements (rootNode, selector, callback) {
-    rootNode.querySelectorAll(selector).forEach(callback);
+    rootNode.querySelectorAll(selector).forEach((elem) => callback(elem));
     new MutationSummary({
         rootNode,
         queries: [{ element: selector }],
@@ -825,6 +1103,28 @@ function waitForElement (rootNode, selector) {
 }
 
 /**
+ * Adds listeners to creating and finishing trades
+ * @param  {function(trades[])} onloaded - Handler for currently pending trades
+ * @param  {function(trade)} onadded - Handler for new trades
+ * @param  {function(trade)} onremoved - Handler for trades finished in any way
+ */
+function onTradeChange (onloaded, onadded, onremoved) {
+    if (!unsafeWindow.io) {
+        setTimeout(onTradeChange, 100, onloaded, onadded, onremoved);
+        return;
+    }
+
+    const socketTrades = io.connect(
+        "https://napi.neonmob.com/trades",
+        { transports: ["websocket"] },
+    );
+
+    if (onloaded) socketTrades.on("loadInitial", ({ results }) => onloaded(results));
+    if (onadded) socketTrades.on("addItem", (result) => onadded(result));
+    if (onremoved) socketTrades.on("removeItem", (result) => onremoved(result));
+}
+
+/**
  * Gets and caches info about a series by its id
  * @param  {(number|string)} settId - Series id
  * @return {Promise<Object>} series info
@@ -852,16 +1152,16 @@ function getSeriesInfo (settId) {
 async function getUserData (profile, name = profile.first_name) {
     const users = getUserData.users || (getUserData.users = {});
     if (!users[profile.id]) {
-        const setts = (await api(null, profile.links.collected_setts_names_only))
-            .reduce((settMap, sett) => {
-                // eslint-disable-next-line no-param-reassign
-                settMap[sett.name.trim().replace(/\s{2,}/g, " ")] = sett;
-                return settMap;
-            }, {});
+        const settNames = await api(null, profile.links.collected_setts_names_only);
+        const settMap = {};
+        // eslint-disable-next-line no-restricted-syntax
+        for (const sett of settNames) {
+            settMap[sett.name.trim().replace(/\s{2,}/g, " ")] = sett;
+        }
         users[profile.id] = {
             name,
             profile,
-            setts,
+            setts: settMap,
             link: profile.links.profile,
         };
     }
@@ -895,16 +1195,29 @@ function getCollectionStats (user, card) {
         /
         ${(total("core") + total("chase") + total("variant") + total("legendary"))}
     `.replace(/\s/g, "");
-    $(a).tooltip({
-        container: "body",
-        html: "html",
-        title: ["core", "chase", "variant", "legendary"]
+    $(a).qtip({
+        style: {
+            def: false,
+            classes: "tooltip", // use NM's styles
+        },
+        position: {
+            my: "bottom center",
+            at: "top center",
+            container: $("#qtip-container"),
+            viewport: $("#qtip-container"),
+        },
+        show: {
+            delay: 0,
+        },
+        content: ["core", "chase", "variant", "legendary"]
             .filter((rarity) => total(rarity))
             .map((r) => `${owned(r)}/${total(r)}&nbsp;<i class='i ${r}'></i>`)
             // if 4 items then locate them in 2 rows
+            // eslint-disable-next-line unicorn/no-reduce
             .reduce((prevs, curr, i, { length }) => (
                 `${prevs}${length === 4 && i === 2 ? "<br>" : "<i class='pipe'></i>"}${curr}`
             )),
+
     });
     a.addEventListener("click", (ev) => ev.stopPropagation(), true);
     span.append(a);
@@ -930,6 +1243,266 @@ function addCollectionProgress (you, partner, card) {
 }
 
 /**
+ * Keep data in the variable `cardsInTrades` syncronized with pending
+ */
+async function updateCardsInTrade () {
+    const updatePrint = (tradeId, side, pid, change) => {
+        if (pid in cardsInTrades[side]) {
+            if (change > 0) {
+                cardsInTrades[side][pid].push(tradeId);
+            } else {
+                cardsInTrades[side][pid] = cardsInTrades[side][pid]
+                    .filter((id) => id !== tradeId);
+            }
+        } else if (change > 0) {
+            cardsInTrades[side][pid] = [tradeId];
+        }
+    };
+    const updateTrade = async ({ object: { id } }, change) => {
+        const trade = await Trade.get(id);
+        // you can propose the same print in multiple trades
+        trade.yourOffer.forEach(({ print_id: pid }) => updatePrint(id, "give", pid, change));
+        // but you usually do only one trade for a some print do group by card id
+        trade.parnerOffer.forEach(({ id: pid }) => updatePrint(id, "receive", pid, change));
+    };
+
+    onTradeChange(
+        (initialTrades) => {
+            Promise.all(initialTrades.map((trade) => updateTrade(trade, +1)))
+                .then(() => { cardsInTrades.ready = true; });
+        },
+        (addedTrade) => {
+            updateTrade(addedTrade, +1);
+        },
+        (removedTrade) => {
+            updateTrade(removedTrade, -1);
+        },
+    );
+}
+
+/**
+ * If a card is used in trades, adds appropriative text
+ * @param {HTMLElement} card - <li.trade--item>
+ */
+async function addUsingInTrades (card) {
+    if (!cardsInTrades.ready) {
+        setTimeout(addUsingInTrades, 100, card);
+        return;
+    }
+
+    const isMySide = card.closest(".trade--side").matches(".trade--you");
+    const pid = getScope(card).print[isMySide ? "print_id" : "id"];
+    let tradeIds = cardsInTrades[isMySide ? "give" : "receive"][pid];
+
+    // exclute current trade
+    if (tradeIds?.length > 0
+        && window.location.search
+        && getScope(document.querySelector("div.nm-modal")).getWindowState() !== "create"
+    ) {
+        const currentTrade = +new URLSearchParams(window.location.search).get("view-trade");
+        tradeIds = tradeIds.filter((trade) => trade !== currentTrade);
+    }
+
+    if (!tradeIds || tradeIds.length === 0) return;
+
+    const trades = await Promise.all(tradeIds.map((tradeId) => Trade.get(tradeId)));
+    const tip = document.createElement("div");
+    if (trades.length === 1) {
+        tip.append(trades[0].makeTradePreview());
+    } else {
+        let pos = 0;
+        const controls = document.createElement("header");
+        controls.className = "text-prominent text-small";
+        controls.innerHTML = `
+            <a class="off">&lt;</a>
+            trade with <span>${trades[0].partner.name}</span>
+            <a>&gt;</a>`;
+        const [prev, currTrade, next] = controls.children;
+
+        const showTradePreivew = async (change) => {
+            pos += change;
+            if (pos < 0 || pos >= trades.length) {
+                pos -= change;
+                return;
+            }
+            prev.classList.toggle("off", pos === 0);
+            next.classList.toggle("off", pos === trades.length - 1);
+            currTrade.textContent = trades[pos].partner.name;
+            controls.nextSibling.replaceWith(trades[pos].makeTradePreview());
+        };
+        prev.addEventListener("click", (ev) => showTradePreivew(-1));
+        next.addEventListener("click", (ev) => showTradePreivew(+1));
+
+        tip.append(
+            controls,
+            trades[pos].makeTradePreview(),
+        );
+    }
+
+    const span = document.createElement("span");
+    span.className = "card-trading text-warning";
+    span.textContent = trades.length === 1
+        ? "Used in another trade"
+        : `Used in ${trades.length} more trades`;
+    $(span).qtip({
+        style: {
+            def: false,
+            classes: "qtip-trade",
+        },
+        position: {
+            my: "top center",
+            at: "bottom center",
+            container: $("#qtip-container"),
+            viewport: $("#qtip-container"),
+        },
+        hide: {
+            delay: 250,
+            fixed: true,
+        },
+        content: $(tip),
+    });
+    card.append(span);
+}
+
+/**
+ * Add notifications of auto-withdrawn trades
+ */
+function fixAutoWithdrawnTrade () {
+    if (!unsafeWindow.io) {
+        setTimeout(fixAutoWithdrawnTrade, 100);
+        return;
+    }
+
+    let pendingTrades = new Collection("pendingTrades");
+    const hiddenTrades = new Collection("hiddenTrades");
+    const socketNotif = io.connect(
+        "https://napi.neonmob.com/notifications",
+        { transports: ["websocket"] },
+    );
+
+    /**
+     * Show trade in notification if it was auto-withdrawn
+     * @param {object} trade - Trade info
+     */
+    function addAutoWithdrawnNotification (trade) {
+        if (trade.verb_phrase !== "auto-withdrew") return;
+        trade.read = false;
+        hiddenTrades.add(trade);
+        // add the trade to notifications
+        socketNotif.listeners("addItem")[0]?.(trade);
+    }
+
+    socketNotif.on("loadInitial", ({ results: notifications }) => {
+        const minTime = new Date(notifications[notifications.length - 1].actor.time).getTime();
+        Trade.cache.minDate = minTime;
+        hiddenTrades.remove((trade) => new Date(trade.actor.time) < minTime);
+        if (hiddenTrades.count > 0) {
+            const [addItem] = socketNotif.listeners("addItem");
+            if (addItem) {
+                hiddenTrades.forEach((trade) => addItem(trade));
+            } else {
+                notifications.push(...hiddenTrades);
+            }
+        }
+    });
+
+    onTradeChange(
+        (initialTrades) => {
+            pendingTrades.remove(initialTrades);
+            pendingTrades.forEach(async (trade) => {
+                trade.verb_phrase = (await Trade.get(trade.object.id, false)).state;
+                addAutoWithdrawnNotification(trade);
+            });
+            pendingTrades = new Collection("pendingTrades", initialTrades);
+        },
+        (addedTrade) => {
+            pendingTrades.add(addedTrade);
+        },
+        (removedTrade) => {
+            pendingTrades.remove(removedTrade);
+            addAutoWithdrawnNotification(removedTrade);
+        },
+    );
+
+    // synchronize added notification status when they get read
+    window.addEventListener("click", ({ target }) => {
+        // when clicked the notification
+        const notifElem = target.closest("li.nm-notifications-feed--item");
+        if (notifElem) {
+            const { notification } = getScope(notifElem);
+            if (notification.verb_phrase === "auto-withdrew") {
+                if (notification.read) return;
+                // replace trade with read copy to avoid side-effect and save
+                hiddenTrades.add({ ...notification, read: true });
+            }
+        // when clicked "Mark all read"
+        } else if (target.matches("a.text-link")) {
+            // replace trades with read copies to avoid side-effect and save
+            hiddenTrades.forEach((trade) => {
+                if (!trade.read) hiddenTrades.add({ ...trade, read: true });
+            });
+        }
+    }, true);
+}
+
+/**
+ * Fixes the Open Pack button color for series with additional freebie packs
+ * @param  {HTMLElement} button - <span.collect-it-button>
+ */
+async function fixFreebieCount (button) {
+    const { sett } = getScope(button);
+    // skip discontinued, limited, and amateur series
+    if (sett.discontinued || sett.edition_size === "limited" || sett.sett_type === 3) return;
+    // assume all series with extra freebies packs have the same number of them
+    const realFreebiesNumber = await fixFreebieCount.realFreebiesNumber
+        ?? await (fixFreebieCount.realFreebiesNumber = api("api", `/pack-tiers/?sett_id=${sett.id}`)
+            .then((packs) => packs
+                .filter((pack) => pack.currency === "freebie")
+                // eslint-disable-next-line unicorn/no-reduce
+                .reduce((num, pack) => num + pack.cout, 0)));
+    if (realFreebiesNumber === 3) return;
+    sett.daily_freebies = realFreebiesNumber;
+}
+
+/**
+ * Add to the card a selector to choose print for trading
+ * @param {HTMLElement} card - <li.trade--item>
+ */
+async function addPrintChooser (card) {
+    const { id: cardId, print_num: printNum } = getScope(card).print;
+    const itemList = getScope(card.closest(".trade--side--item-list"));
+    const userId = itemList.offerType === "bidder_offer" ? itemList.you.id : itemList.partner.id;
+    const details = await api("api", `/users/${userId}/piece/${cardId}/detail/`);
+    const { prints } = details.refs[details.payload[1]];
+
+    const select = document.createElement("select");
+    select.innerHTML = prints
+        .map(({ print_num: num, id }) => `<option value="${id}" label="#${num}">#${num}</option>`)
+        .join();
+    select.options[prints.findIndex(({ print_num: num }) => num === printNum)].selected = true;
+    select.addEventListener("change", (ev) => {
+        // in fact, we need update the variable _selectedIds but we don't have access to it
+        // so we make re-adding card with updated data
+        const print = itemList.getOfferData().prints.find(({ id }) => id === cardId);
+        const pos = itemList.getOfferData().prints.indexOf(print);
+        itemList.removeItem(itemList.offerType, "prints", pos);
+        print.print_num = +ev.target.selectedOptions[0].textContent;
+        print.print_id = +ev.target.value;
+        getScope(card.closest(".trade--side").querySelector(".trade--add-items")).addPrint(print);
+
+        if (card.lastChild.matches(".card-trading")) {
+            card.lastChild.remove();
+        }
+        addUsingInTrades(card);
+    });
+
+    const dd = card.querySelector("dd:nth-child(10)");
+    dd.style.cursor = null;
+    dd.textContent = dd.textContent.slice(dd.textContent.indexOf("/"));
+    dd.prepend(select);
+}
+
+/**
  * Apply enhancement to the trade window
  * @param {HTMLElement} tradeWindow - <div.nm-modal.trade>
  */
@@ -939,11 +1512,19 @@ async function addEnhancements (tradeWindow) {
     const you = await getUserData(NM.you.attributes, "You");
     // wait for the appearance of partner data and then get it
     const partner = await waitForElement(tradeWindow, "div.trade--side--item-list")
-        .then((elem) => angular.element(elem).scope().partner)
+        .then((elem) => getScope(elem).partner)
         .then((profile) => getUserData(profile));
     // add info to cards
     forAllElements(tradeWindow, ".trade--item", (card) => {
         addCollectionProgress(you, partner, card);
+        addUsingInTrades(card);
+
+        // allow tweak only choosen cards and during trade edition
+        if (getScope(card.closest(".trade--side--item-list"))?.showRemove) {
+            const dd = card.querySelector("dd:nth-child(10)");
+            dd.style.cursor = "pointer";
+            dd.addEventListener("click", () => addPrintChooser(card));
+        }
     });
 }
 
@@ -952,7 +1533,7 @@ async function addEnhancements (tradeWindow) {
  * @param {HTMLElement} header - <div.nm-conversation--header>
  */
 async function addLastActionAgo (header, watchForChanges = true) {
-    const userId = angular.element(header).scope().recipient.id;
+    const userId = getScope(header).recipient.id;
     const lastActionAgo = await api("napi", `/activityfeed/user/${userId}/?amount=5&page=1`)
         .then((data) => data[0].created);
 
@@ -973,9 +1554,51 @@ async function addLastActionAgo (header, watchForChanges = true) {
     });
 }
 
+/**
+ * Adds to pending trades in the sidebar priviews
+ * @param {HTMLElement} notification - <li.nm-notification> or <li.nm-notifications-feed--item>
+ */
+async function addTradePreview (notification) {
+    const scope = getScope(notification);
+    if (scope.notification && scope.notification.object.type !== "trade-event") return;
+    const tradeId = (scope.notification ?? scope.trade).object.id;
+    $(notification).qtip({
+        style: {
+            def: false,
+            classes: "qtip-trade sidebar",
+        },
+        position: {
+            my: "right center",
+            at: "left center",
+            container: $("#qtip-container"),
+            viewport: $("#qtip-container"),
+        },
+        hide: {
+            delay: 0,
+        },
+        content: $((await Trade.get(tradeId)).makeTradePreview()),
+    });
+}
+
 // =============================================================================
 //                         Program execution start
 // =============================================================================
 
 forAllElements(document, "div.nm-modal.trade", addEnhancements);
 forAllElements(document, "div.nm-conversation--header", addLastActionAgo);
+forAllElements(document, "li.nm-notification, li.nm-notifications-feed--item", addTradePreview);
+forAllElements(document, "span.collect-it.collect-it-button", fixFreebieCount);
+
+fixAutoWithdrawnTrade();
+updateCardsInTrade();
+
+document.addEventListener("DOMContentLoaded", () => {
+    const container = document.createElement("div");
+    container.id = "qtip-container";
+    document.body.append(container);
+
+    const css = document.createElement("link");
+    css.rel = "stylesheet";
+    css.href = "https://cdnjs.cloudflare.com/ajax/libs/qtip2/3.0.3/jquery.qtip.min.css";
+    document.head.append(css);
+});
