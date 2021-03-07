@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      1.4.2
+// @version      1.4.3
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -1448,8 +1448,12 @@ function fixAutoWithdrawnTrade () {
  */
 async function fixFreebieCount (button) {
     const { sett } = getScope(button);
-    // skip discontinued, limited, and amateur series
-    if (sett.discontinued || sett.edition_size === "limited" || sett.sett_type === 3) return;
+    // skip discontinued, unreleased, limited, and amateur series
+    if (sett.discontinued
+        || new Date(sett.released) > Date.now()
+        || sett.edition_size === "limited"
+        || sett.sett_type === 3
+    ) return;
     // assume all series with extra freebies packs have the same number of them
     const realFreebiesNumber = await fixFreebieCount.realFreebiesNumber
         ?? await (fixFreebieCount.realFreebiesNumber = api("api", `/pack-tiers/?sett_id=${sett.id}`)
