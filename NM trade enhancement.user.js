@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      1.4.1
+// @version      1.4.2
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -172,9 +172,6 @@ GM_addStyle(`
     }
     #qtip-container .qtip-trade header a:not(.off):hover {
         background: rgba(0,0,0,.15);
-    }
-    #qtip-container .qtip-trade .trade-preview {
-        max-width: 270px;
     }
     #qtip-container .qtip-trade.sidebar {
         box-shadow: 1px 1px 7px rgba(0, 0, 0, .15);
