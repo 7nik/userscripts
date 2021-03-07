@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      1.4.0
+// @version      1.4.1
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -1459,7 +1459,7 @@ async function fixFreebieCount (button) {
             .then((packs) => packs
                 .filter((pack) => pack.currency === "freebie")
                 // eslint-disable-next-line unicorn/no-reduce
-                .reduce((num, pack) => num + pack.cout, 0)));
+                .reduce((num, pack) => num + pack.count, 0)));
     if (realFreebiesNumber === 3) return;
     sett.daily_freebies = realFreebiesNumber;
 }
