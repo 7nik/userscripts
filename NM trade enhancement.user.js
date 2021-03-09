@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      1.4.3
+// @version      1.4.5
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -1146,7 +1146,8 @@ function getSeriesInfo (settId) {
  * @param  {string=} name - User name to display
  * @return {Promise<UserData>} User data
  */
-async function getUserData (profile, name = profile.first_name) {
+async function getUserData (profile, name = profile?.first_name) {
+    if (!profile) return null;
     const users = getUserData.users || (getUserData.users = {});
     if (!users[profile.id]) {
         const settNames = await api(null, profile.links.collected_setts_names_only);
@@ -1507,14 +1508,16 @@ async function addPrintChooser (card) {
  * Apply enhancement to the trade window
  * @param {HTMLElement} tradeWindow - <div.nm-modal.trade>
  */
-async function addEnhancements (tradeWindow) {
+async function addTradeWindowEnhancements (tradeWindow) {
     forAllElements(tradeWindow, ".trade--add-items", (side) => new CardFilter(side));
 
     const you = await getUserData(NM.you.attributes, "You");
     // wait for the appearance of partner data and then get it
     const partner = await waitForElement(tradeWindow, "div.trade--side--item-list")
-        .then((elem) => getScope(elem).partner)
+        .then((elem) => getScope(elem)?.partner)
         .then((profile) => getUserData(profile));
+    // window is already closed, likely
+    if (!partner) return;
     // add info to cards
     forAllElements(tradeWindow, ".trade--item", (card) => {
         addCollectionProgress(you, partner, card);
@@ -1585,7 +1588,7 @@ async function addTradePreview (notification) {
 //                         Program execution start
 // =============================================================================
 
-forAllElements(document, "div.nm-modal.trade", addEnhancements);
+forAllElements(document, "div.nm-modal.trade", addTradeWindowEnhancements);
 forAllElements(document, "div.nm-conversation--header", addLastActionAgo);
 forAllElements(document, "li.nm-notification, li.nm-notifications-feed--item", addTradePreview);
 forAllElements(document, "span.collect-it.collect-it-button", fixFreebieCount);
