@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      1.4.5
+// @version      1.4.6
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -13,6 +13,7 @@
 // @grant        GM_getValue
 // @run-at       document-start
 // @require      https://github.com/rafaelw/mutation-summary/raw/master/src/mutation-summary.js
+// @require      https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/qtip2/3.0.3/jquery.qtip.js
 // ==/UserScript==
 
@@ -1588,11 +1589,6 @@ async function addTradePreview (notification) {
 //                         Program execution start
 // =============================================================================
 
-forAllElements(document, "div.nm-modal.trade", addTradeWindowEnhancements);
-forAllElements(document, "div.nm-conversation--header", addLastActionAgo);
-forAllElements(document, "li.nm-notification, li.nm-notifications-feed--item", addTradePreview);
-forAllElements(document, "span.collect-it.collect-it-button", fixFreebieCount);
-
 fixAutoWithdrawnTrade();
 updateCardsInTrade();
 
@@ -1605,4 +1601,9 @@ document.addEventListener("DOMContentLoaded", () => {
     css.rel = "stylesheet";
     css.href = "https://cdnjs.cloudflare.com/ajax/libs/qtip2/3.0.3/jquery.qtip.min.css";
     document.head.append(css);
+
+    forAllElements(document, "div.nm-modal.trade", addTradeWindowEnhancements);
+    forAllElements(document, "div.nm-conversation--header", addLastActionAgo);
+    forAllElements(document, "li.nm-notification, li.nm-notifications-feed--item", addTradePreview);
+    forAllElements(document, "span.collect-it.collect-it-button", fixFreebieCount);
 });
