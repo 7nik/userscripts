@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      1.4.6
+// @version      1.4.7
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -13,11 +13,11 @@
 // @grant        GM_getValue
 // @run-at       document-start
 // @require      https://github.com/rafaelw/mutation-summary/raw/master/src/mutation-summary.js
-// @require      https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.min.js
-// @require      https://cdnjs.cloudflare.com/ajax/libs/qtip2/3.0.3/jquery.qtip.js
+// @require      https://unpkg.com/@popperjs/core@2
+// @require      https://unpkg.com/tippy.js@6
 // ==/UserScript==
 
-/* globals MutationSummary NM angular io */
+/* globals MutationSummary NM angular io tippy */
 /* eslint-disable
     max-classes-per-file,
     sonarjs/cognitive-complexity,
@@ -133,75 +133,62 @@ GM_addStyle(`
         to {opacity: 1;}
     }
 
-    #qtip-container {
-        position: fixed;
-        width: 100vw;
-        height: 100vh;
-        top: 0;
-        pointer-events: none;
-        z-index: 15000;
-    }
-    #qtip-container > * {
-        pointer-events: all;
-    }
-
-    #qtip-container .qtip-tip {
-        border-color: #efefef;
-    }
-    #qtip-container .qtip-trade {
+    .tippy-box[data-theme~='trade'] {
         background: #efefef;
         border-radius: 5px;
         box-shadow: 0 1px 2px rgba(0, 0, 0, .15);
-        width: 300px;
-        max-width: 300px;
+        width: 280px;
+        max-width: 280px;
     }
-    #qtip-container .qtip-trade header {
+    .tippy-box[data-theme~='trade'] .tippy-arrow {
+        color: #efefef;
+    }
+    .tippy-box[data-theme~='trade'] header {
         padding: 7px;
         border-bottom: 1px solid rgba(0,0,0,.1);
         text-align: center;
         user-select: none;
     }
-    #qtip-container .qtip-trade header a {
+    .tippy-box[data-theme~='trade'] header a {
         cursor: pointer;
         font-weight: 500;
         padding: 1px 4px;
         border-radius: 7px;
     }
-    #qtip-container .qtip-trade header a.off {
+    .tippy-box[data-theme~='trade'] header a.off {
         color: #888;
         cursor: initial;
     }
-    #qtip-container .qtip-trade header a:not(.off):hover {
+    .tippy-box[data-theme~='trade'] header a:not(.off):hover {
         background: rgba(0,0,0,.15);
     }
-    #qtip-container .qtip-trade.sidebar {
+    .tippy-box[data-theme~='trade'][data-theme~='sidebar'] {
         box-shadow: 1px 1px 7px rgba(0, 0, 0, .15);
     }
-    #qtip-container .qtip-trade.sidebar .btn {
+    .tippy-box[data-theme~='trade'][data-theme~='sidebar'] .btn {
         display: none;
     }
 
-    #qtip-container .tooltip .qtip-tip {
-        opacity: 0;
-    }
-    #qtip-container .tooltip .qtip-content {
-        font-size: 13px;
+    .tippy-box[data-theme~='tooltip'] {
+        max-width: 250px;
+        background: #FBF8CF;
+        color: #2c2830;
         box-shadow: 0 1px 2px rgba(0, 0, 0, .15);
     }
-    #qtip-container .tooltip .tooltip-inner {
-        max-width: 250px;
+    .tippy-box[data-theme~='tooltip'] .tippy-arrow {
+        color: #FBF8CF;
     }
-    #qtip-container .tooltip .i {
+    .tippy-box[data-theme~='tooltip'] .i {
         width: 18px;
         height: 15px;
         margin: 0 0 3px 2px;
     }
-    #qtip-container .tooltip .i.core {
+    .tippy-box[data-theme~='tooltip'] .i.core {
         background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA8AAAAMCAYAAAC9QufkAAACTUlEQVQoU3VRW0iTYRh+3m/7928rt9LNZaZzSzecCzNqDDWEKAqFyEpZrMPwVDCCIOh610HSTRB0oAPdBNkBlKLb8CK6KDqAGUROiqw128G5/fv/r2/LiV303Hx87/s+PM/7vIQVDNznusJ8sjfgMl5yO6TIsU5putI7fjPV6XdIt4JO4/mFD5gaHCS11KPKwJHLif2qyq52e2Snv1F+m8iop8Jdhtfn7mW2L2n8ttcubevYIn8R82f2+OnZCpnT0fFkd1HDpChUdXmN6GiSUVTxc+ZHPjr3S73CCTZ3tQSfQy5x0oyhr8eHF9Q/nuzhGq4BvMViZvA1GtBWZ4DJQIgn1dzcomIq2ZP1BK/dAItRV7I7y/UYpYGz0w+UbK5fp2fUGvTAVl8NsyA6q/VIZDUspMvrlSFrGtbnFUEmDkYPaWjosTe9uHSnqKiBKpsVO/oCsNqtMAglSUfI5rUyURWv8j0LFMSf4SXXs5MEzilyesqfS2buFpaVdovNgu5DQdRs2gAS/jgX8zkVv+ez0PIqiOENSdKJsfDGd6tpj45OeBYT+QnhoM3RUIPe8G6Y1xlRFEl+/ZRCPquCMfaeTDg8FrJ//OdUXDgYiTzpTGdyN5RC0bvZacPeg7uQSgJLmSKYnmZ0Oj48HK6dJhI7r71zJZRodNKz8C31VDhwtfia4fK4hCJ9tpqMB0IhS1mxglXblULJwXDk0b50avm6s7mpodm3NS5JfGQoXPu8ovhfcqkRi8VYPN6+01FXf9Hd6r4wP1vzKhajv7GvwR8AsNgcRdQufwAAAABJRU5ErkJggg==);
         background-size: auto;
         width: 15px;
     }
-    #qtip-container .tooltip .pipe {
+    .tippy-box[data-theme~='tooltip'] .pipe {
         margin-bottom: 4px;
     }
 
@@ -858,7 +845,8 @@ class Trade {
                 ${this.parnerOffer.map(Trade.makeThumb).join("")}
             </div>
             <div class="btn small trade-preview--action">View Trade</div>`;
-        a.addEventListener("click", () => $(a).closest(".qtip").qtip("hide"));
+        // eslint-disable-next-line no-underscore-dangle
+        a.addEventListener("click", () => a._tippy?.hide());
 
         return a;
     }
@@ -1189,25 +1177,14 @@ function getCollectionStats (user, card) {
     const a = document.createElement("a");
     a.classList.add("href-link");
     a.href = sett.links.permalink.concat(`/user${user.link}/cards/`);
+    a.target = "_blank";
     a.textContent = `
         ${(owned("core") + owned("chase") + owned("variant") + owned("legendary"))}
         /
         ${(total("core") + total("chase") + total("variant") + total("legendary"))}
     `.replace(/\s/g, "");
-    $(a).qtip({
-        style: {
-            def: false,
-            classes: "tooltip", // use NM's styles
-        },
-        position: {
-            my: "bottom center",
-            at: "top center",
-            container: $("#qtip-container"),
-            viewport: $("#qtip-container"),
-        },
-        show: {
-            delay: 0,
-        },
+    tippy(a, {
+        allowHTML: true,
         content: ["core", "chase", "variant", "legendary"]
             .filter((rarity) => total(rarity))
             .map((r) => `${owned(r)}/${total(r)}&nbsp;<i class='i ${r}'></i>`)
@@ -1216,9 +1193,8 @@ function getCollectionStats (user, card) {
             .reduce((prevs, curr, i, { length }) => (
                 `${prevs}${length === 4 && i === 2 ? "<br>" : "<i class='pipe'></i>"}${curr}`
             )),
-
+        theme: "tooltip",
     });
-    a.addEventListener("click", (ev) => ev.stopPropagation(), true);
     span.append(a);
     return span;
 }
@@ -1343,22 +1319,12 @@ async function addUsingInTrades (card) {
     span.textContent = trades.length === 1
         ? "Used in another trade"
         : `Used in ${trades.length} more trades`;
-    $(span).qtip({
-        style: {
-            def: false,
-            classes: "qtip-trade",
-        },
-        position: {
-            my: "top center",
-            at: "bottom center",
-            container: $("#qtip-container"),
-            viewport: $("#qtip-container"),
-        },
-        hide: {
-            delay: 250,
-            fixed: true,
-        },
-        content: $(tip),
+    tippy(span, {
+        // allowHTML: true,
+        appendTo: document.body,
+        interactive: true,
+        content: tip,
+        theme: "trade",
     });
     card.append(span);
 }
@@ -1567,22 +1533,19 @@ async function addTradePreview (notification) {
     const scope = getScope(notification);
     if (scope.notification && scope.notification.object.type !== "trade-event") return;
     const tradeId = (scope.notification ?? scope.trade).object.id;
-    $(notification).qtip({
-        style: {
-            def: false,
-            classes: "qtip-trade sidebar",
-        },
-        position: {
-            my: "right center",
-            at: "left center",
-            container: $("#qtip-container"),
-            viewport: $("#qtip-container"),
-        },
-        hide: {
-            delay: 0,
-        },
-        content: $((await Trade.get(tradeId)).makeTradePreview()),
+    const tip = tippy(notification, {
+        content: (await Trade.get(tradeId)).makeTradePreview(),
     });
+    const tips = addTradePreview.tips ?? (addTradePreview.tips = []);
+    tips.push(tip);
+    const singleton = addTradePreview.singleton
+        ?? (addTradePreview.singleton = tippy.createSingleton(tips, {
+            delay: [600, 200],
+            placement: "left",
+            theme: "trade sidebar",
+            moveTransition: "transform 0.2s ease-out",
+        }));
+    singleton.setInstances(tips);
 }
 
 // =============================================================================
@@ -1593,15 +1556,6 @@ fixAutoWithdrawnTrade();
 updateCardsInTrade();
 
 document.addEventListener("DOMContentLoaded", () => {
-    const container = document.createElement("div");
-    container.id = "qtip-container";
-    document.body.append(container);
-
-    const css = document.createElement("link");
-    css.rel = "stylesheet";
-    css.href = "https://cdnjs.cloudflare.com/ajax/libs/qtip2/3.0.3/jquery.qtip.min.css";
-    document.head.append(css);
-
     forAllElements(document, "div.nm-modal.trade", addTradeWindowEnhancements);
     forAllElements(document, "div.nm-conversation--header", addLastActionAgo);
     forAllElements(document, "li.nm-notification, li.nm-notifications-feed--item", addTradePreview);
