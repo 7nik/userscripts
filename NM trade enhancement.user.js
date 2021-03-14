@@ -992,10 +992,11 @@ class Collection {
  * @return {any} Saved or default value
  */
 function loadValue (name, defValue) {
-    if (name in localStorage) {
-        return JSON.parse(localStorage[name]);
+    const fullName = "NM_trade_enhancements_".concat(name);
+    if (fullName in localStorage) {
+        return JSON.parse(localStorage[fullName]);
     }
-    return GM_getValue(name, defValue);
+    return GM_getValue(fullName, defValue);
 }
 
 /**
@@ -1004,7 +1005,8 @@ function loadValue (name, defValue) {
  * @param  {any} value - Value to save
  */
 function saveValue (name, value) {
-    localStorage[name] = JSON.stringify(value);
+    const fullName = "NM_trade_enhancements_".concat(name);
+    localStorage[fullName] = JSON.stringify(value);
 }
 
 /**
