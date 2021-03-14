@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.3.5
+// @version      1.3.6
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -2078,11 +2078,11 @@ async function addDanbooruTagDescription () {
     getElem(".posts_body_head")?.classList.add("danboored");
 
     const tagNodes = [getElem(".posts_body_head h2").firstChild];
-    const aliasesTextNode = [...getElem(".posts_body_head").childNodes]
+    const aliasesTextNode = getAllElems(".posts_body_head .extra_stuff strong")
         .find((node) => node.textContent.startsWith(TEXT.aliasesTags));
     if (aliasesTextNode) {
         let node = aliasesTextNode.nextSibling;
-        while (node && node.nodeName !== "BR") {
+        while (node) {
             if (node.nodeName === "A") {
                 tagNodes.push(node);
             }
@@ -2104,13 +2104,13 @@ async function addDanbooruTagDescription () {
         // eslint-disable-next-line no-continue
         if (!tag) continue;
 
-        tagNodes[i].after(newElem(
+        tagNodes[i].nextSibling.after(newElem(
             "a",
             {
                 href: `https://danbooru.donmai.us/wiki_pages/${tag.name}`,
                 css: {
                     verticalAlign: "middle",
-                    marginLeft: "0.25ch",
+                    marginLeft: "0.5ch",
                 },
             },
             newElem("img", { src: "https://danbooru.donmai.us/favicon.ico" }),
