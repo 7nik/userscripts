@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.3.4
+// @version      1.3.5
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -1529,7 +1529,7 @@ const floatingSidebarCSS = `
         margin: 0 10px;
     }
     @media screen and (min-width: 1630px) {
-        #sidebar > div[style] {
+        #sidebar > div[style]:not(:first-child) {
             display: none;
         }
         div#sidebar[id] {
