@@ -1536,16 +1536,20 @@ async function addTradePreview (notification) {
     if (scope.notification && scope.notification.object.type !== "trade-event") return;
     const tradeId = (scope.notification ?? scope.trade).object.id;
     const tip = tippy(notification, {
-        content: (await Trade.get(tradeId)).makeTradePreview(),
+        onTrigger: async (instance) => {
+            if (instance.props.content) return;
+            instance.setContent((await Trade.get(tradeId)).makeTradePreview());
+        },
     });
     const tips = addTradePreview.tips ?? (addTradePreview.tips = {});
     tips[tradeId] = tip;
     const singleton = addTradePreview.singleton
-        ?? (addTradePreview.singleton = tippy.createSingleton([], {
+        ?? (addTradePreview.singleton = tippy.createSingleton([tip], {
             delay: [600, 200],
             placement: "left",
             theme: "trade sidebar",
             moveTransition: "transform 0.2s ease-out",
+            overrides: ["onTrigger"],
         }));
     singleton.setInstances(Object.values(tips));
 }
