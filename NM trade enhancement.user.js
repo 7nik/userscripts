@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      1.4.7
+// @version      1.4.8
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -1536,16 +1536,16 @@ async function addTradePreview (notification) {
     const tip = tippy(notification, {
         content: (await Trade.get(tradeId)).makeTradePreview(),
     });
-    const tips = addTradePreview.tips ?? (addTradePreview.tips = []);
-    tips.push(tip);
+    const tips = addTradePreview.tips ?? (addTradePreview.tips = {});
+    tips[tradeId] = tip;
     const singleton = addTradePreview.singleton
-        ?? (addTradePreview.singleton = tippy.createSingleton(tips, {
+        ?? (addTradePreview.singleton = tippy.createSingleton([], {
             delay: [600, 200],
             placement: "left",
             theme: "trade sidebar",
             moveTransition: "transform 0.2s ease-out",
         }));
-    singleton.setInstances(tips);
+    singleton.setInstances(Object.values(tips));
 }
 
 // =============================================================================
