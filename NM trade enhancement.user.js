@@ -888,7 +888,7 @@ class Trade {
         const trades = loadValue("tradesCache", { minDate: 0 });
         // remove outdated trades
         Reflect.ownKeys(trades).forEach((id) => {
-            if (new Date(trades[id].expire_date) < Date.now()) {
+            if (new Date(trades[id].expire_date) < trades.minDate) {
                 delete trades[id];
             }
         });
