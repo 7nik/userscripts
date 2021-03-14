@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for moderators
 // @namespace    7nik@anime-pictures.net
-// @version      1.3.2
+// @version      1.4.0
 // @description  Makes everything great! Moderator edition
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -152,6 +152,55 @@ function addModeratorHotkeys () {
             },
         },
     );
+}
+
+/**
+ * Adds edit tag buttons to the search page
+ */
+async function addEditTagButton () {
+    if (!getElem(".posts_body_head h2")) return;
+    if (getElem(".posts_body_head.edit_tags")) return; // no self-triggering
+    getElem(".posts_body_head")?.classList.add("edit_tags");
+
+    GM_addStyle(`
+        .posts_body_head h2 .icon_edit {
+            cursor: pointer;
+            zoom: 80%;
+        }
+        .posts_body_head strong ~ .icon_edit {
+            margin-left: 1ch;
+            cursor: pointer;
+            zoom: 60%;
+        }
+    `);
+
+    const tagNodes = [getElem(".posts_body_head h2").firstChild];
+    const aliasesTextNode = getAllElems(".posts_body_head .extra_stuff strong")
+        .find((node) => node.textContent.startsWith(TEXT.aliasesTags));
+    if (aliasesTextNode) {
+        let node = aliasesTextNode.nextSibling;
+        while (node) {
+            if (node.nodeName === "A") {
+                tagNodes.push(node);
+            }
+            node = node.nextElementSibling;
+        }
+    }
+
+    if (tagNodes.length === 0) return;
+
+    const tags = await Promise.all(tagNodes.map((node) => getTagInfo(node.textContent)));
+    // eslint-disable-next-line unicorn/no-for-loop
+    for (let i = 0; i < tags.length; i++) {
+        tagNodes[i].after(newElem("span", {
+            className: "icon_edit",
+            onclick: () => window.open(
+                `${PAGES.editTag}${tags[i].id}`,
+                `${TEXT.editTag} ${tags[i].name}`,
+                "width=500,height=700",
+            ),
+        }));
+    }
 }
 
 /**
@@ -659,6 +708,12 @@ onready(() => {
         });
     }
 
-    if (pageIs.searchPosts) addRemoveTagsButton();
+    if (pageIs.searchPosts) {
+        addRemoveTagsButton();
+        addEditTagButton();
+        new MutationObserver(() => {
+            addEditTagButton();
+        }).observe(getElem("#posts"), { childList: true });
+    }
     if (pageIs.editTag) improveTagEditor();
 });
