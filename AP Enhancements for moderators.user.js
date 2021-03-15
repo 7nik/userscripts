@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for moderators
 // @namespace    7nik@anime-pictures.net
-// @version      1.4.0
+// @version      1.4.1
 // @description  Makes everything great! Moderator edition
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -194,7 +194,7 @@ async function addEditTagButton () {
     for (let i = 0; i < tags.length; i++) {
         tagNodes[i].after(newElem("span", {
             className: "icon_edit",
-            onclick: () => window.open(
+            click: () => window.open(
                 `${PAGES.editTag}${tags[i].id}`,
                 `${TEXT.editTag} ${tags[i].name}`,
                 "width=500,height=700",
