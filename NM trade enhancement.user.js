@@ -996,7 +996,7 @@ function loadValue (name, defValue) {
     if (fullName in localStorage) {
         return JSON.parse(localStorage[fullName]);
     }
-    return GM_getValue(fullName, defValue);
+    return GM_getValue(name, defValue);
 }
 
 /**
