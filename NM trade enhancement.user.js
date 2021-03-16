@@ -1324,6 +1324,7 @@ async function addUsingInTrades (card) {
     tippy(span, {
         // allowHTML: true,
         appendTo: document.body,
+        delay: [500, 200],
         interactive: true,
         content: tip,
         theme: "trade",
