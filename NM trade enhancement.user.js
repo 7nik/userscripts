@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      1.4.8
+// @version      1.4.9
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -1468,10 +1468,11 @@ async function addPrintChooser (card) {
         addUsingInTrades(card);
     });
 
-    const dd = card.querySelector("dd:nth-child(10)");
-    dd.style.cursor = null;
-    dd.textContent = dd.textContent.slice(dd.textContent.indexOf("/"));
-    dd.prepend(select);
+    const span = card.querySelector("dd:nth-child(10) span");
+    delete span.dataset.originalTitle;
+    span.style.cursor = null;
+    span.textContent = span.textContent.slice(span.textContent.indexOf("/"));
+    span.prepend(select);
 }
 
 /**
@@ -1496,7 +1497,13 @@ async function addTradeWindowEnhancements (tradeWindow) {
         // allow tweak only choosen cards and during trade edition
         if (getScope(card.closest(".trade--side--item-list"))?.showRemove) {
             const dd = card.querySelector("dd:nth-child(10)");
-            dd.style.cursor = "pointer";
+            const span = document.createElement("span");
+            span.className = "tip";
+            span.title = "Change print id";
+            span.style.cursor = "pointer";
+            span.textContent = dd.textContent;
+            dd.innerHTML = "";
+            dd.append(span);
             dd.addEventListener("click", () => addPrintChooser(card));
         }
     });
