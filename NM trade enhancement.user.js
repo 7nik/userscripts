@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      1.4.9
+// @version      1.4.10
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -1548,6 +1548,10 @@ async function addTradePreview (notification) {
             if (instance.props.content) return;
             instance.setContent((await Trade.get(tradeId)).makeTradePreview());
         },
+        onShow: (instance) => {
+            console.log(document.body.contains(notification));
+            return document.body.contains(notification);
+        },
     });
     const tips = addTradePreview.tips ?? (addTradePreview.tips = {});
     tips[tradeId] = tip;
@@ -1557,7 +1561,7 @@ async function addTradePreview (notification) {
             placement: "left",
             theme: "trade sidebar",
             moveTransition: "transform 0.2s ease-out",
-            overrides: ["onTrigger"],
+            overrides: ["onTrigger", "onShow"],
         }));
     singleton.setInstances(Object.values(tips));
 }
