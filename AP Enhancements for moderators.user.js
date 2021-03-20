@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for moderators
 // @namespace    7nik@anime-pictures.net
-// @version      1.4.1
+// @version      1.4.2
 // @description  Makes everything great! Moderator edition
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -163,14 +163,24 @@ async function addEditTagButton () {
     getElem(".posts_body_head")?.classList.add("edit_tags");
 
     GM_addStyle(`
-        .posts_body_head h2 .icon_edit {
+        .posts_body_head .icon_edit {
             cursor: pointer;
             zoom: 80%;
+            filter: ${
+                SETTINGS.themeName === "second"
+                    ? "sepia(1) saturate(20) hue-rotate(294.5deg) brightness(0.615) contrast(3.7);"
+                    : "invert(1);"
+            }
         }
         .posts_body_head strong ~ .icon_edit {
             margin-left: 1ch;
-            cursor: pointer;
             zoom: 60%;
+            filter: ${
+                SETTINGS.themeName === "second"
+                    ? "sepia(1) saturate(20) hue-rotate(294.5deg) brightness(0.655) contrast(2.25);"
+                    : "invert(1);"
+            }
+            ${SETTINGS.themeName === "second" ? "" : "vertical-align: middle;"}
         }
     `);
 
