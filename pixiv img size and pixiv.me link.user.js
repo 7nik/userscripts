@@ -1,16 +1,15 @@
 // ==UserScript==
 // @name         pixiv img size and pixiv.me link
 // @namespace    http://tampermonkey.net/
-// @version      2.0.0
+// @version      2.1.0
 // @description  Add size of the illustrations and direct links to them.
 // @author       7nik
 // @match        https://www.pixiv.net/en/users/*
 // @match        https://www.pixiv.net/users/*
 // @match        https://www.pixiv.net/en/artworks/*
 // @match        https://www.pixiv.net/artworks/*
-// @match        https://i.pximg.net/*
 // @grant        GM_download
-// @grant        window.close
+// @grant        GM_addStyle
 // @run-at       document-end
 // @require      https://raw.githubusercontent.com/rafaelw/mutation-summary/421110f84178aa9e4098b38df83f727e5aea3d97/src/mutation-summary.js
 // ==/UserScript==
@@ -18,12 +17,6 @@
 /* global GM_download MutationSummary */
 
 "use strict";
-
-if (window.location.hostname === "i.pximg.net" && window.location.hash === "#download") {
-    GM_download(window.location.href, window.location.pathname.match(/[\w.]+$/i)[0]);
-    setTimeout(window.close, 1000);
-    return;
-}
 
 const addPixivme = (function addPixivmeWrapper () {
     function putPixivme (name) {
@@ -62,13 +55,13 @@ const addPixivme = (function addPixivmeWrapper () {
         let name = await viaMobileApi();
         if (name === false) {
             name = await viaSketch();
-            if (name === false) {
-                name = await viaIllust();
-                while (name === null) {
-                    await delay(300); // eslint-disable-line no-await-in-loop
-                    name = await viaIllust(); // eslint-disable-line no-await-in-loop
-                }
-            }
+        }
+        if (name === false) {
+            name = await viaIllust();
+        }
+        while (name === null) {
+            await delay(300); // eslint-disable-line no-await-in-loop
+            name = await viaIllust(); // eslint-disable-line no-await-in-loop
         }
         putPixivme(name);
     };
@@ -78,10 +71,10 @@ const addSize = (function addSizeWrapper () {
     const toLink = (data) => (!data
         ? console.log("no data")
         : ` <a href="${data.urls.original}">${data.width}x${data.height}</a>
-            <a href="${data.urls.original}#download" target="_blank" >⇓</a>`
+            <a href="${data.urls.original}" target="_blank" class="dwnldimg" >⇓</a>`
     );
 
-    function putSize (data) {
+    function putSize (postId, data) {
         const has = (parent, childSel) => !!parent.querySelector(childSel);
         let conts;
 
@@ -90,6 +83,8 @@ const addSize = (function addSizeWrapper () {
         conts = document.querySelector("figure ~ div section");
         if (conts && !has(conts, "div > a:not([class])")) {
             const div = document.createElement("div");
+            div.className = "orglnk";
+            div.dataset.postId = postId;
             div.style.position = "absolute";
             div.style.top = "0";
             div.style.left = "0";
@@ -102,9 +97,13 @@ const addSize = (function addSizeWrapper () {
         // https://www.pixiv.net/member_illust.php?mode=medium&illust_id=
         // add links below image for mutli-page posts
         conts = document.querySelectorAll("figure > div[role] > div > div[role]");
-        if (conts.length > 0 && data.length > 1 && !has(conts[0], "a:not([class])")) {
+        if (data.length > 1) {
             for (let i = 0; i < conts.length; i++) { // eslint-disable-line unicorn/no-for-loop
+                // eslint-disable-next-line no-continue
+                if (has(conts[i], "a:not([class])")) continue;
                 const span = document.createElement("span");
+                span.className = "orglnk";
+                span.dataset.postId = postId;
                 span.style.marginTop = "5px";
                 span.style.zIndex = 2;
                 span.style.position = "relative";
@@ -118,56 +117,119 @@ const addSize = (function addSizeWrapper () {
 
         // https://www.pixiv.net/member_illust.php?mode=medium&illust_id=
         // add links under mini-previews on mutli-page posts
-        conts = document.querySelectorAll("body > div[role] img, body > div[role] figure");
-        if (conts.length > 0 && !has(conts[0].parentElement, "a")) {
-            for (let i = 0; i < conts.length; i++) { // eslint-disable-line unicorn/no-for-loop
-                const span = document.createElement("span");
-                span.style.height = "0";
-                span.style.order = 2;
-                span.innerHTML = toLink(data[i]);
-                conts[i].parentElement.append(span);
-                conts[i].parentElement.style.flexDirection = "column";
-                conts[i].parentElement.parentElement.style.marginBottom = "20px";
-            }
+        conts = document.querySelectorAll("body > div > style + div div[aria-disabled] div");
+        for (let i = 0; i < conts.length; i++) { // eslint-disable-line unicorn/no-for-loop
+            // eslint-disable-next-line no-continue
+            if (has(conts[i], "a")) continue;
+            const span = document.createElement("span");
+            span.className = "orglnk";
+            span.dataset.postId = postId;
+            span.style.height = "0";
+            span.style.order = 2;
+            span.innerHTML = toLink(data[i]);
+            conts[i].append(span);
+            conts[i].style.flexDirection = "column";
+            conts[i].parentElement.style.marginBottom = "20px";
         }
     }
 
-    const datas = {};
+    const cache = {};
 
     return function addSizeFn () {
         // const postId = new URL(window.location).searchParams.get("illust_id");
         const postId = (window.location.href.match(/\/(\d+)/) || [])[1];
         if (!postId) return;
-        if (datas[postId]) {
-            if (datas[postId] !== "pending") {
-                putSize(datas[postId]);
+        document.querySelectorAll(`.orglnk:not([data-post-id="${postId}"])`)
+            .forEach(((el) => el.remove()));
+        if (cache[postId]) {
+            if (cache[postId] !== "pending") {
+                putSize(postId, cache[postId]);
             }
             return;
         }
 
-        datas[postId] = "pending";
+        cache[postId] = "pending";
         fetch(`/ajax/illust/${postId}/pages`)
             .then((resp) => resp.json())
             .then((data) => {
-                datas[postId] = data.body;
-                putSize(datas[postId]);
+                cache[postId] = data.body;
+                putSize(postId, cache[postId]);
             });
+    };
+}());
+
+const downloadImage = (function downloadImageWrapper () {
+    GM_addStyle(`
+        #bar-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+        }
+        #bar-container div {
+            height: 2px;
+            width: 0;
+            background: #0096fa;
+            margin: 1px 0;
+        }
+        body.downloading {
+            cursor: wait;
+        }
+        body.downloading a {
+            cursor: progress;
+        }
+    `);
+
+    const barCont = document.createElement("div");
+    barCont.id = "bar-container";
+    document.body.append(barCont);
+
+    return function downloadImageFn (ev) {
+        if (!ev.target.matches("a.dwnldimg")) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+
+        this.loads = this.loads ?? 0 + 1;
+        document.body.classList.add("downloading");
+
+        const bar = document.createElement("div");
+        barCont.append(bar);
+        const url = ev.target.href;
+
+        GM_download({
+            url,
+            name: url.match(/[\w.]+$/i)[0],
+            headers: {
+                referer: "https://www.pixiv.net/",
+            },
+            onprogress ({ loaded, total }) {
+                bar.style.width = `${loaded / total * 100}%`;
+            },
+            onload () {
+                setTimeout(() => {
+                    bar.remove();
+                    this.loads -= 1;
+                    if (!this.loads) document.body.classList.remove("downloading");
+                }, 1000);
+            },
+        });
     };
 }());
 
 function onElementsAdded (selector, callback) {
     new MutationSummary({
         queries: [{ element: selector }],
+        // eslint-disable-next-line unicorn/no-fn-reference-in-iterator
         callback: (summaries) => summaries[0].added.forEach(callback),
     });
 }
 
+window.addEventListener("click", downloadImage, true);
+window.addEventListener("auxclick", downloadImage, true);
+
 onElementsAdded("div.cSpfix", addPixivme);
-onElementsAdded("div.gtm-medium-work-expanded-view", addSize);
 onElementsAdded("section", addSize);
+onElementsAdded("div[aria-disabled]", addSize);
 onElementsAdded("div[role='presentation']", addSize);
 
 addSize();
-
-// TODO:
-// do not touch hover-ups
