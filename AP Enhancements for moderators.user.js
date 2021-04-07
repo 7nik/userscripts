@@ -164,22 +164,17 @@ async function addEditTagButton () {
 
     GM_addStyle(`
         .posts_body_head .icon_edit {
+            margin-left: 1ch;
             cursor: pointer;
             zoom: 80%;
             filter: ${
                 SETTINGS.themeName === "second"
-                    ? "sepia(1) saturate(20) hue-rotate(294.5deg) brightness(0.615) contrast(3.7);"
-                    : "invert(1);"
+                    ? "brightness(0.87);"
+                    : "invert(0.72);"
             }
         }
         .posts_body_head strong ~ .icon_edit {
-            margin-left: 1ch;
             zoom: 60%;
-            filter: ${
-                SETTINGS.themeName === "second"
-                    ? "sepia(1) saturate(20) hue-rotate(294.5deg) brightness(0.655) contrast(2.25);"
-                    : "invert(1);"
-            }
             ${SETTINGS.themeName === "second" ? "" : "vertical-align: middle;"}
         }
     `);
