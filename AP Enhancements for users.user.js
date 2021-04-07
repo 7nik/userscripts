@@ -2601,7 +2601,7 @@ function getSelText () {
  * @param  {boolean} [options.resolveAlias=true] - If a tag is an alias return the main tag or alias
  * @return {Promise<Tag>} Found tag or `NO_TAG`
  */
-async function getTagInfo (tagName, { postId, resolveAlias = true }) {
+async function getTagInfo (tagName, { postId, resolveAlias = true } = {}) {
     if (!tagName) return NO_TAG;
     const cache = SETTINGS.tagsCache;
 
