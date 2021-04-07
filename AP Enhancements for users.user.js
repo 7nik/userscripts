@@ -2427,13 +2427,13 @@ async function addRecommendedTags (recommendedTags) {
         for (const tag of tags) {
             // find a presented tag which has usage count bigger then the recommended tag
             // eslint-disable-next-line no-await-in-loop
-            while (currentText && await getTagInfo(currentText, post_id) > tag) {
+            while (currentText && await getTagInfo(currentText, { post_id }) > tag) {
                 currentElem = currentElem.nextElementSibling;
                 currentText = getTagName(currentElem);
             }
             if (currentElem) {
                 // eslint-disable-next-line no-await-in-loop
-                if (currentText && await getTagInfo(currentText, post_id) > tag) {
+                if (currentText && await getTagInfo(currentText, { post_id }) > tag) {
                     currentElem.after(newTagItem(tag));
                 } else {
                     currentElem.before(newTagItem(tag));
@@ -2596,11 +2596,12 @@ function getSelText () {
 /**
  * Returns tag by its name or id
  * @param  {(string|number)} tagName - The tag name (string) or id (number)
- * @param  {(string|number)} [postId] - ID of a post where the will be search in the first order.
- *                                    Use it if you going to get multiple tags from this post.
+ * @param  {(string|number)} [options.postId] - If multiple tags from the same post will
+ *                                            be requested, use it to preload all the post's tags
+ * @param  {boolean} [options.resolveAlias=true] - If a tag is an alias return the main tag or alias
  * @return {Promise<Tag>} Found tag or `NO_TAG`
  */
-async function getTagInfo (tagName, postId) {
+async function getTagInfo (tagName, { postId, resolveAlias = true }) {
     if (!tagName) return NO_TAG;
     const cache = SETTINGS.tagsCache;
 
