@@ -690,13 +690,44 @@ GM_addStyle(`
     .icon_tag {
         background-image: url('data:image/svg+xml;utf8,\
             <svg viewBox="-2 -2 14 14" xmlns="http://www.w3.org/2000/svg">\
-                <path
-                    fill="white"
+                <path fill="white"\
                     d="M10,0v4L4,10L0,6L6,0zm-1.5,1.5A.7,.7,0,0,0,7,3A.7,.7,0,0,0,8.5,1.5"/>\
             </svg>');
         width: 30px;
         height: 30px;
     }
+
+    /* for tag counting */
+    @counter-style empty {
+      system: cyclic;
+      symbols: "";
+    }
+    /* Show empty string for zero and " + ##" for other numbers.
+       As prefix prop works only in ::marker use a custom negative sign instead */
+    @counter-style pretags-style {
+      system: numeric;
+      symbols: "0" "1" "2" "3" "4" "5" "6" "7" "8" "9";
+      negative: " + ";
+      range: infinite -1;
+      fallback: empty;
+    }
+    body {
+        counter-reset: tags pretags;
+    }
+    .tags li:not(.preTag) {
+        counter-increment: tags;
+    }
+    .tags li.preTag {
+        counter-increment: pretags;
+    }
+    #tags_sidebar::after {
+        position: absolute;
+        top: 7px;
+        left: 55px;
+        content: "(" counter(tags) " + " counter(pretags) ")";
+        color: white;
+    }
+
 `);
 
 onready(() => {
