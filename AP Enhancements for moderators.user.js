@@ -22,7 +22,7 @@
 /* global post_id AnimePictures */
 
 // variables of the AP Enhancements for users
-/* global NO_TAG PAGES SETTINGS TEXT API hotkeys pageIs Tag
+/* global NO_TAG PAGES SETTINGS TEXT API hotkeys pageIs Tag getRecommendedTags
     getElem getAllElems getTagInfo newElem newTagInput
     onNewTabLinkClick onready say addRecommendedTags */
 
@@ -161,23 +161,6 @@ async function addEditTagButton () {
     if (!getElem(".posts_body_head h2")) return;
     if (getElem(".posts_body_head.edit_tags")) return; // no self-triggering
     getElem(".posts_body_head")?.classList.add("edit_tags");
-
-    GM_addStyle(`
-        .posts_body_head .icon_edit {
-            margin-left: 1ch;
-            cursor: pointer;
-            zoom: 80%;
-            filter: ${
-                SETTINGS.themeName === "second"
-                    ? "brightness(0.87);"
-                    : "invert(0.72);"
-            }
-        }
-        .posts_body_head strong ~ .icon_edit {
-            zoom: 60%;
-            ${SETTINGS.themeName === "second" ? "" : "vertical-align: middle;"}
-        }
-    `);
 
     const tagNodes = [getElem(".posts_body_head h2").firstChild];
     const aliasesTextNode = getAllElems(".posts_body_head .extra_stuff strong")
@@ -686,6 +669,36 @@ if (!SETTINGS.isModerator) {
 // add moderator settings
 Object.entries(MOD_SETTIGNS).forEach(([name, setting]) => SETTINGS.append(name, setting));
 
+GM_addStyle(`
+    /* for edit button on the post search page */
+    .posts_body_head .icon_edit {
+        margin-left: 1ch;
+        cursor: pointer;
+        zoom: 80%;
+        filter: ${
+            SETTINGS.themeName === "second"
+                ? "brightness(0.87);"
+                : "invert(0.72);"
+        }
+    }
+    .posts_body_head strong ~ .icon_edit {
+        zoom: 60%;
+        ${SETTINGS.themeName === "second" ? "" : "vertical-align: middle;"}
+    }
+
+    /* for recommeded tags moderation link */
+    .icon_tag {
+        background-image: url('data:image/svg+xml;utf8,\
+            <svg viewBox="-2 -2 14 14" xmlns="http://www.w3.org/2000/svg">\
+                <path
+                    fill="white"
+                    d="M10,0v4L4,10L0,6L6,0zm-1.5,1.5A.7,.7,0,0,0,7,3A.7,.7,0,0,0,8.5,1.5"/>\
+            </svg>');
+        width: 30px;
+        height: 30px;
+    }
+`);
+
 onready(() => {
     addModeratorHotkeys();
 
@@ -720,4 +733,17 @@ onready(() => {
         }).observe(getElem("#posts"), { childList: true });
     }
     if (pageIs.editTag) improveTagEditor();
+
+    if (SETTINGS.alwaysLoadPreTags) {
+        getRecommendedTags().then(() => {
+            const count = SETTINGS.preTagsCache.getAll().flatMap(({ tags }) => tags).length;
+            if (!count) return;
+            getElem("header > nav")?.append(newElem(
+                "a",
+                { href: `${PAGES.moderatePreTags}0?lang=${SETTINGS.lang}` },
+                newElem("span", { className: "icon icon_tag" }),
+                count,
+            ));
+        });
+    }
 });
