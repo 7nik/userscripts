@@ -1013,9 +1013,8 @@ const API = {
      * @return {Promise<Document>} - The parsed page
      */
     html (url) {
-        const link = url.includes("lang=")
-            ? url
-            : url.concat(`${url.includes("?") ? "&" : "?"}lang=${SETTINGS.lang}`);
+        const link = new URL(url, PAGES.origin);
+        link.searchParams.set("lang", SETTINGS.lang);
         return this.ajax(link).then((resp) => {
             if (!resp.ok) throw resp;
             return resp.text().then((text) => new DOMParser().parseFromString(text, "text/html"));
@@ -1028,11 +1027,12 @@ const API = {
      * @return {Promise<Object>} - The parsed JSON response
      */
     get (url, params = null) {
-        const fullParams = { ...params, lang: SETTINGS.lang };
-        const fullUrl = url
-            + (url.includes("?") ? "&" : "?")
-            + Object.entries(fullParams).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
-        return this.ajax(fullUrl, { method: "GET" }).then((resp) => {
+        const link = new URL(url, PAGES.origin);
+        if (params) {
+            Object.entries(params).forEach(([key, value]) => link.searchParams.append(key, value));
+        }
+        link.searchParams.set("lang", SETTINGS.lang);
+        return this.ajax(link, { method: "GET" }).then((resp) => {
             if (!resp.ok) throw resp;
             return resp.json();
         });
