@@ -199,7 +199,9 @@ async function addEditTagButton () {
 
     if (tagNodes.length === 0) return;
 
-    const tags = await Promise.all(tagNodes.map((node) => getTagInfo(node.textContent)));
+    const tags = await Promise.all(
+        tagNodes.map((node) => getTagInfo(node.textContent, { resolveAlias: false })),
+    );
     // eslint-disable-next-line unicorn/no-for-loop
     for (let i = 0; i < tags.length; i++) {
         tagNodes[i].after(newElem("span", {
