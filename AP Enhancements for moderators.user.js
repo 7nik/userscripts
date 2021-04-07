@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for moderators
 // @namespace    7nik@anime-pictures.net
-// @version      1.4.2
+// @version      1.4.3
 // @description  Makes everything great! Moderator edition
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -194,20 +194,17 @@ async function addEditTagButton () {
 
     if (tagNodes.length === 0) return;
 
-    const tags = await Promise.all(
-        tagNodes.map((node) => getTagInfo(node.textContent, { resolveAlias: false })),
-    );
-    // eslint-disable-next-line unicorn/no-for-loop
-    for (let i = 0; i < tags.length; i++) {
-        tagNodes[i].after(newElem("span", {
-            className: "icon_edit",
-            click: () => window.open(
-                `${PAGES.editTag}${tags[i].id}`,
-                `${TEXT.editTag} ${tags[i].name}`,
+    tagNodes.forEach((tagNode) => tagNode.after(newElem("span", {
+        className: "icon_edit",
+        click: async () => {
+            const tag = await getTagInfo(tagNode.textContent, { resolveAlias: false });
+            window.open(
+                `${PAGES.editTag}${tag.id}`,
+                `${TEXT.editTag} ${tag.name}`,
                 "width=500,height=700",
-            ),
-        }));
-    }
+            );
+        },
+    })));
 }
 
 /**
