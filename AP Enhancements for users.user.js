@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.3.8
+// @version      1.3.9
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -3914,10 +3914,11 @@ onready(() => {
 
     // show AP Enhancements settings on the profile settings page
     if (pageIs.settings) {
-        getElem("#content").append(
+        // wait for adding moderator settings
+        setTimeout(() => getElem("#content").append(
             newElem("h2", { text: TEXT.hkAPEOptions, css: { textAlign: "center" } }),
             buildSettings(),
-        );
+        ), 100);
     }
 
     if (pageIs.comments || pageIs.moderatePreTags || pageIs.post) {
