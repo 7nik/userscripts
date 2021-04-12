@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for moderators
 // @namespace    7nik@anime-pictures.net
-// @version      1.4.3
+// @version      1.4.4
 // @description  Makes everything great! Moderator edition
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -711,7 +711,10 @@ GM_addStyle(`
       range: infinite -1;
       fallback: empty;
     }
-    body {
+    #tags_sidebar {
+        position: relative;
+    }
+    .tags {
         counter-reset: tags pretags;
     }
     .tags li:not(.preTag) {
@@ -720,7 +723,7 @@ GM_addStyle(`
     .tags li.preTag {
         counter-increment: pretags;
     }
-    #tags_sidebar::after {
+    .tags::after {
         position: absolute;
         top: 7px;
         left: 55px;
