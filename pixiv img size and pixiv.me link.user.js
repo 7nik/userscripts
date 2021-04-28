@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         pixiv img size and pixiv.me link
 // @namespace    http://tampermonkey.net/
-// @version      2.1.0
+// @version      2.1.1
 // @description  Add size of the illustrations and direct links to them.
 // @author       7nik
 // @match        https://www.pixiv.net/en/users/*
@@ -20,7 +20,7 @@
 
 const addPixivme = (function addPixivmeWrapper () {
     function putPixivme (name) {
-        const userName = document.querySelector("div.cSpfix h1");
+        const userName = document.querySelector("div.hgYhRu h1");
         userName.innerHTML = `<a href="https://pixiv.me/${name}">${userName.textContent}</a>`;
     }
 
@@ -51,7 +51,7 @@ const addPixivme = (function addPixivmeWrapper () {
     }
 
     return async function addPixivmeFn () {
-        if (document.querySelector("div.cSpfix h1 a")) return;
+        if (document.querySelector("div.hgYhRu h1 a")) return;
         let name = await viaMobileApi();
         if (name === false) {
             name = await viaSketch();
@@ -227,7 +227,7 @@ function onElementsAdded (selector, callback) {
 window.addEventListener("click", downloadImage, true);
 window.addEventListener("auxclick", downloadImage, true);
 
-onElementsAdded("div.cSpfix", addPixivme);
+onElementsAdded("div.hgYhRu", addPixivme);
 onElementsAdded("section", addSize);
 onElementsAdded("div[aria-disabled]", addSize);
 onElementsAdded("div[role='presentation']", addSize);
