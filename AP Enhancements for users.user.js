@@ -2007,23 +2007,43 @@ class Tag {
     }
 
     /**
-     * Remove this tag from the list of recommended and from page of recommede tags
+     * Remove this tag from the list of recommended and from page of recommeded tags
      * @return {Promise<undefined>}
      */
     async resolve () {
-        const tags = await getRecommendedTags();
-        const preTagIndex = tags.findIndex(({ preId }) => preId === this.preId);
-        if (preTagIndex < 0) return;
-        tags.splice(preTagIndex, 1);
-        if (tags.length === 0) {
+        if (pageIs.post) {
+            const tags = await getRecommendedTags();
+            const preTagIndex = tags.findIndex(({ preId }) => preId === this.preId);
+            if (preTagIndex < 0) return;
+            tags.splice(preTagIndex, 1);
             const cache = SETTINGS.preTagsCache;
-            cache.remove(post_id);
+            if (tags.length === 0) {
+                cache.remove(post_id);
+            } else {
+                cache.get(post_id).tags = tags;
+            }
             SETTINGS.preTagsCache = cache;
-        }
 
-        if (window.opener) {
-            // remove the recommended tag in opener (if it's the moderate recommended tags page)
-            window.opener.postMessage({ cmd: "resolve_pretag", preTagId: this.preId });
+            if (window.opener) {
+                // remove the recommended tag in opener (if it's the moderate recommended tags page)
+                window.opener.postMessage({ cmd: "resolve_pretag", preTagId: this.preId });
+            }
+        } else {
+            const cache = SETTINGS.preTagsCache;
+            const post = cache.getAll()
+                .map(({  postId, tags }) => ({
+                    postId,
+                    tags,
+                    preTagIndex: tags.findIndex(({ preId }) => preId === this.preId),
+                }))
+                .find(({ preTagIndex }) => preTagIndex >= 0);
+            if (!post) return;
+            post.tags.splice(post.preTagIndex, 1);
+            if (post.tags.length === 0) {
+                cache.remove(post.postId);
+            }
+            SETTINGS.preTagsCache = cache;
+            getElem(`#pre_tag_${this.preId}`)?.remove();
         }
     }
 
@@ -3876,6 +3896,22 @@ onready(() => {
         }
         // update pretags if they are outdated
         getRecommendedTags(true);
+
+        getAllElems("a[href='']").forEach((a) => a.addEventListener("click", (ev) => {
+            const preId = a.getAttribute("onclick").match(/\d+/)[0];
+            const postId = getElem("a[href^='/pictures/view_post/']", a.closest("tr"))
+                .href.match(/\d+/)[0];
+            const { preTagsCache } = SETTINGS;
+            const preTag = preTagsCache.get(postId)?.tags.find((tag) => tag.preId === preId);
+            if (!preTag) return;
+            if (a.getAttribute("onclick").startsWith("delete_pre_tag")) {
+                new Tag(preTag).decline();
+            } else {
+                new Tag(preTag).accept();
+            }
+            ev.stopImmediatePropagation();
+            ev.preventDefault();
+        }, true));
     }
 
     if (pageIs.post) {
