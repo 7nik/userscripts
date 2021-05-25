@@ -399,6 +399,10 @@ const TEXT = new Proxy(
             en: "hotkeys",
             ru: "горячие клавиши",
         },
+        hugePreivew: {
+            en: "Enlarge preview: wheel - zoom, double click - fit/100%",
+            ru: "Огромное превью: колесо - зум, двойной клик - вписать/100%",
+        },
         interrupted: {
             en: "Interrupted",
             ru: "Прервано",
@@ -4105,7 +4109,7 @@ onready(() => {
                 display: "inline-block",
                 marginLeft: "10px",
             },
-            title: "Enlarge preview: wheel - zoom, double click - fit/100%",
+            title: TEXT.hugePreivew,
             click: makeHugePreview,
         }));
     }
