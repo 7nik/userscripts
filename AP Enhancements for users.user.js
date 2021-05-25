@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.3.9
+// @version      1.4.0
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -16,7 +16,7 @@
 // @connect      donmai.us
 // ==/UserScript==
 
-/* global lang site_theme post_id ajax_request2 is_login is_moderator AnimePictures */
+/* global lang site_theme post_id ajax_request2 is_login is_moderator AnimePictures post_filename */
 /* eslint-disable sonarjs/no-duplicate-string, sonarjs/cognitive-complexity, max-classes-per-file */
 
 "use strict";
@@ -1381,18 +1381,6 @@ const wideLayoutCSS = `
         margin-top: 0;
     }
 
-    @media screen and (min-width: 1630px) and (max-width: 1899px)  {
-        div#content {
-            margin: 0;
-        }
-        div#content.cont_view_post {
-            margin: 10px auto;
-        }
-        #cont > #part2 > div:last-child /* comment block wripper */ {
-            width: 680px !important;
-        }
-    }
-
     @media screen and (orientation: landscape) and (min-width: 1900px) {
         #body_wrapper:not(#id) {
             grid-template-columns: 0 auto 300px;
@@ -1577,6 +1565,79 @@ const floatingSidebarCSS = `
     }
 `;
 
+const hudePreviewCSS = `
+    @media screen and (max-width: 1629px) {
+        #preview_wrapper {
+            display: none;
+        }
+    }
+    @media screen and (min-width: 1630px) {
+        .huge_preview #body_wrapper:not(#id) {
+            grid-template-columns: 300px 680px auto 0;
+            gap: 10px;
+        }
+        .huge_preview div#content[id] {
+            margin: 0;
+            padding: 0;
+        }
+        .huge_preview #content .post_content,
+        .huge_preview #content .post_vote_block {
+            width: 640px;
+        }
+        .huge_preview #big_preview_cont {
+            display: none;
+        }
+        .huge_preview #sidebar > :not(#tags_sidebar) {
+            display: none;
+        }
+        .huge_preview div#tags_sidebar[id] {
+            left: calc(10px - 100vw);
+        }
+        #preview_wrapper {
+            position: relative;
+            height: 100%;
+        }
+        #preview_container {
+            position: sticky;
+            width: 100%;
+            height: calc(100vh - 50px);
+            top: 0;
+            overflow: hidden;
+        }
+        #preview_container img {
+            position: absolute;
+            cursor: move;
+        }
+    }
+    @media screen and (min-width: 1900px) {
+        .huge_preview #body_wrapper:not(#id) {
+            grid-template-columns: 0 640px auto 300px;
+            gap: 10px;
+        }
+        .huge_preview div#content[id] {
+            grid-template-areas:
+                "message"
+                "uploader"
+                "imgPost"
+                "postInfo"
+                "comments";
+            margin-left: -10px;
+        }
+        .huge_preview #sidebar > :not(#tags_sidebar) {
+            display: none;
+        }
+        .huge_preview div#tags_sidebar[id] {
+            left: initial;
+            right: initial;
+        }
+        #preview_wrapper {
+            position: relative;
+            height: 100%;
+            margin-left: -10px;
+        }
+    }
+`;
+
 // order of tag types in the tag list
 const tagTypePosition = {
     3: 0,
@@ -1659,7 +1720,7 @@ const hotkeys = [
         descr: TEXT.hkOpenFull,
         pages: [PAGES.post],
         selectors: ["#big_preview_cont > a"],
-        action: (element) => element.click(),
+        action: makeHugePreview,
     },
     {
         hotkey: "F",
@@ -2929,6 +2990,98 @@ function improveFileUploader () {
     });
 }
 
+function makeHugePreview () {
+    if (window.innerWidth < 1630) {
+        document.body.classList.remove("huge_preview");
+        getElem("#preview_wrapper")?.remove();
+        getElem("#big_preview_cont a").click();
+        return;
+    }
+    if (document.body.classList.contains("huge_preview")) {
+        document.body.classList.remove("huge_preview");
+        getElem("#preview_wrapper")?.remove();
+        return;
+    }
+    if (!makeHugePreview.wasCssAdded) {
+        makeHugePreview.wasCssAdded = true;
+        GM_addStyle(hudePreviewCSS);
+    }
+
+    const [, width, height] = post_filename.match(/\d+/g);
+    let scale = 1;
+    let top = 0;
+    let left = 0;
+
+    const img = newElem("img", {
+        src: getElem("#big_preview_cont a").href,
+        mousedown: (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (ev.buttons === 1) window.addEventListener("mousemove", movePreview);
+        },
+        mouseup: (ev) => {
+            window.removeEventListener("mousemove", movePreview);
+        },
+        dblclick: (ev) => resizePreview(ev, scale === 1 ? 0 : 1),
+        mousewheel: (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (ev.deltaX + ev.deltaY > 0) {
+                resizePreview(ev, scale / 1.2);
+            } else {
+                resizePreview(ev, scale * 1.2);
+            }
+        },
+    });
+    const container = newElem(
+        "div",
+        { id: "preview_container" },
+        img,
+    );
+    getElem("#content").after(newElem("div", { id: "preview_wrapper" }, container));
+    document.body.classList.add("huge_preview");
+    alignContainer();
+    resizePreview({}, 0);
+    document.addEventListener("scroll", alignContainer);
+    window.addEventListener("resize", alignContainer);
+
+    function resizePreview (ev, newScale) {
+        if (newScale) {
+            left += ev.offsetX * (1 - newScale / scale);
+            top += ev.offsetY * (1 - newScale / scale);
+            scale = newScale;
+        } else {
+            // fit to the container
+            scale = Math.min(
+                container.clientWidth / width,
+                container.clientHeight / height,
+            );
+            top = (container.clientHeight - height * scale) / 2;
+            left = (container.clientWidth - width * scale) / 2;
+        }
+        img.style.width = `${width * scale}px`;
+        img.style.height = `${height * scale}px`;
+        img.style.top = `${top}px`;
+        img.style.left = `${left}px`;
+    }
+
+    function movePreview (ev) {
+        if (ev.buttons !== 1) return;
+        img.style.top = `${top += ev.movementY}px`;
+        img.style.left = `${left += ev.movementX}px`;
+    }
+
+    function alignContainer (ev) {
+        const {
+            scrollTop,
+            clientHeight,
+        } = document.scrollingElement;
+        const topp = Math.max(0, 50 - scrollTop);
+        const maxHeight = container.parentElement.clientHeight;
+        container.style.height = `${Math.min(maxHeight, clientHeight - topp)}px`;
+    }
+}
+
 /**
  * Applies alternative wide layout
  */
@@ -3937,6 +4090,24 @@ onready(() => {
         makeTagsMeta();
         highlightTagger();
         getRecommendedTags(updatePreTags).then(addRecommendedTags);
+
+        getElem("#rating")?.append(newElem("span", {
+            css: {
+                cursor: "pointer",
+                backgroundImage: `url('data:image/svg+xml;utf8,\
+                    <svg viewBox="0 0 15 15" xmlns="http://www.w3.org/2000/svg">\
+                        <path fill="${SETTINGS.themeName === "second" ? "white" : "black"}"\
+                            d="M0,0v5h2v-3h3v-2h5v2h3v3h2v-5z M0,10h2v3h3v2h5v-2h3v-3h2v5h-15z"/>\
+                    </svg>\
+                ')`,
+                width: "32px",
+                height: "32px",
+                display: "inline-block",
+                marginLeft: "10px",
+            },
+            title: "Enlarge preview: wheel - zoom, double click - fit/100%",
+            click: makeHugePreview,
+        }));
     }
 
     if (pageIs.searchPosts) {
