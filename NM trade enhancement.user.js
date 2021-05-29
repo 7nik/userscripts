@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      1.4.13
+// @version      1.4.14
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -1419,20 +1419,37 @@ function fixAutoWithdrawnTrade () {
  */
 async function fixFreebieCount (button) {
     const { sett } = getScope(button);
-    // skip discontinued, unreleased, limited, and amateur series
+    // skip discontinued, unreleased, limited
     if (sett.discontinued
         || new Date(sett.released) > Date.now()
         || sett.edition_size === "limited"
-    ) return;
+    ) {
+        return;
+    }
     // assume all series with extra freebies packs have the same number of them
-    const realFreebiesNumber = await fixFreebieCount.realFreebiesNumber
-        ?? await (fixFreebieCount.realFreebiesNumber = api("api", `/pack-tiers/?sett_id=${sett.id}`)
+    // use value from the previous visit
+    let realFreebiesNumber = loadValue("realFreebiesNumber", 3);
+    if (realFreebiesNumber !== 3) {
+        sett.daily_freebies = realFreebiesNumber;
+    }
+    // get the current number of freebies
+    const numberUpdated = fixFreebieCount.numberUpdated
+        ?? (fixFreebieCount.numberUpdated = api("api", `/pack-tiers/?sett_id=${sett.id}`)
             .then((packs) => packs
                 .filter((pack) => pack.currency === "freebie")
                 // eslint-disable-next-line unicorn/no-reduce
-                .reduce((num, pack) => num + pack.count, 0)));
-    if (realFreebiesNumber === 3) return;
-    sett.daily_freebies = realFreebiesNumber;
+                .reduce((num, pack) => num + pack.count, 0))
+            .then((freebieNumber) => {
+                if (realFreebiesNumber !== freebieNumber) {
+                    realFreebiesNumber = freebieNumber;
+                    saveValue("realFreebiesNumber", freebieNumber);
+                    return true;
+                }
+                return false;
+            }));
+    if (await numberUpdated) {
+        sett.daily_freebies = realFreebiesNumber;
+    }
 }
 
 /**
