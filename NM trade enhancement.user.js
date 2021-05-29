@@ -1562,7 +1562,12 @@ async function addTradePreview (notification) {
     const tip = tippy(notification, {
         onTrigger: async (instance) => {
             if (instance.props.content) return;
-            instance.setContent((await Trade.get(tradeId)).makeTradePreview());
+            addTradePreview.currentTradeId = tradeId;
+            const preview = (await Trade.get(tradeId)).makeTradePreview();
+            // set only if it still actuall
+            if (addTradePreview.currentTradeId === tradeId) {
+                instance.setContent(preview);
+            }
         },
         onShow: (instance) => document.body.contains(notification),
     });
