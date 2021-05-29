@@ -1521,7 +1521,7 @@ async function addTradeWindowEnhancements (tradeWindow) {
     forAllElements(tradeWindow, ".trade--item", async (card) => {
         // allow tweak only choosen cards and during trade edition
         if (getScope(card.closest(".trade--side--item-list"))?.showRemove) {
-            const dd = card.querySelector("dd:nth-child(10)");
+            const dd = card.querySelector("dd:nth-child(8)");
             const span = document.createElement("span");
             span.className = "tip";
             span.title = "Change print id";
