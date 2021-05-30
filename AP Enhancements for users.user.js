@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.4.0
+// @version      1.4.1
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -47,7 +47,7 @@ const TEXT = new Proxy(
                 if ((n % 10) === 1 && (n % 100) !== 11) {
                     return singular;
                 }
-                if ((n % 10) >= 2 && (n % 10) <= 4 && (n % 100) < 10 || (n % 100) > 20) {
+                if ((n % 10) >= 2 && (n % 10) <= 4 && ((n % 100) < 10 || (n % 100) > 20)) {
                     return paucal;
                 }
                 return plural;
