@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.4.1
+// @version      1.4.2
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -16,7 +16,8 @@
 // @connect      donmai.us
 // ==/UserScript==
 
-/* global lang site_theme post_id ajax_request2 is_login is_moderator AnimePictures post_filename */
+/* global lang site_theme post_id ajax_request2 is_login is_moderator AnimePictures post_filename
+    db_user_id */
 /* eslint-disable sonarjs/no-duplicate-string, sonarjs/cognitive-complexity, max-classes-per-file */
 
 "use strict";
@@ -1342,7 +1343,7 @@ const generalCSS = `
     /* for recommended tags */
     #post_tags .tags li.waiting a,
     #post_tags .tags li.preTag a {
-        border-left: 2px solid black;
+        border-left: 2px solid aqua;
     }
     .tags li.preTag .icon_delete,
     .tags li.preTag .icon_frame,
@@ -1370,10 +1371,6 @@ const darkThemeCSS = `
     }
     ul.autocomplite li {
         border-color: #666;
-    }
-    #post_tags .tags li.waiting a,
-    #post_tags .tags li.preTag a {
-        border-left: 2px solid aqua;
     }
 `;
 
@@ -2621,13 +2618,14 @@ function getRecommendedTags (mayUpdatePreTags = false) {
         cache.clear();
         document.body.classList.add("wait");
         const { isModerator } = SETTINGS;
+        const yourName = (await getUserInfo(db_user_id)).name;
         // get recommended tag from <tr>
         const addPreTag = async (tr) => {
             const tag = await getTagInfo(tr.children[isModerator ? 1 : 0].textContent.trim());
             [tag.preId] = tr.id.match(/\d+/);
             tag.by = isModerator
                 ? tr.children[0].querySelector("a").textContent
-                : getElem(".sidebar_login .title a").textContent;
+                : yourName;
 
             const postId = tr.children[isModerator ? 2 : 1].querySelector("a").href.match(/\d+/)[0];
             const post = cache.get(postId) || { id: postId, tags: [] };
@@ -2994,6 +2992,9 @@ function improveFileUploader () {
     });
 }
 
+/**
+ * Replace picture thumbnail with bigger zoom-able one
+ */
 function makeHugePreview () {
     if (window.innerWidth < 1630) {
         document.body.classList.remove("huge_preview");
@@ -3458,6 +3459,7 @@ async function onPreTagClick (ev) {
     // -1 - temporal preId => force update preTags and re-add them to the page
     if (preTagId === "-1") {
         SETTINGS.reset("preTagsCache");
+        getRecommendedTags.result = false;
         getRecommendedTags(true).then(addRecommendedTags);
         return;
     }
@@ -3517,23 +3519,25 @@ function onready (fn) {
  * @return {Promise<undefined>}
  */
 async function onTagRecommended (ev) {
-    const by = getElem(".sidebar_login .title a").textContent;
+    const by = (await getUserInfo(db_user_id)).name;
     // get recommended tags
-    const tags = (await Promise.all(
+    const newTags = (await Promise.all(
         getElem("#add_pre_tag_input").value
             .split("||")
             .map((tagName) => getTagInfo(tagName.trim())),
     ))
         .filter(({ id }) => id);
-    tags.forEach((tag) => {
+    newTags.forEach((tag) => {
         tag.by = by;
         tag.preId = -1; // no way to get preId without (re)parsing pages with recommended tags
     });
 
     const cache = SETTINGS.preTagsCache;
-    cache.set({ id: unsafeWindow.post_id, tags });
+    const post = cache.get(post_id) ?? { id: post_id, tags: await getRecommendedTags(true) };
+    post.tags.push(...newTags);
+    cache.add(post);
     SETTINGS.preTagsCache = cache;
-    addRecommendedTags();
+    addRecommendedTags(post.tags);
 }
 
 /**
