@@ -232,6 +232,9 @@ cRdQufwAAAABJRU5ErkJggg==);
     #messages .comments--field:not(:only-child) {
         position: initial;
     }
+    img.asset.remove-gray {
+        cursor: pointer;
+    }
 `);
 
 const cardsInTrades = { receive: {}, give: {}, ready: false };
@@ -1467,6 +1470,19 @@ async function fixFreebieCount (button) {
 }
 
 /**
+ * Allows you to click on gray cards to reveal the colored cards
+ * @param {HTMLElement} card image - <img.asset[src*="_gray"]>
+ */
+async function removeGray (card) {
+    if (card.src.match(/_gray\..{2,7}$/)) {
+        card.classList.add("remove-gray");
+        card.addEventListener('click', () => {
+            card.src = card.src.replace('_gray', '');
+        }, {once : true});
+    }
+}
+
+/**
  * Add to the card a selector to choose print for trading
  * @param {HTMLElement} card - <li.trade--item>
  */
@@ -1606,4 +1622,5 @@ document.addEventListener("DOMContentLoaded", () => {
     forAllElements(document, "div.nm-conversation--header", addLastActionAgo);
     forAllElements(document, "li.nm-notification, li.nm-notifications-feed--item", addTradePreview);
     forAllElements(document, "span.collect-it.collect-it-button", fixFreebieCount);
+    forAllElements(document, "img.asset[src*='_gray']", removeGray);
 });
