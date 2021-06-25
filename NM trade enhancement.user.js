@@ -1622,5 +1622,5 @@ document.addEventListener("DOMContentLoaded", () => {
     forAllElements(document, "div.nm-conversation--header", addLastActionAgo);
     forAllElements(document, "li.nm-notification, li.nm-notifications-feed--item", addTradePreview);
     forAllElements(document, "span.collect-it.collect-it-button", fixFreebieCount);
-    forAllElements(document, "img.asset[src*='_gray']", removeGray);
+    forAllElements(document, "img.asset", removeGray);
 });
