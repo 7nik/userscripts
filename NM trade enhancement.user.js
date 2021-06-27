@@ -1594,6 +1594,18 @@ async function addTradePreview (notification) {
     singleton.setInstances(Object.values(tips));
 }
 
+/**
+ * Allows you to hit enter with your keyboard to dismiss confirm boxes.
+ * @param {Event} e - keydown event
+ */
+async function okayNotification (e) {
+    const ENTER_KEYCODE = 13;
+    if (e.keyCode === ENTER_KEYCODE) {
+        const confirm = document.querySelector('#confirm-btn')
+        confirm && confirm.click();
+    }
+}
+
 // =============================================================================
 //                         Program execution start
 // =============================================================================
@@ -1601,6 +1613,7 @@ async function addTradePreview (notification) {
 fixAutoWithdrawnTrade();
 updateCardsInTrade();
 
+document.addEventListener("keydown", okayNotification);
 document.addEventListener("DOMContentLoaded", () => {
     forAllElements(document, "div.nm-modal.trade", addTradeWindowEnhancements);
     forAllElements(document, "div.nm-conversation--header", addLastActionAgo);
