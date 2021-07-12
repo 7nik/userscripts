@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      1.4.14
+// @version      1.4.15
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -1519,8 +1519,12 @@ async function addTradeWindowEnhancements (tradeWindow) {
         .then((profile) => getUserData(profile));
     // add info to cards
     forAllElements(tradeWindow, ".trade--item", async (card) => {
-        // allow tweak only choosen cards and during trade edition
-        if (getScope(card.closest(".trade--side--item-list"))?.showRemove) {
+        // Allows to tweak only chosen cards during trade edition and only on your side because
+        // other users can unintentionally trade away a card with a low print number thinking that
+        // they accept a trade with the highest print number among owned ones.
+        if (card.closest(".trade--side").matches(".trade--you")
+            && getScope(card.closest(".trade--side--item-list"))?.showRemove
+        ) {
             const dd = card.querySelector("dd:nth-child(8)");
             const span = document.createElement("span");
             span.className = "tip";
