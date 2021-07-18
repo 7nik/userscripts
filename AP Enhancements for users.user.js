@@ -3592,7 +3592,7 @@ async function onTagRecommended (ev) {
 
     const cache = SETTINGS.preTagsCache;
     const post = cache.get(post_id) ?? { id: post_id, tags: await getRecommendedTags(true) };
-    post.tags.push(...newTags);
+    post.tags = post.tags.concat(newTags).map((tag) => ((tag instanceof Tag) ? tag : new Tag(tag)));
     cache.add(post);
     SETTINGS.preTagsCache = cache;
     addRecommendedTags(post.tags);
