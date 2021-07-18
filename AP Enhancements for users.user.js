@@ -236,6 +236,10 @@ const TEXT = new Proxy(
             en: "close tab",
             ru: "закрыть вкладку",
         },
+        copyTags: {
+            en: "Copy tags to the redirected post?",
+            ru: "Скопировать теги на перенаправленный пост?",
+        },
         decline: {
             en: "Decline",
             ru: "Отклонить",
@@ -427,6 +431,10 @@ const TEXT = new Proxy(
         nothing: {
             en: "nothing",
             ru: "ничего",
+        },
+        moveCommentsAndFavorites: {
+            en: "Move comments, stars, and favorites to the redirected post?",
+            ru: "Перенести коменты, звёзды и избранные в перенаправленный пост?",
         },
         pending: {
             en: "Pending",
@@ -1109,6 +1117,16 @@ const API = {
         },
     ),
     /**
+     * Copies tags from one post to another
+     * @param  {(number|string)} fromPostId - ID of the source post
+     * @param  {(number|string)} toPostId - ID of the target post
+     * @return {Promise<Object>} - JSON reponse
+     */
+    copyTags: (fromPostId, toPostId) => API.get(
+        `/pictures/add_tag_from_post/${toPostId}`,
+        { from_post: fromPostId, lang: SETTINGS.lang },
+    ),
+    /**
      * Decline recommended tag, requires moderator rights or being creator of the recommendation
      * @param  {(number|string)} preTagId - Id of the recommendation
      * @return {Promise<Object>} - JSON response
@@ -1147,6 +1165,16 @@ const API = {
      * @return {Promise<Object>} - JSON response
      */
     getUserInfo: (userId) => API.get(`${PAGES.profile}${userId}?type=json`),
+    /**
+     * Moves stars and favorites from one post to another
+     * @param  {(number|string)} fromPostId - ID of the source post
+     * @param  {(number|string)} toPostId - ID of the target post
+     * @return {Promise<Object>} - JSON reponse
+     */
+    moveCommentsAndFavorites: (fromPostId, toPostId) => API.get(
+        `/pictures/move_comment_favorites_scores/${toPostId}`,
+        { from_post: fromPostId, lang: SETTINGS.lang },
+    ),
     /**
      * Delete a tag from a post, requires rights base on post status:
      * NEW - uploader of moderator;
@@ -1195,6 +1223,19 @@ const API = {
         });
         return API.get(`${PAGES.searchPosts}${pageNum}`, params);
     },
+    /**
+     * Changes post status to the given one
+     * @param  {(number|string)} postId - ID of the post which status is changing
+     * @param  {(number|string)} status - Code of the new status:
+     *                                   0 - new, -2 - pre, 1 - publick, 2 - banned
+     * @param  {(number|string)} [banReason] - Code of the reason: 0-8
+     * @param  {(number|string)} [redirectToPostId] - ID of a post for redireting to it
+     * @return {Promise<Object>} - JSON response
+     */
+    setPostStatus: (postId, status, banReason = "0", redirectToPostId = "") => API.post(
+        `/pictures/set_post_status/${postId}`,
+        { status, status_type: banReason, redirect_id: redirectToPostId },
+    ),
 };
 
 // color-related stuff
