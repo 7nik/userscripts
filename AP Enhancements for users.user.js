@@ -3503,16 +3503,20 @@ function onNewTabLinkClick (ev) {
  * @return {Promise<undefined>}
  */
 async function onPreTagClick (ev) {
-    const tagElem = ev.target.closest("li");
-    const { preTagId } = ev.target.parentNode.dataset;
+    let tagElem = ev.target.closest("li");
+    const { tagId } = ev.target.parentNode.dataset;
+    let { preTagId } = ev.target.parentNode.dataset;
     if (!tagElem || !preTagId) return;
     // -1 - temporal preId => force update preTags and re-add them to the page
     if (preTagId === "-1") {
         SETTINGS.reset("preTagsCache");
         getRecommendedTags.result = false;
-        getRecommendedTags(true).then(addRecommendedTags);
-        return;
+        await getRecommendedTags(true).then(addRecommendedTags);
+        tagElem = getElem(`#tag_li_${tagId}`);
+        preTagId = getElem(`#tag_li_${tagId} span[data-pre-tag-id]`)?.dataset.preTagId;
     }
+    if (preTagId === "-1") return;
+
     const preTag = (preTagId < -1
         // eslint-disable-next-line no-undef
         ? await getPermanentlyRecommendedTags?.()
