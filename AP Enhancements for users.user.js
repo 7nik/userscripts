@@ -2502,7 +2502,7 @@ async function addRecommendedTags (recommendedTags) {
     }
 
     getAllElems(".tags li.preTag").forEach((li) => li.remove());
-    const presentedTags = new Set(getAllElems(".tags .edit_tag").map((el) => +el.dataset.tagId));
+    const presentedTags = new Set(getAllElems(".tags > li").map(({ id }) => +id.match(/\d+/)[0]));
 
     const tagsToAdd = recommendedTags.filter((tag, i, tags) => {
         // decline presented tags and duplicated tags
