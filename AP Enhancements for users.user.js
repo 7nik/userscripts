@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.4.2
+// @version      1.4.3
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -243,6 +243,15 @@ const TEXT = new Proxy(
         decline: {
             en: "Decline",
             ru: "Отклонить",
+        },
+        deleteRecommendedTag: {
+            en: "Delete this recommended tag?",
+            ru: "Удалить рекомендованный тег?",
+            jp: "申請しているタグを削除しますか？",
+            zh_CH: "删除推荐标签？",
+            es: "Borrar recomendar tag?",
+            it: "Elimina questo tag consigliato?",
+            fr: "Supprimer le tag recommandé ?",
         },
         duplicate: {
             en: "Duplicate",
@@ -4106,10 +4115,11 @@ onready(() => {
             const { preTagsCache } = SETTINGS;
             const preTag = preTagsCache.get(postId)?.tags.find((tag) => tag.preId === preId);
             if (!preTag) return;
-            if (a.getAttribute("onclick").startsWith("delete_pre_tag")) {
-                new Tag(preTag).decline();
-            } else {
+            if (a.getAttribute("onclick").startsWith("accept_pre_tag")) {
                 new Tag(preTag).accept();
+            // eslint-disable-next-line no-alert
+            } else if (SETTINGS.isModerator || window.confirm(TEXT.deleteRecommendedTag)) {
+                new Tag(preTag).decline();
             }
             ev.stopImmediatePropagation();
             ev.preventDefault();
