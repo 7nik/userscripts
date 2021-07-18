@@ -3576,11 +3576,12 @@ async function onTagRecommended (ev) {
             .split("||")
             .map((tagName) => getTagInfo(tagName.trim())),
     ))
-        .filter(({ id }) => id);
+        .filter(({ id }) => id && !getElem(`#tag_li_${id}`));
     newTags.forEach((tag) => {
         tag.by = by;
         tag.preId = -1; // no way to get preId without (re)parsing pages with recommended tags
     });
+    if (newTags.length === 0) return;
 
     const cache = SETTINGS.preTagsCache;
     const post = cache.get(post_id) ?? { id: post_id, tags: await getRecommendedTags(true) };
