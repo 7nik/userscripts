@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for moderators
 // @namespace    7nik@anime-pictures.net
-// @version      1.4.4
+// @version      1.5.0
 // @description  Makes everything great! Moderator edition
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -741,6 +741,29 @@ onready(() => {
         // fix fields that accept a post ID
         setNumType(getElem("[name=redirect_id]"));
         getAllElems("[name=from_post]").forEach((el) => setNumType(el));
+
+        const postStatusForm = getElem("form[action*=set_post_status]");
+        const initialStatus = postStatusForm.elements.status.value;
+        postStatusForm.addEventListener("submit", (ev) => {
+            // do not allow re-publish with the same status
+            if (initialStatus === postStatusForm.elements.status.value) {
+                ev.preventDefault();
+                return;
+            }
+            const redirectId = postStatusForm.elements.redirect_id.value;
+            // move stars and commentaries to the redirected post if user agrees
+            if (postStatusForm.elements.status.value === "2" && redirectId) {
+                // eslint-disable-next-line no-alert
+                if (window.confirm(TEXT.moveCommentsAndFavorites)) {
+                    API.moveCommentsAndFavorites(post_id, redirectId);
+                }
+                // eslint-disable-next-line no-alert
+                if (window.confirm(TEXT.copyTags)) {
+                    API.copyTags(post_id, redirectId);
+                }
+            }
+        });
+
         // on tag list change
         new MutationObserver(() => {
             openNewTags();
