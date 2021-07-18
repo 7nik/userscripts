@@ -2507,7 +2507,7 @@ async function addRecommendedTags (recommendedTags) {
     const tagsToAdd = recommendedTags.filter((tag, i, tags) => {
         // decline presented tags and duplicated tags
         if (presentedTags.has(tag.id) || tags.findIndex((t) => t.id === tag.id) < i) {
-            tag.decline();
+            if (tag.preId > 0) tag.decline();
             return false;
         }
         return true;
@@ -3576,7 +3576,10 @@ async function onTagRecommended (ev) {
             .split("||")
             .map((tagName) => getTagInfo(tagName.trim())),
     ))
-        .filter(({ id }) => id && !getElem(`#tag_li_${id}`));
+        // skip invalid, already presented, and recommended twice tags
+        .filter(({ id }, i, tags) => (
+            id && !getElem(`#tag_li_${id}`) && tags.findIndex((t) => t.id === id) === i
+        ));
     newTags.forEach((tag) => {
         tag.by = by;
         tag.preId = -1; // no way to get preId without (re)parsing pages with recommended tags
