@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.4.3
+// @version      1.4.4
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -4140,6 +4140,7 @@ onready(() => {
         if (SETTINGS.foldSimilarBlock) makeSimilarBlockFoldable();
         if (getElem("#add_pre_tag_form")) {
             getElem("#add_pre_tag_form").addEventListener("submit", onTagRecommended);
+            getElem("#add_pre_tag_submit").addEventListener("click", onTagRecommended);
         }
 
         // on tag list change
