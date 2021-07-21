@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         AP Enhancements for users
 // @namespace    7nik@anime-pictures.net
-// @version      1.4.4
+// @version      1.4.5
 // @description  Makes everything great!
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -497,6 +497,10 @@ const TEXT = new Proxy(
         removeTags: {
             en: "Remove tags",
             ru: "Убрать теги",
+        },
+        serverError: {
+            en: "Server Error",
+            ru: "Серверная ошибка",
         },
         smallDimension: {
             en: "Dimension is too small",
@@ -3933,7 +3937,7 @@ async function uploadFile (file) {
                         );
                     }
                 } else {
-                    status.textContent = TEXT.netError;
+                    status.textContent = xhr.status >= 500 ? TEXT.serverError : TEXT.netError;
                     post.classList.add("error");
                 }
                 // hide progress bar
