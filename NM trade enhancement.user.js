@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      1.4.15
+// @version      1.4.16
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -125,6 +125,11 @@ betdAD3UQ9OViIA4AAM0mVgxU9d2NAAAAAElFTkSuQmCC);
         position: absolute;
         top: 15px;
         right: 20px;
+    }
+    .trade--item .card-print-text {
+        width: auto;
+        padding: 0;
+        cursor: pointer;
     }
 
     #trade--search--empty {
@@ -1281,6 +1286,10 @@ async function addUsingInTrades (card) {
         return;
     }
 
+    if (card.lastChild.matches(".card-trading")) {
+        card.lastChild.remove();
+    }
+
     const isMySide = card.closest(".trade--side").matches(".trade--you");
     const pid = getScope(card).print[isMySide ? "print_id" : "id"];
     let tradeIds = cardsInTrades[isMySide ? "give" : "receive"][pid];
@@ -1470,7 +1479,9 @@ async function fixFreebieCount (button) {
  * Add to the card a selector to choose print for trading
  * @param {HTMLElement} card - <li.trade--item>
  */
-async function addPrintChooser (card) {
+async function addPrintChooser ({ target }) {
+    const card = target.closest(".trade--item");
+    const dd = target.closest("dd");
     const { id: cardId, print_num: printNum } = getScope(card).print;
     const itemList = getScope(card.closest(".trade--side--item-list"));
     const userId = itemList.offerType === "bidder_offer" ? itemList.you.id : itemList.partner.id;
@@ -1479,7 +1490,7 @@ async function addPrintChooser (card) {
 
     const select = document.createElement("select");
     select.innerHTML = prints
-        .map(({ print_num: num, id }) => `<option value="${id}" label="#${num}">#${num}</option>`)
+        .map(({ print_num: num, id }) => `<option value="${id}" label="#${num}">${num}</option>`)
         .join();
     select.options[prints.findIndex(({ print_num: num }) => num === printNum)].selected = true;
     select.addEventListener("change", (ev) => {
@@ -1488,21 +1499,25 @@ async function addPrintChooser (card) {
         const print = itemList.getOfferData().prints.find(({ id }) => id === cardId);
         const pos = itemList.getOfferData().prints.indexOf(print);
         itemList.removeItem(itemList.offerType, "prints", pos);
-        print.print_num = +ev.target.selectedOptions[0].textContent;
-        print.print_id = +ev.target.value;
+        print.print_num = +select.selectedOptions[0].textContent;
+        print.print_id = +select.value;
         getScope(card.closest(".trade--side").querySelector(".trade--add-items")).addPrint(print);
 
-        if (card.lastChild.matches(".card-trading")) {
-            card.lastChild.remove();
-        }
         addUsingInTrades(card);
     });
 
-    const span = card.querySelector("dd:nth-child(10) span");
-    delete span.dataset.originalTitle;
-    span.style.cursor = null;
-    span.textContent = span.textContent.slice(span.textContent.indexOf("/"));
-    span.prepend(select);
+    delete dd.dataset.originalTitle;
+    dd.firstChild.textContent = "/";
+    dd.prepend(select);
+    dd.classList.remove("card-print-text", "tip");
+
+    new MutationSummary({
+        rootNode: dd,
+        queries: [{ characterData: true }],
+        callback: (summaries) => {
+            dd.firstChild.nextSibling.textContent = "/";
+        },
+    });
 }
 
 /**
@@ -1526,14 +1541,9 @@ async function addTradeWindowEnhancements (tradeWindow) {
             && getScope(card.closest(".trade--side--item-list"))?.showRemove
         ) {
             const dd = card.querySelector("dd:nth-child(8)");
-            const span = document.createElement("span");
-            span.className = "tip";
-            span.title = "Change print id";
-            span.style.cursor = "pointer";
-            span.textContent = dd.textContent;
-            dd.innerHTML = "";
-            dd.append(span);
-            dd.addEventListener("click", () => addPrintChooser(card));
+            dd.classList.add("card-print-text", "tip");
+            dd.title = "Change print number";
+            dd.addEventListener("click", addPrintChooser, { once: true });
         }
         addUsingInTrades(card);
         addCollectionProgress(await you, await partner, card);
