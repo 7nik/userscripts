@@ -1599,7 +1599,7 @@ async function addTradePreview (notification) {
  * @param {Event} ev - keydown event
  */
 function okayNotification (ev) {
-    if (e.code === "Enter") {
+    if (ev.code === "Enter") {
         document.querySelector('#confirm-btn')?.click();
     }
 }
