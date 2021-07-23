@@ -1482,6 +1482,9 @@ async function addPrintChooser (card) {
         .map(({ print_num: num, id }) => `<option value="${id}" label="#${num}">#${num}</option>`)
         .join();
     select.options[prints.findIndex(({ print_num: num }) => num === printNum)].selected = true;
+    select.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+    });
     select.addEventListener("change", (ev) => {
         // in fact, we need update the variable _selectedIds but we don't have access to it
         // so we make re-adding card with updated data
