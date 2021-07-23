@@ -1596,13 +1596,11 @@ async function addTradePreview (notification) {
 
 /**
  * Allows you to hit enter with your keyboard to dismiss confirm boxes.
- * @param {Event} e - keydown event
+ * @param {Event} ev - keydown event
  */
-async function okayNotification (e) {
-    const ENTER_KEYCODE = 13;
-    if (e.keyCode === ENTER_KEYCODE) {
-        const confirm = document.querySelector('#confirm-btn')
-        confirm && confirm.click();
+function okayNotification (ev) {
+    if (e.code === "Enter") {
+        document.querySelector('#confirm-btn')?.click();
     }
 }
 
