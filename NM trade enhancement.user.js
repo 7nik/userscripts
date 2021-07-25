@@ -1614,8 +1614,44 @@ async function addTradePreview (notification) {
  */
 function okayNotification (ev) {
     if (ev.code === "Enter") {
-        document.querySelector('#confirm-btn')?.click();
+        document.querySelector("#confirm-btn")?.click();
     }
+}
+
+/**
+ * On detailed view of a card makes grayed image colored/animed at clicking and holding on it.
+ * @param  {HTMLElement} piece - <div[data-art-piece-asset='piece']>
+ */
+function makePiecePeekable (piece) {
+    if (!piece.querySelector("img[src*='_gray']")) return;
+
+    const { imageSize, piece: { piece_assets: { image, video } } } = getScope(piece);
+    const videoSize = imageSize === "xlarge" ? "large" : imageSize;
+
+    piece.addEventListener("mousedown", (ev) => {
+        if (ev.button !== 0) return;
+        ev.preventDefault();
+
+        let elem;
+        if (video) {
+            elem = document.createElement("video");
+            elem.autoplay = true;
+            elem.loop = true;
+            elem.poster = image[imageSize].url;
+            elem.innerHTML = video[videoSize].sources
+                .map(({ mime_type: type, url }) => `<source src="${url}" type="${type}">`)
+                .join("");
+        } else {
+            elem = document.createElement("img");
+            elem.src = image[imageSize].url;
+        }
+        elem.style.position = "absolute";
+        elem.style.top = "0";
+        elem.style.width = "100%";
+        elem.style.background = "transparent";
+        piece.firstElementChild.append(elem);
+        window.addEventListener("mouseup", () => elem.remove(), { once: true });
+    });
 }
 
 // =============================================================================
@@ -1631,4 +1667,5 @@ document.addEventListener("DOMContentLoaded", () => {
     forAllElements(document, "div.nm-conversation--header", addLastActionAgo);
     forAllElements(document, "li.nm-notification, li.nm-notifications-feed--item", addTradePreview);
     forAllElements(document, "span.collect-it.collect-it-button", fixFreebieCount);
+    forAllElements(document, "div[data-art-piece-asset='piece']", makePiecePeekable);
 });
