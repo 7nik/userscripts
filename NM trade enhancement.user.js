@@ -1637,18 +1637,21 @@ function makePiecePeekable (piece) {
             elem = document.createElement("video");
             elem.autoplay = true;
             elem.loop = true;
-            elem.poster = image[imageSize].url;
             elem.innerHTML = video[videoSize].sources
                 .map(({ mime_type: type, url }) => `<source src="${url}" type="${type}">`)
                 .join("");
+            elem.addEventListener("loadedmetadata", () => { elem.style.cursor = null; });
         } else {
             elem = document.createElement("img");
             elem.src = image[imageSize].url;
+            elem.addEventListener("load", () => { elem.style.cursor = null; });
         }
         elem.style.position = "absolute";
         elem.style.top = "0";
         elem.style.width = "100%";
+        elem.style.height = "100%";
         elem.style.background = "transparent";
+        elem.style.cursor = "progress";
         piece.firstElementChild.append(elem);
         window.addEventListener("mouseup", () => elem.remove(), { once: true });
     });
