@@ -1644,12 +1644,24 @@ async function addTradePreview (notification) {
 }
 
 /**
- * Allows you to hit enter with your keyboard to dismiss confirm boxes.
- * @param {Event} ev - keydown event
+ * Allows you to confirm/decline a confirm message and close a trade by keyboard.
+ * @param {Event} ev - keyup event
  */
-function okayNotification (ev) {
-    if (ev.code === "Enter") {
-        document.querySelector("#confirm-btn")?.click();
+function addHotkeys (ev) {
+    if (["Enter", "NumpadEnter", "Space"].includes(ev.code)) {
+        document.querySelector("#message.show #confirm-btn")?.click();
+    }
+    if (ev.code === "Escape") {
+        // if a confirm message is shown
+        if (document.querySelector("#message.show #cancel-btn")) {
+            document.querySelector("#message.show #cancel-btn").click();
+            ev.stopPropagation();
+        // if a trade window is open
+        } else if (document.querySelector(".nm-modal--actionbar--left")) {
+            document.querySelector(".nm-modal--actionbar--left").click();
+            ev.stopPropagation();
+        }
+        // otherwise an overlay will be closed by the angular
     }
 }
 
@@ -1834,7 +1846,7 @@ function addRollbackTradeButton () {
 fixAutoWithdrawnTrade();
 updateCardsInTrade();
 
-document.addEventListener("keydown", okayNotification);
+document.addEventListener("keyup", addHotkeys, true);
 document.addEventListener("DOMContentLoaded", () => {
     forAllElements(document, "div.nm-modal.trade", addTradeWindowEnhancements);
     forAllElements(document, "div.nm-conversation--header", addLastActionAgo);
