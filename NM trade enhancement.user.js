@@ -237,6 +237,10 @@ cRdQufwAAAABJRU5ErkJggg==);
     #messages .comments--field:not(:only-child) {
         position: initial;
     }
+
+    .btn.wislist-btn {
+        padding: 14px 18px;
+    }
 `);
 
 const cardsInTrades = { receive: {}, give: {}, ready: false };
@@ -1055,9 +1059,10 @@ function getScope (element) {
  * API call to server
  * @param  {("api"|"napi"|"root")} type - Which API scheme use
  * @param  {string} url - Relative URL to API
+ * @param  {object} [body] - Body (params) of the request
  * @return {Promise<Object>} Parsed JSON response
  */
-function api (type, url) {
+function api (type, url, body) {
     let fullUrl;
     switch (type) {
         case "api":  fullUrl = `https://www.neonmob.com/api${url}`; break;
@@ -1067,7 +1072,7 @@ function api (type, url) {
     }
     // forbid parallel requests
     this.lastRequest = (this.lastRequest ?? Promise.resolve())
-        .then(() => fetch(fullUrl), () => fetch(fullUrl))
+        .then(() => fetch(fullUrl, body), () => fetch(fullUrl, body))
         .then((res) => res.json());
     return this.lastRequest;
 }
@@ -1657,6 +1662,71 @@ function makePiecePeekable (piece) {
     });
 }
 
+/**
+ * Adds button to wishlist all unowned cards according to rariry filters
+ * @param {HTMLElement} container - <div.collection--filters>
+ */
+function addWishlistButton (container) {
+    const button = document.createElement("span");
+    button.className = "btn wislist-btn tip";
+    button.textContent = "Wishlist cards";
+    button.title = "Wishlist unowned cards according to the chosen rarities";
+    button.addEventListener("click", wishlistCards);
+    container.append(button);
+}
+
+/**
+ * Wishlist all unowned card according to rarity filters
+ * @param  {Event} ev - The button click event
+ */
+async function wishlistCards (ev) {
+    const container = ev.target.closest(".sett-detail-container");
+    const {
+        applyFilters,
+        favoriteFilter,
+        filters,
+        getNextPage,
+    } = getScope(container);
+
+    // save current filters
+    const { ownership, duplicate } = filters;
+    const favorite  = favoriteFilter?.selected;
+
+    // set temporal filters
+    favoriteFilter.selected = false;
+    filters.ownership = "unowned";
+    filters.duplicate = null;
+    applyFilters();
+
+    // display and save all cards
+    let cards = [];
+    let count;
+    do {
+        count = cards.length;
+        getNextPage();
+        cards = getScope(container).columns.flat();
+    } while (cards.length > count);
+    cards = cards.filter((card) => !card.favorite);
+
+    // sequentially favorite the cards
+    const params = {
+        method: "POST",
+        headers: new Headers({ "X-CSRFToken": document.cookie.match(/csrftoken=(\w+)/)[1] }),
+    };
+    // eslint-disable-next-line no-restricted-syntax
+    for (const card of cards) {
+        // eslint-disable-next-line no-await-in-loop
+        await api("api", `/pieces/${card.id}/favorite/`, params);
+        card.favorite = !card.favorite;
+    }
+
+    // restore the filters
+    favoriteFilter.selected = favorite;
+    filters.ownership = ownership;
+    filters.duplicate = duplicate;
+    applyFilters();
+}
+
 // =============================================================================
 //                         Program execution start
 // =============================================================================
@@ -1671,4 +1741,5 @@ document.addEventListener("DOMContentLoaded", () => {
     forAllElements(document, "li.nm-notification, li.nm-notifications-feed--item", addTradePreview);
     forAllElements(document, "span.collect-it.collect-it-button", fixFreebieCount);
     forAllElements(document, "div[data-art-piece-asset='piece']", makePiecePeekable);
+    forAllElements(document, "div.collection--filters", addWishlistButton);
 });
