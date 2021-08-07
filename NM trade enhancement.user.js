@@ -1775,6 +1775,58 @@ async function wishlistCards (ev) {
     applyFilters();
 }
 
+/**
+ * Patches AngularJS to show button to rollback an edited trade.
+ */
+function addRollbackTradeButton () {
+    // add logic of the button
+    angular.module("nm.trades").controller("rollbackTradeButton", [
+        "$scope",
+        "nmTrades",
+        ($scope, nmTrades) => {
+            const bidderOffer = nmTrades.getOfferData("bidder_offer").prints.slice();
+            const respOffer = nmTrades.getOfferData("responder_offer").prints.slice();
+
+            $scope.cancelChanges = () => {
+                // restore offers
+                let arr = nmTrades.getOfferData("bidder_offer").prints;
+                arr.splice(0, arr.length, ...bidderOffer);
+                arr = nmTrades.getPrintIds("bidder_offer");
+                arr.splice(0, arr.length, ...bidderOffer.map((print) => print.print_id));
+
+                arr = nmTrades.getOfferData("responder_offer").prints;
+                arr.splice(0, arr.length, ...respOffer);
+                arr = nmTrades.getPrintIds("responder_offer");
+                arr.splice(0, arr.length, ...respOffer.map((print) => print.print_id));
+
+                // at countering the bidder and the responder are swapped
+                // so we need to swap them back
+                if (nmTrades.getWindowState() === "counter") {
+                    nmTrades.startCounter();
+                }
+
+                nmTrades.setWindowState("view");
+            };
+        },
+    ]);
+
+    // add the button to the template
+    angular.module("nmApp").run(["$templateCache", ($templateCache) => {
+        let template = $templateCache.get("/static/common/trades/partial/footer.html");
+        template = template.replace(
+            "<span>Offer Trade</span></button>",
+            `<span>Offer Trade</span></button>
+            <button class="btn subdued"
+                    ng-if="getWindowState()==='counter' || getWindowState()==='modify'"
+                    ng-controller="rollbackTradeButton"
+                    ng-click="cancelChanges()">
+                <span>Back</span>
+            </button>`,
+        );
+        $templateCache.put("/static/common/trades/partial/footer.html", template);
+    }]);
+}
+
 // =============================================================================
 //                         Program execution start
 // =============================================================================
@@ -1790,4 +1842,6 @@ document.addEventListener("DOMContentLoaded", () => {
     forAllElements(document, "span.collect-it.collect-it-button", fixFreebieCount);
     forAllElements(document, "div[data-art-piece-asset='piece']", makePiecePeekable);
     forAllElements(document, "div.collection--filters", addWishlistButton);
+
+    addRollbackTradeButton();
 });
