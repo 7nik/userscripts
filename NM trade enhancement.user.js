@@ -241,6 +241,32 @@ cRdQufwAAAABJRU5ErkJggg==);
     .btn.wislist-btn {
         padding: 14px 18px;
     }
+    #wishlist--animate {
+        position: fixed;
+        top: 0;
+        height: 100vh;
+        width: 100vw;
+        background: rgba(37,26,48,.9);
+        z-index: 5;
+        color: silver;
+    }
+    #wishlist--animate > i {
+        position: absolute;
+        font-size: 20pt;
+        animation-name: flyout;
+        animation-duration: var(--time);
+        animation-fill-mode: forwards;
+    }
+    @keyframes flyout {
+        from {
+            top: var(--startY);
+            left: var(--startX);
+        }
+        to {
+            top: var(--endY);
+            left: var(--endX);
+        }
+    }
 `);
 
 const cardsInTrades = { receive: {}, give: {}, ready: false };
@@ -1708,6 +1734,22 @@ async function wishlistCards (ev) {
     } while (cards.length > count);
     cards = cards.filter((card) => !card.favorite);
 
+    // create container with stars that display the wishlist status of the cards
+    const div = document.createElement("div");
+    div.id = "wishlist--animate";
+    div.style.setProperty("--startX", `${ev.clientX / window.innerWidth * 100}%`);
+    div.style.setProperty("--startY", `${ev.clientY / window.innerHeight * 100}%`);
+    div.append(...cards.map(({ id }) => {
+        const i = document.createElement("i");
+        i.className = "icon-like";
+        i.id = `card-${id}`;
+        i.style.setProperty("--endX",  `${5 + Math.random() * 90}%`);
+        i.style.setProperty("--endY", `${5 + Math.random() * 90}%`);
+        i.style.setProperty("--time", `${1 + Math.random() * cards.length * 0.67}s`);
+        return i;
+    }));
+    document.body.prepend(div);
+
     // sequentially favorite the cards
     const params = {
         method: "POST",
@@ -1718,8 +1760,10 @@ async function wishlistCards (ev) {
         // eslint-disable-next-line no-await-in-loop
         await api("api", `/pieces/${card.id}/favorite/`, params);
         card.favorite = !card.favorite;
+        div.querySelector(`#card-${card.id}`).className = "icon-liked";
     }
 
+    div.remove();
     // restore the filters
     favoriteFilter.selected = favorite;
     filters.ownership = ownership;
