@@ -1891,6 +1891,241 @@ function addCachingPartnerList () {
     }]);
 }
 
+/**
+ * Fix directive nm-trade-add to ensure that response is still actual
+ */
+function fixCardSearchCollision () {
+    // we cannot override a directive so we replace it in the template to our own directive
+    angular.module("nmApp").run(["$templateCache", ($templateCache) => {
+        let template = $templateCache.get("/static/common/trades/partial/create.html");
+        template = template.replaceAll("nm-trades-add", "nm-trades-add2");
+        $templateCache.put("/static/common/trades/partial/create.html", template);
+    }]);
+
+    // based on https://d1ld1je540hac5.cloudfront.net/client/common/trades/module/add.js
+    angular.module("nm.trades").directive("nmTradesAdd2", [
+        "$timeout",
+        "artNodeHttpService",
+        "artPieceService",
+        "artResource",
+        "artSubscriptionService",
+        "artUser",
+        "artUrl",
+        "nmTrades",
+        (
+            $timeout,
+            artNodeHttpService,
+            artPieceService,
+            artResource,
+            artSubscriptionService,
+            artUser,
+            artUrl,
+            nmTrades,
+        ) => ({
+            scope: {
+                partner: "=nmTradesAdd2",
+                direction: "@nmTradesAdd2Direction",
+                settId: "=?nmTradesAdd2Sett",
+            },
+            // $scope.direction is either 'give' or 'receive'
+            // if 'give' this is the items the logged in user will give
+            // if 'receive' this is the items the logged in user will receive
+            templateUrl: "/static/common/trades/partial/add.html",
+            link (scope) {
+                scope.you = artUser.toObject();
+                scope.addItemsActive = false;
+                scope.searchType = "cards";
+                scope.loading = false;
+                scope.typing = false;
+                scope.loadingMore = false;
+                scope.showBio = false;
+                scope.itemData = [];
+                scope.baseUrl = "/api/search/prints/";
+
+                const offerType = scope.direction === "give" ? "bidder_offer" : "responder_offer";
+                const receivingUser = scope.direction === "give" ? scope.partner : scope.you;
+                const givingUser = scope.direction === "give" ? scope.you : scope.partner;
+
+                scope.notOwnedBy = {
+                    val: false,
+                    filter: receivingUser.id,
+                };
+
+                scope.wishListBy = {
+                    val: false,
+                    filter: receivingUser.id,
+                };
+
+                scope.incompleteBy = {
+                    val: false,
+                    filter: receivingUser.id,
+                };
+
+                scope.filters = {
+                    user_id: givingUser.id,
+                    partner_id: receivingUser.id,
+                    search: null,
+                    sett: scope.settId,
+                    duplicates_only: false,
+                    common: false,
+                    uncommon: false,
+                    rare: false,
+                    veryRare: false,
+                    extraRare: false,
+                    variant: false,
+                    chase: false,
+                    legendary: false,
+                };
+
+                scope.updateWishListByFilter = () => {
+                    if (scope.wishListBy.val) {
+                        scope.filters.wish_list_by = scope.wishListBy.filter;
+                    } else {
+                        delete scope.filters.wish_list_by;
+                    }
+                    scope.load();
+                };
+
+                scope.updateIncompleteByFilter = () => {
+                    if (scope.incompleteBy.val) {
+                        scope.filters.incomplete_by = scope.incompleteBy.filter;
+                    } else {
+                        delete scope.filters.incomplete_by;
+                    }
+                    scope.load();
+                };
+
+                scope.updateNotOwnedByFilter = () => {
+                    if (scope.notOwnedBy.val) {
+                        scope.filters.not_owned_by = scope.notOwnedBy.filter;
+                    } else {
+                        delete scope.filters.not_owned_by;
+                    }
+                    scope.load();
+                };
+
+                let typingTimeout = null;
+                scope.updateSearchFilter = () => {
+                    if (!scope.typing) scope.typing = true;
+                    $timeout.cancel(typingTimeout);
+                    typingTimeout = $timeout(() => {
+                        scope.load();
+                        scope.typing = false;
+                    }, 500);
+                };
+
+                scope.openAddItems = () => {
+                    scope.addItemsActive = true;
+                    artSubscriptionService.broadcast(`open-add-trade-items-${givingUser.id}`);
+                };
+
+                scope.closeAddItems = () => {
+                    scope.addItemsActive = false;
+                };
+
+                scope.addPrint = (print) => {
+                    nmTrades.addItem(offerType, "prints", print);
+                    scope.closeAddItems();
+                };
+
+                scope.displayPrintInList = (print) => (
+                    nmTrades.hasPrintId(offerType, print.print_id) === false
+                );
+
+                scope.canAddItems = () => {
+                    const offerData = nmTrades.getOfferData(offerType);
+                    return offerData.prints.length < 5;
+                };
+
+                scope.isEmpty = () => scope.items.length === 0;
+
+                scope.getPrintCount = artPieceService.getPrintCount.bind(artPieceService);
+
+                scope.giving = () => scope.direction === "give";
+
+                scope.showCards = () => scope.searchType === "cards";
+
+                scope.getUrl = () => artUrl.updateParams(scope.baseUrl, scope.filters);
+
+                scope.showLoading = () => scope.typing || (scope.loading && !scope.loadingMore);
+
+                scope.getTooltip = (filter) => {
+                    switch (filter) {
+                        case "unowned":
+                            return scope.giving()
+                                ? "Cards your partner doesn't own"
+                                : "Cards you don't own";
+                        case "multiples":
+                            return scope.giving()
+                                ? "Cards you own multiples of"
+                                : "Cards your partner owns multiples of";
+                        case "wish_list":
+                            return scope.giving()
+                                ? "Cards your partner wishlisted"
+                                : "Cards you wishlisted";
+                        case "incomplete_by":
+                            return scope.giving()
+                                ? "Cards from same series you and your partner are collecting"
+                                : "Cards from same series your partner and you are collecting";
+                        default:
+                            throw new Error(`Unknown filter: ${filter}`);
+                    }
+                };
+
+                let lastUrl;
+                scope.load = () => {
+                    scope.loading = true;
+                    scope.loadingMore = false;
+                    const url = scope.getUrl();
+                    lastUrl = url;
+                    artResource.retrievePaginated(url).then((data) => {
+                        if (lastUrl !== url) return;
+                        scope.itemData = data;
+                        scope.loading = false;
+                    });
+                };
+
+                scope.getNextPage = () => {
+                    if (scope.loading || !scope.itemData.next) return;
+                    scope.loading = true;
+                    scope.loadingMore = true;
+                    scope.itemData.retrieveNext().then((data) => {
+                        scope.loading = false;
+                        scope.loadingMore = false;
+                    });
+                };
+
+                // initiate all data
+                const stopWordRegex = /^the-/;
+                function prepareSettsForDisplay (settData) {
+                    if (!settData) return;
+
+                    settData
+                        // copy array and fix slug names
+                        .map((item) => {
+                            item.$name_slug = item.name_slug.replace(stopWordRegex, "");
+                            return item;
+                        })
+                        .sort((a, b) => a.$name_slug.localeCompare(b.$name_slug))
+                        .forEach(({ name, id }) => {
+                            scope.collectedSetts.push({ name, id });
+                            if (id === scope.settId) {
+                                scope.filters.sett = id;
+                            }
+                        });
+                }
+
+                scope.load();
+                scope.collectedSetts = [{ id: null, name: "Choose a Series" }];
+                scope.filters.sett = scope.collectedSetts[0].id;
+                artNodeHttpService.get(givingUser.links.collected_setts_names_only).then((data) => {
+                    prepareSettsForDisplay(data);
+                });
+            },
+        }),
+    ]);
+}
+
 // =============================================================================
 //                         Program execution start
 // =============================================================================
@@ -1909,4 +2144,5 @@ document.addEventListener("DOMContentLoaded", () => {
 
     addRollbackTradeButton();
     addCachingPartnerList();
+    fixCardSearchCollision();
 });
