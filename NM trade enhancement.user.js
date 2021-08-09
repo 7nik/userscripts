@@ -1791,25 +1791,27 @@ async function wishlistCards (ev) {
  * Patches AngularJS to show button to rollback an edited trade.
  */
 function addRollbackTradeButton () {
+    // replace target array's data with source's data
+    const replaceArray = (target, source) => {
+        target.splice(0, target.length, ...source);
+    };
+    const getId = (print) => print.print_id;
+
     // add logic of the button
     angular.module("nm.trades").controller("rollbackTradeButton", [
         "$scope",
         "nmTrades",
         ($scope, nmTrades) => {
+            // save copies of the original offers
             const bidderOffer = nmTrades.getOfferData("bidder_offer").prints.slice();
             const respOffer = nmTrades.getOfferData("responder_offer").prints.slice();
 
             $scope.cancelChanges = () => {
                 // restore offers
-                let arr = nmTrades.getOfferData("bidder_offer").prints;
-                arr.splice(0, arr.length, ...bidderOffer);
-                arr = nmTrades.getPrintIds("bidder_offer");
-                arr.splice(0, arr.length, ...bidderOffer.map((print) => print.print_id));
-
-                arr = nmTrades.getOfferData("responder_offer").prints;
-                arr.splice(0, arr.length, ...respOffer);
-                arr = nmTrades.getPrintIds("responder_offer");
-                arr.splice(0, arr.length, ...respOffer.map((print) => print.print_id));
+                replaceArray(nmTrades.getOfferData("bidder_offer").prints, bidderOffer);
+                replaceArray(nmTrades.getOfferData("responder_offer").prints, respOffer);
+                replaceArray(nmTrades.getPrintIds("bidder_offer"), bidderOffer.map(getId));
+                replaceArray(nmTrades.getPrintIds("responder_offer"), respOffer.map(getId));
 
                 // at countering the bidder and the responder are swapped
                 // so we need to swap them back
@@ -1821,6 +1823,32 @@ function addRollbackTradeButton () {
             };
         },
     ]);
+
+    // replace method `nmTrades.startCounter` with one that doesn't resets variable `_tradeId`
+    angular.module("nm.trades").run(["nmTrades", (nmTrades) => {
+        nmTrades.startCounter = () => {
+            nmTrades.startModify(); // to set `_parentId`
+
+            // swap offers without overwriting arrays
+            const origBidOffer = nmTrades.getOfferData("bidder_offer").prints.slice();
+            const origRespOffer = nmTrades.getOfferData("responder_offer").prints.slice();
+
+            replaceArray(nmTrades.getOfferData("bidder_offer").prints, origRespOffer);
+            replaceArray(nmTrades.getOfferData("responder_offer").prints, origBidOffer);
+            replaceArray(nmTrades.getPrintIds("bidder_offer"), origRespOffer.map(getId));
+            replaceArray(nmTrades.getPrintIds("responder_offer"), origBidOffer.map(getId));
+
+            // swap bidder and responder without overwriting objects themself
+            const bidder = nmTrades.getBidder();
+            const responder = nmTrades.getResponder();
+
+            Object.getOwnPropertyNames(bidder).forEach((prop) => {
+                [bidder[prop], responder[prop]] = [responder[prop], bidder[prop]];
+            });
+
+            nmTrades.setWindowState("counter");
+        };
+    }]);
 
     // add the button to the template
     angular.module("nmApp").run(["$templateCache", ($templateCache) => {
@@ -1857,3 +1885,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     addRollbackTradeButton();
 });
+
+// avoid reloading the partners list
+// fix card search collision
