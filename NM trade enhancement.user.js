@@ -1867,6 +1867,30 @@ function addRollbackTradeButton () {
     }]);
 }
 
+/**
+ * Cache list of partners for 15 minutes.
+ */
+function addCachingPartnerList () {
+    angular.module("Art").run(["artResource", (artResource) => {
+        const origFunc = artResource.retrievePaginatedAllowCancel;
+        const cache = {};
+        artResource.retrievePaginatedAllowCancel = (config) => {
+            // this function is used only in the partner search list
+            // so it safe to use only the url as a key
+            if (!(config.url in cache)) {
+                cache[config.url] = origFunc(config);
+                const timer = setTimeout(() => { delete cache[config.url]; }, 15 * 60 * 1000);
+                // do not cache bad responces
+                cache[config.url].catch(() => {
+                    delete cache[config.url];
+                    clearTimeout(timer);
+                });
+            }
+            return cache[config.url];
+        };
+    }]);
+}
+
 // =============================================================================
 //                         Program execution start
 // =============================================================================
@@ -1884,7 +1908,5 @@ document.addEventListener("DOMContentLoaded", () => {
     forAllElements(document, "div.collection--filters", addWishlistButton);
 
     addRollbackTradeButton();
+    addCachingPartnerList();
 });
-
-// avoid reloading the partners list
-// fix card search collision
