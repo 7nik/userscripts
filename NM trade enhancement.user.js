@@ -275,6 +275,8 @@ GM_addStyle(`
 
 const cardsInTrades = { receive: {}, give: {}, ready: false };
 
+const debug = (...args) => console.debug("[NM trade enhancement]", ...args);
+
 /**
  * Adds card fitlers to one side of the trade window
  */
@@ -1821,6 +1823,7 @@ function addRollbackTradeButton () {
 
                 nmTrades.setWindowState("view");
             };
+            debug("rollbackTradeButton initiated");
         },
     ]);
 
@@ -1848,6 +1851,7 @@ function addRollbackTradeButton () {
 
             nmTrades.setWindowState("counter");
         };
+        debug("nmTrades patched");
     }]);
 
     // add the button to the template
@@ -1864,6 +1868,7 @@ function addRollbackTradeButton () {
             </button>`,
         );
         $templateCache.put("/static/common/trades/partial/footer.html", template);
+        debug("trades/partial/footer.html patched");
     }]);
 }
 
@@ -1871,7 +1876,7 @@ function addRollbackTradeButton () {
  * Cache list of partners for 15 minutes.
  */
 function addCachingPartnerList () {
-    angular.module("Art").run(["artResource", (artResource) => {
+    (window.artModule ?? angular.module("Art")).run(["artResource", (artResource) => {
         const origFunc = artResource.retrievePaginatedAllowCancel;
         const cache = {};
         artResource.retrievePaginatedAllowCancel = (config) => {
@@ -1888,6 +1893,7 @@ function addCachingPartnerList () {
             }
             return cache[config.url];
         };
+        debug("artResource patched");
     }]);
 }
 
@@ -1900,6 +1906,7 @@ function fixCardSearchCollision () {
         let template = $templateCache.get("/static/common/trades/partial/create.html");
         template = template.replaceAll("nm-trades-add", "nm-trades-add2");
         $templateCache.put("/static/common/trades/partial/create.html", template);
+        debug("trades/partial/create.html patched");
     }]);
 
     // based on https://d1ld1je540hac5.cloudfront.net/client/common/trades/module/add.js
@@ -2121,6 +2128,7 @@ function fixCardSearchCollision () {
                 artNodeHttpService.get(givingUser.links.collected_setts_names_only).then((data) => {
                     prepareSettsForDisplay(data);
                 });
+                debug("nmTradesAdd2 initiated");
             },
         }),
     ]);
