@@ -1181,101 +1181,6 @@ function getSeriesInfo (settId) {
 }
 
 /**
- * @typedef {Object} UserData
- * @property {string} name - User name
- * @property {string} link - Link to user profile
- * @property {Object} profile - User profile
- * @property {Object} setts - Map of user collections
- */
-/**
- * Gather user's info into one object
- * @param  {Object} profile - User profile
- * @param  {string=} name - User name to display
- * @return {Promise<UserData>} User data
- */
-async function getUserData (profile, name = profile?.first_name) {
-    if (!profile) return null;
-    const users = getUserData.users || (getUserData.users = {});
-    if (!users[profile.id]) {
-        const settNames = await api(null, profile.links.collected_setts_names_only);
-        const settMap = {};
-        // eslint-disable-next-line no-restricted-syntax
-        for (const sett of settNames) {
-            settMap[sett.name.trim().replace(/\s{2,}/g, " ")] = sett;
-        }
-        users[profile.id] = {
-            name,
-            profile,
-            setts: settMap,
-            link: profile.links.profile,
-        };
-    }
-    return users[profile.id];
-}
-
-/**
- * Returns an <a> with link to the collection and the collection progress at its tooltip
- * @param  {UserData} user - User data
- * @param  {HTMLElement} card - <li.trade--item>
- * @return {HTMLElement} <a>
- */
-function getCollectionStats (user, card) {
-    const settName = card.querySelector("dd:nth-of-type(2)").firstChild.textContent.trim();
-    const sett = user.setts[settName];
-    const total = (rarity) => sett[`${rarity}_piece_count`];
-    const owned = (rarity) => sett.owned_metrics[`owned_${rarity}_piece_count`];
-    const span = document.createElement("span");
-    span.textContent = `${user.name}: `;
-
-    if (!sett) {
-        span.textContent += "—";
-        span.classList.add("text-warning");
-        return span;
-    }
-    const a = document.createElement("a");
-    a.classList.add("href-link");
-    a.href = sett.links.permalink.concat(`/user${user.link}/cards/`);
-    a.target = "_blank";
-    a.textContent = `
-        ${(owned("core") + owned("chase") + owned("variant") + owned("legendary"))}
-        /
-        ${(total("core") + total("chase") + total("variant") + total("legendary"))}
-    `.replace(/\s/g, "");
-    tippy(a, {
-        allowHTML: true,
-        content: ["core", "chase", "variant", "legendary"]
-            .filter((rarity) => total(rarity))
-            .map((r) => `${owned(r)}/${total(r)}&nbsp;<i class='i ${r}'></i>`)
-            // if 4 items then locate them in 2 rows
-            // eslint-disable-next-line unicorn/no-reduce
-            .reduce((prevs, curr, i, { length }) => (
-                `${prevs}${length === 4 && i === 2 ? "<br>" : "<i class='pipe'></i>"}${curr}`
-            )),
-        theme: "tooltip",
-    });
-    span.append(a);
-    return span;
-}
-
-/**
- * Adds to card your and partner's collection progress
- * @param {UserData} you - Your data
- * @param {UserData} partner - Partner data
- * @param {HTMLElement} card - <li.trade--item>
- */
-function addCollectionProgress (you, partner, card) {
-    const rarity = card.querySelector("dt:nth-of-type(3)");
-    const dt = document.createElement("dt");
-    dt.className = "small-caps";
-    dt.textContent = "Collected";
-    rarity.before(dt);
-    const dd = document.createElement("dd");
-    dd.className = "collected-cards";
-    dd.append(getCollectionStats(you, card), ", ", getCollectionStats(partner, card));
-    rarity.before(dd);
-}
-
-/**
  * Keep data in the variable `cardsInTrades` syncronized with pending
  */
 async function updateCardsInTrade () {
@@ -1564,11 +1469,6 @@ async function addPrintChooser ({ target }) {
 async function addTradeWindowEnhancements (tradeWindow) {
     forAllElements(tradeWindow, ".trade--add-items", (side) => new CardFilter(side));
 
-    const you = getUserData(NM.you.attributes, "You");
-    // wait for the appearance of partner data and then get it
-    const partner = waitForElement(tradeWindow, "div.trade--side--item-list")
-        .then((elem) => getScope(elem)?.partner)
-        .then((profile) => getUserData(profile));
     // add info to cards
     forAllElements(tradeWindow, ".trade--item", async (card) => {
         // Allows to tweak only chosen cards during trade edition and only on your side because
@@ -1583,7 +1483,6 @@ async function addTradeWindowEnhancements (tradeWindow) {
             dd.addEventListener("click", addPrintChooser, { once: true });
         }
         addUsingInTrades(card);
-        addCollectionProgress(await you, await partner, card);
     });
 }
 
@@ -1901,13 +1800,124 @@ function addCachingPartnerList () {
  * Fix directive nm-trade-add to ensure that response is still actual
  */
 function fixCardSearchCollision () {
-    // we cannot override a directive so we replace it in the template to our own directive
     angular.module("nmApp").run(["$templateCache", ($templateCache) => {
+        // we cannot override a directive so we replace it in the template to our own directive
         let template = $templateCache.get("/static/common/trades/partial/create.html");
         template = template.replaceAll("nm-trades-add", "nm-trades-add2");
         $templateCache.put("/static/common/trades/partial/create.html", template);
         debug("trades/partial/create.html patched");
+
+        // inject collection progress into the template
+        const original = "<dt class=small-caps>Rarity</dt>";
+        const patched = `
+            <dt class=small-caps>Collected</dt>
+            <dd>
+                <span
+                    nm-collection-progress=you
+                    nm-collection-progress-sett-id=print.sett_id
+                ></span>,
+                <span
+                    nm-collection-progress=partner
+                    nm-collection-progress-sett-id=print.sett_id
+                ></span>
+            </dd>
+            <dt class=small-caps>Rarity</dt>
+        `;
+        template = $templateCache.get("/static/common/trades/partial/add.html");
+        template = template.replace(original, patched);
+        $templateCache.put("/static/common/trades/partial/add.html", template);
+        debug("trades/partial/add.html patched");
+
+        template = $templateCache.get("/static/common/trades/partial/item-list.html");
+        template = template.replace(original, patched);
+        $templateCache.put("/static/common/trades/partial/item-list.html", template);
+        debug("trades/partial/item-list.html patched");
     }]);
+
+    // load and keep users' collections when trade is loading
+    angular.module("nm.trades").run(["nmTrades", (nmTrades) => {
+        let collections = {};
+        async function loadCollections (user) {
+            if (user.id in collections) return collections[user.id];
+            const setts = await fetch(user.links.collected_setts_names_only).then((r) => r.json());
+            const settMap = {};
+            // eslint-disable-next-line no-restricted-syntax
+            for (const sett of setts) {
+                settMap[sett.id] = sett;
+            }
+            return settMap;
+        }
+
+        const origSetWindowState = nmTrades.setWindowState;
+        nmTrades.setWindowState = (state) => {
+            if (state === "create" || state === "view") {
+                collections[nmTrades.getResponder().id] = loadCollections(nmTrades.getResponder());
+                collections[nmTrades.getBidder().id] = loadCollections(nmTrades.getBidder());
+            }
+            origSetWindowState(state);
+        };
+        nmTrades.getCollections = (user) => {
+            if (!(user.id in collections)) {
+                collections[user.id] = loadCollections(user);
+            }
+            return collections[user.id];
+        };
+        const origClearTradeQuery = nmTrades.clearTradeQuery;
+        nmTrades.clearTradeQuery = () => {
+            collections = {};
+            origClearTradeQuery();
+        };
+
+        debug("nmTrades patched 2");
+    }]);
+
+    // a directive to display collection progress
+    angular.module("nm.trades").directive("nmCollectionProgress", ["nmTrades", (nmTrades) => ({
+        scope: {
+            user: "=nmCollectionProgress",
+            settId: "=nmCollectionProgressSettId",
+        },
+        template: `
+            <span ng-class="{'text-warning': !hasCollection}">
+                {{username}}:&nbsp;
+                <a ng-if="hasCollection" href="{{link}}" target="_blank" class="href-link">
+                    {{progress}}
+                </a>
+                <span ng-if="!hasCollection">—</span>
+            </span>
+        `.trim().replace(/\n\s+/g, ""),
+        replace: true,
+        async link (scope, elem) {
+            scope.username = scope.user.id === NM.you.attributes.id ? "You" : scope.user.first_name;
+
+            const setts = await nmTrades.getCollections(scope.user);
+            const sett = setts[scope.settId];
+            const total = (rarity) => sett[`${rarity}_piece_count`];
+            const owned = (rarity) => sett.owned_metrics[`owned_${rarity}_piece_count`];
+
+            scope.hasCollection = !!sett;
+            if (!scope.hasCollection) return;
+            scope.link = sett.links.permalink.concat(`/user${scope.user.links.profile}/cards/`);
+            scope.progress = `
+                ${(owned("core") + owned("chase") + owned("variant") + owned("legendary"))}
+                /
+                ${(total("core") + total("chase") + total("variant") + total("legendary"))}
+            `.replace(/\s/g, "");
+
+            tippy(await waitForElement(elem[0], "a"), {
+                allowHTML: true,
+                content: ["core", "chase", "variant", "legendary"]
+                    .filter((rarity) => total(rarity))
+                    .map((r) => `${owned(r)}/${total(r)}&nbsp;<i class='i ${r}'></i>`)
+                    // if 4 items then locate them in 2 rows
+                    // eslint-disable-next-line unicorn/no-reduce
+                    .reduce((prevs, curr, i, { length }) => (
+                        `${prevs}${length === 4 && i === 2 ? "<br>" : "<i class=pipe></i>"}${curr}`
+                    )),
+                theme: "tooltip",
+            });
+        },
+    })]);
 
     // based on https://d1ld1je540hac5.cloudfront.net/client/common/trades/module/add.js
     angular.module("nm.trades").directive("nmTradesAdd2", [
@@ -1941,7 +1951,6 @@ function fixCardSearchCollision () {
             link (scope) {
                 scope.you = artUser.toObject();
                 scope.addItemsActive = false;
-                scope.searchType = "cards";
                 scope.loading = false;
                 scope.typing = false;
                 scope.loadingMore = false;
@@ -2050,7 +2059,7 @@ function fixCardSearchCollision () {
 
                 scope.giving = () => scope.direction === "give";
 
-                scope.showCards = () => scope.searchType === "cards";
+                scope.showCards = () => true; // only user can trade only cards
 
                 scope.getUrl = () => artUrl.updateParams(scope.baseUrl, scope.filters);
 
@@ -2103,31 +2112,19 @@ function fixCardSearchCollision () {
                 };
 
                 // initiate all data
-                const stopWordRegex = /^the-/;
+                const stopWord = /^the /;
                 function prepareSettsForDisplay (settData) {
                     if (!settData) return;
 
-                    settData
-                        // copy array and fix slug names
-                        .map((item) => {
-                            item.$name_slug = item.name_slug.replace(stopWordRegex, "");
-                            return item;
-                        })
-                        .sort((a, b) => a.$name_slug.localeCompare(b.$name_slug))
-                        .forEach(({ name, id }) => {
-                            scope.collectedSetts.push({ name, id });
-                            if (id === scope.settId) {
-                                scope.filters.sett = id;
-                            }
-                        });
+                    scope.collectedSetts.push(...Object.values(settData)
+                        .map(({ id, name }) => ({ id, name, $name: name.replace(stopWord, "") }))
+                        .sort((a, b) => a.$name.localeCompare(b.$name)));
                 }
 
                 scope.load();
                 scope.collectedSetts = [{ id: null, name: "Choose a Series" }];
                 scope.filters.sett = scope.collectedSetts[0].id;
-                artNodeHttpService.get(givingUser.links.collected_setts_names_only).then((data) => {
-                    prepareSettsForDisplay(data);
-                });
+                nmTrades.getCollections(givingUser).then(prepareSettsForDisplay);
                 debug("nmTradesAdd2 initiated");
             },
         }),
