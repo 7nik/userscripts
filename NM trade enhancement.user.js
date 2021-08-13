@@ -1782,6 +1782,7 @@ function fixCardSearchCollision () {
             for (const sett of setts) {
                 settMap[sett.id] = sett;
             }
+            collections[user.id] = settMap;
             return settMap;
         }
 
@@ -1827,7 +1828,8 @@ function fixCardSearchCollision () {
         async link (scope, $elem) {
             scope.username = scope.user.id === NM.you.attributes.id ? "You" : scope.user.first_name;
 
-            const setts = await nmTrades.getCollections(scope.user);
+            const data = nmTrades.getCollections(scope.user);
+            const setts = data instanceof Promise ? await data : data;
             const sett = setts[scope.settId];
             const total = (rarity) => sett[`${rarity}_piece_count`];
             const owned = (rarity) => sett.owned_metrics[`owned_${rarity}_piece_count`];
@@ -2150,7 +2152,12 @@ function fixCardSearchCollision () {
                 scope.load();
                 scope.collectedSetts = [{ id: null, name: "Choose a Series" }];
                 scope.filters.sett = scope.collectedSetts[0].id;
-                nmTrades.getCollections(givingUser).then(prepareSettsForDisplay);
+                const data = nmTrades.getCollections(givingUser);
+                if (data instanceof Promise) {
+                    data.then(prepareSettsForDisplay);
+                } else {
+                    prepareSettsForDisplay(data);
+                }
                 debug("nmTradesAdd2 initiated");
             },
         }),
