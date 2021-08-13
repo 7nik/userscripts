@@ -1861,6 +1861,11 @@ function fixCardSearchCollision () {
     // a directive to mark cards used in other trades
     angular.module("nm.trades").directive("nmUsedInTrades", ["nmTrades", (nmTrades) => {
         const attachTip = async (elem, tradeIds) => {
+            // destroy preivous tip if presented
+            // eslint-disable-next-line no-underscore-dangle
+            elem._tippy?.destroy();
+            if (tradeIds.length === 0) return;
+
             const trades = await Promise.all(tradeIds.map((id) => Trade.get(id)));
 
             const tip = document.createElement("div");
@@ -1904,7 +1909,7 @@ function fixCardSearchCollision () {
                 theme: "trade",
             });
         };
-        const update = async (print, elem) => {
+        const getTrades = async (print, elem) => {
             if (cardsInTrades.loading) await cardsInTrades.loading;
 
             const giving = elem.closest(".trade--side").matches(".trade--you");
@@ -1917,12 +1922,7 @@ function fixCardSearchCollision () {
                 tradeIds = tradeIds.filter((trade) => trade !== currentTrade);
             }
 
-            // destroy preivous tip if presented
-            // eslint-disable-next-line no-underscore-dangle
-            elem._tippy?.destroy();
-            if (tradeIds.length > 0) attachTip(elem, tradeIds);
-
-            return tradeIds.length;
+            return tradeIds;
         };
 
         return {
@@ -1937,10 +1937,11 @@ function fixCardSearchCollision () {
             `,
             async link (scope, $elem) {
                 scope.length = 0;
-                scope.update = () => update(scope.print, $elem[0]).then((length) => {
-                    scope.$apply(() => { scope.length = length; });
+                scope.update = () => getTrades(scope.print, $elem[0]).then((trades) => {
+                    scope.$apply(() => { scope.length = trades.length; });
+                    attachTip(trades, $elem[0]);
                 });
-                scope.length = await update(scope.print, $elem[0]);
+                scope.update();
             },
         };
     }]);
