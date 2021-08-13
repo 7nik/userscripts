@@ -2119,6 +2119,8 @@ function fixCardSearchCollision () {
                     scope.collectedSetts.push(...Object.values(settData)
                         .map(({ id, name }) => ({ id, name, $name: name.replace(stopWord, "") }))
                         .sort((a, b) => a.$name.localeCompare(b.$name)));
+
+                    if (settData[scope.settId]) scope.filters.sett = scope.settId;
                 }
 
                 scope.load();
