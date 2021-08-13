@@ -139,11 +139,6 @@ GM_addStyle(`
         top: 15px;
         right: 20px;
     }
-    .trade--item .card-print-text {
-        width: auto;
-        padding: 0;
-        cursor: pointer;
-    }
 
     #trade--search--empty {
         animation: fadeIn 0s 0.15s backwards;
@@ -1350,70 +1345,11 @@ async function fixFreebieCount (button) {
 }
 
 /**
- * Add to the card a selector to choose print for trading
- * @param {HTMLElement} card - <li.trade--item>
- */
-async function addPrintChooser ({ target }) {
-    const card = target.closest(".trade--item");
-    const dd = target.closest("dd");
-    const { id: cardId, print_num: printNum } = getScope(card).print;
-    const itemList = getScope(card.closest(".trade--side--item-list"));
-    const userId = itemList.offerType === "bidder_offer" ? itemList.you.id : itemList.partner.id;
-    const details = await api("api", `/users/${userId}/piece/${cardId}/detail/`);
-    const { prints } = details.refs[details.payload[1]];
-
-    const select = document.createElement("select");
-    select.innerHTML = prints
-        .map(({ print_num: num, id }) => `<option value="${id}" label="#${num}">${num}</option>`)
-        .join();
-    select.options[prints.findIndex(({ print_num: num }) => num === printNum)].selected = true;
-    select.addEventListener("change", (ev) => {
-        // in fact, we need update the variable _selectedIds but we don't have access to it
-        // so we make re-adding card with updated data
-        const print = itemList.getOfferData().prints.find(({ id }) => id === cardId);
-        const pos = itemList.getOfferData().prints.indexOf(print);
-        itemList.removeItem(itemList.offerType, "prints", pos);
-        print.print_num = +select.selectedOptions[0].textContent;
-        print.print_id = +select.value;
-        getScope(card.closest(".trade--side").querySelector(".trade--add-items")).addPrint(print);
-        getScope(card.querySelector("[nm-used-in-trades]").childNodes[1]).update();
-    });
-
-    delete dd.dataset.originalTitle;
-    dd.firstChild.textContent = "/";
-    dd.prepend(select);
-    dd.classList.remove("card-print-text", "tip");
-
-    new MutationSummary({
-        rootNode: dd,
-        queries: [{ characterData: true }],
-        callback: (summaries) => {
-            dd.firstChild.nextSibling.textContent = "/";
-        },
-    });
-}
-
-/**
  * Apply enhancement to the trade window
  * @param {HTMLElement} tradeWindow - <div.nm-modal.trade>
  */
 async function addTradeWindowEnhancements (tradeWindow) {
     forAllElements(tradeWindow, ".trade--add-items", (side) => new CardFilter(side));
-
-    // add info to cards
-    forAllElements(tradeWindow, ".trade--item", async (card) => {
-        // Allows to tweak only chosen cards during trade edition and only on your side because
-        // other users can unintentionally trade away a card with a low print number thinking that
-        // they accept a trade with the highest print number among owned ones.
-        if (card.closest(".trade--side").matches(".trade--you")
-            && getScope(card.closest(".trade--side--item-list"))?.showRemove
-        ) {
-            const dd = card.querySelector("dd:nth-child(10)");
-            dd.classList.add("card-print-text", "tip");
-            dd.title = "Change print number";
-            dd.addEventListener("click", addPrintChooser, { once: true });
-        }
-    });
 }
 
 /**
@@ -1622,12 +1558,6 @@ async function wishlistCards (ev) {
  * Patches AngularJS to show button to rollback an edited trade.
  */
 function addRollbackTradeButton () {
-    // replace target array's data with source's data
-    const replaceArray = (target, source) => {
-        target.splice(0, target.length, ...source);
-    };
-    const getId = (print) => print.print_id;
-
     // add logic of the button
     angular.module("nm.trades").controller("rollbackTradeButton", [
         "$scope",
@@ -1639,10 +1569,8 @@ function addRollbackTradeButton () {
 
             $scope.cancelChanges = () => {
                 // restore offers
-                replaceArray(nmTrades.getOfferData("bidder_offer").prints, bidderOffer);
-                replaceArray(nmTrades.getOfferData("responder_offer").prints, respOffer);
-                replaceArray(nmTrades.getPrintIds("bidder_offer"), bidderOffer.map(getId));
-                replaceArray(nmTrades.getPrintIds("responder_offer"), respOffer.map(getId));
+                nmTrades.setOfferData("bidder_offer", bidderOffer);
+                nmTrades.setOfferData("responder_offer", respOffer);
 
                 // at countering the bidder and the responder are swapped
                 // so we need to swap them back
@@ -1658,17 +1586,22 @@ function addRollbackTradeButton () {
 
     // replace method `nmTrades.startCounter` with one that doesn't resets variable `_tradeId`
     angular.module("nm.trades").run(["nmTrades", (nmTrades) => {
+        const replaceArray = (target, source) => {
+            target.splice(0, target.length, ...source);
+        };
+        nmTrades.setOfferData = (offerType, prints) => {
+            replaceArray(nmTrades.getOfferData(offerType).prints, prints);
+            replaceArray(nmTrades.getPrintIds(offerType), prints.map((print) => print.print_id));
+        };
         nmTrades.startCounter = () => {
             nmTrades.startModify(); // to set `_parentId`
 
             // swap offers without overwriting arrays
-            const origBidOffer = nmTrades.getOfferData("bidder_offer").prints.slice();
-            const origRespOffer = nmTrades.getOfferData("responder_offer").prints.slice();
+            const bidOffer = nmTrades.getOfferData("bidder_offer").prints.slice();
+            const respOffer = nmTrades.getOfferData("responder_offer").prints.slice();
 
-            replaceArray(nmTrades.getOfferData("bidder_offer").prints, origRespOffer);
-            replaceArray(nmTrades.getOfferData("responder_offer").prints, origBidOffer);
-            replaceArray(nmTrades.getPrintIds("bidder_offer"), origRespOffer.map(getId));
-            replaceArray(nmTrades.getPrintIds("responder_offer"), origBidOffer.map(getId));
+            nmTrades.setOfferData("bidder_offer", respOffer);
+            nmTrades.setOfferData("responder_offer", bidOffer);
 
             // swap bidder and responder without overwriting objects themself
             const bidder = nmTrades.getBidder();
@@ -1752,7 +1685,7 @@ function fixCardSearchCollision () {
                 </dd>
                 <dt class=small-caps>Rarity</dt>
             `,
-            "</li>": `<span nm-used-in-trades=print></span></li>`,
+            "</li>": `<span nm-used-in-trades=print class="card-trading"></span></li>`,
         };
         template = $templateCache.get("/static/common/trades/partial/add.html");
         // eslint-disable-next-line guard-for-in, no-restricted-syntax
@@ -1767,6 +1700,10 @@ function fixCardSearchCollision () {
         for (const original in patches) {
             template = template.replace(original, patches[original]);
         }
+        template = template.replace(
+            "#{{print.print_num}}",
+            `<span nm-print-chooser=print></span>`,
+        );
         $templateCache.put("/static/common/trades/partial/item-list.html", template);
         debug("trades/partial/item-list.html patched");
     }]);
@@ -1930,21 +1867,77 @@ function fixCardSearchCollision () {
                 print: "=nmUsedInTrades",
             },
             template: `
-                <span ng-if="length > 0" class="card-trading text-warning">
+                <span ng-if="length > 0" class="text-warning">
                     <span ng-if="length === 1">Used in another trade</span>
                     <span ng-if="length > 1">Used in {{length}} more trades</span>
                 </span>
             `,
             async link (scope, $elem) {
                 scope.length = 0;
-                scope.update = () => getTrades(scope.print, $elem[0]).then((trades) => {
-                    scope.$apply(() => { scope.length = trades.length; });
-                    attachTip(trades, $elem[0]);
-                });
-                scope.update();
+                scope.$watch(
+                    () => scope.print.print_id,
+                    () => getTrades(scope.print, $elem[0]).then((trades) => {
+                        scope.$apply(() => { scope.length = trades.length; });
+                        attachTip($elem[0], trades);
+                    }),
+                );
             },
         };
     }]);
+
+    // a directive to allow users to choose print
+    angular.module("nm.trades").directive("nmPrintChooser", ["nmTrades", (nmTrades) => ({
+        template: `
+            <span ng-if="!active() || state === 'loading'">
+                #{{card.print_num}}
+            </span>
+            <span ng-if="active() && state === 'view'"
+                class="tip"
+                style="cursor: pointer"
+                title="Change print number"
+                ng-click="loadPrints()"
+            >
+                #{{card.print_num}}
+            </span>
+            <select ng-if="active() && state === 'choose'"
+                ng-model="$parent.print"
+                ng-options="print as '#'+print.print_num for print in prints"
+                ng-change="setPrint()"
+                ng-class="{'disabled': prints.length == 1}"
+                ng-disabled="prints.length == 1"
+            ></select>
+        `.trim().replace(/\n\s+/g, ""),
+        scope: {
+            card: "=nmPrintChooser",
+        },
+        link (scope, $elem) {
+            const giving = $elem.closest(".trade--side").is(".trade--you");
+            // allow to change print during editing the trade and only on users side
+            scope.active = () => giving
+                && ["create", "modify", "counter"].includes(nmTrades.getWindowState());
+            scope.state = "view";
+            scope.loadPrints = async () => {
+                scope.state = "loading";
+                angular.element(".tip").tooltip("hide");
+                const user = giving ? NM.you.attributes : nmTrades.getTradingPartner();
+                const url = `/users/${user.id}/piece/${scope.card.id}/detail/`;
+                const details = await api("api", url);
+                scope.prints = details.refs[details.payload[1]].prints;
+                scope.print = scope.prints[scope.prints.length - 1];
+                scope.state = "choose";
+            };
+            scope.setPrint = () => {
+                const offerType = giving ? "bidder_offer" : "responder_offer";
+                const offer = nmTrades.getOfferData(offerType).prints.slice();
+                const print = offer.find(({ id }) => id === scope.card.id);
+                const pos = offer.indexOf(print);
+                print.print_id = scope.print.id;
+                print.print_num = scope.print.print_num;
+                // no direct access the variable _selectedIds so we modify is such way
+                nmTrades.getPrintIds(offerType).splice(pos, 1, print.print_id);
+            };
+        },
+    })]);
 
     // based on https://d1ld1je540hac5.cloudfront.net/client/common/trades/module/add.js
     angular.module("nm.trades").directive("nmTradesAdd2", [
