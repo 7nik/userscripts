@@ -1182,6 +1182,9 @@ function onTradeChange (onloaded, onadded, onremoved) {
 function getSeriesInfo (settId) {
     if (!getSeriesInfo[settId]) {
         getSeriesInfo[settId] = api("api", `/setts/${settId}/`);
+        getSeriesInfo[settId].then((data) => {
+            getSeriesInfo[settId] = data;
+        });
     }
     return getSeriesInfo[settId];
 }
@@ -1689,7 +1692,7 @@ async function addTradeWindowEnhancements () {
             `{{print.sett_name}}</a>
             <span ng-if="!filters.sett">
                 <span class="icon-button search-series-button"
-                    ng-click="filters.sett = print.sett_id; load()"></span>
+                    ng-click="selectSeries(print.sett_id)"></span>
                 <span class="icon-button" ng-click="hideSeries(print.sett_id)">🗙</span>
             </span>`,
         ).replace(
@@ -1704,11 +1707,16 @@ async function addTradeWindowEnhancements () {
             <ul`,
         ).replace(
             "<select",
-            `<span class="reset tip" title="Reset series" ng-click="filters.sett = null; load()">
+            `<span class="reset tip" title="Reset series" ng-click="selectSeries(null)">
                 <i class='reset-sett'></i>
             </span>
             <select`,
-        );
+        ).replace(
+            `<select class="btn small subdued series" ng-model=filters.sett`,
+            `<select class="btn small subdued series" ng-model=seriesFilter`,
+        )
+            .replace(`ng-if="showCards() && displayPrintInList(print)"`, "")
+            .replace(`ng-if=showCards()`, "");
         $templateCache.put("/static/common/trades/partial/add.html", template);
         debug("trades/partial/add.html patched");
 
@@ -1732,7 +1740,7 @@ async function addTradeWindowEnhancements () {
         return {
             getCollections (user) {
                 if (user.id in collections) return collections[user.id];
-                return fetch(user.links.collected_setts_names_only)
+                collections[user.id] = fetch(user.links.collected_setts_names_only)
                     .then((resp) => resp.json())
                     .then((setts) => {
                         const settMap = {};
@@ -1743,6 +1751,7 @@ async function addTradeWindowEnhancements () {
                         collections[user.id] = settMap;
                         return settMap;
                     });
+                return collections[user.id];
             },
             dropCollection (user) {
                 if (user.id in collections) delete collections[user.id];
@@ -2047,7 +2056,7 @@ async function addTradeWindowEnhancements () {
             // if 'give' this is the items the logged in user will give
             // if 'receive' this is the items the logged in user will receive
             templateUrl: "/static/common/trades/partial/add.html",
-            link (scope) {
+            link (scope, $elem) {
                 scope.you = artUser.toObject();
                 scope.addItemsActive = false;
                 scope.loading = false;
@@ -2055,6 +2064,7 @@ async function addTradeWindowEnhancements () {
                 scope.loadingMore = false;
                 scope.showBio = false;
                 scope.itemData = [];
+                scope.fullItemData = [];
                 scope.hiddenSeries = [];
                 scope.baseUrl = "/api/search/prints/";
 
@@ -2141,14 +2151,9 @@ async function addTradeWindowEnhancements () {
 
                 scope.addPrint = (print) => {
                     nmTrades.addItem(offerType, "prints", print);
+                    scope.itemData.splice(scope.itemData.indexOf(print), 1);
                     scope.closeAddItems();
                 };
-
-                scope.displayPrintInList = (print) => (
-                    (scope.filters.sett
-                        || !scope.hiddenSeries.find(({ id }) => id === print.sett_id))
-                    && !nmTrades.hasPrintId(offerType, print.print_id)
-                );
 
                 scope.canAddItems = () => {
                     const offerData = nmTrades.getOfferData(offerType);
@@ -2175,13 +2180,16 @@ async function addTradeWindowEnhancements () {
                     if (pos >= 0) scope.hiddenSeries.splice(pos, 1);
                 };
 
+                scope.selectSeries = (settId) => {
+                    scope.seriesFilter = settId;
+                    scope.load();
+                };
+
                 scope.isEmpty = () => scope.items.length === 0;
 
                 scope.getPrintCount = artPieceService.getPrintCount.bind(artPieceService);
 
                 scope.giving = () => scope.direction === "give";
-
-                scope.showCards = () => true; // user can trade only cards
 
                 scope.getUrl = () => artUrl.updateParams(scope.baseUrl, scope.filters);
 
@@ -2211,25 +2219,101 @@ async function addTradeWindowEnhancements () {
                 };
 
                 let lastUrl;
+                async function displayPrint (print, url) {
+                    let showSeries = !!scope.filters.sett;
+                    let data;
+                    switch (scope.seriesFilter) {
+                        case "allSeries":
+                            showSeries = !scope.hiddenSeries.find(({ id }) => id === print.sett_id);
+                            break;
+                        case "finite": {
+                            showSeries = print.num_prints_total !== "unlimited";
+                            break;
+                        }
+                        case "infinite": {
+                            showSeries = print.num_prints_total === "unlimited";
+                            break;
+                        }
+                        case "freePackAvailable": {
+                            data = getSeriesInfo(print.sett_id);
+                            if (data instanceof Promise) data = await data;
+                            showSeries = new Date(data.discontinue_date) > Date.now()
+                                && (!data.freebies_discontinued
+                                    || new Date(data.freebies_discontinued) > Date.now());
+                            break;
+                        }
+                        case "anyPackAvailable": {
+                            data = getSeriesInfo(print.sett_id);
+                            if (data instanceof Promise) data = await data;
+                            showSeries = new Date(data.discontinue_date) > Date.now();
+                            break;
+                        }
+                        case "outOfPrint": {
+                            data = getSeriesInfo(print.sett_id);
+                            if (data instanceof Promise) data = await data;
+                            showSeries = new Date(data.discontinue_date) < Date.now();
+                            break;
+                        }
+                        // no default
+                    }
+                    if (lastUrl === url // filtering is still actuall
+                            && showSeries
+                            && !nmTrades.hasPrintId(offerType, print.print_id)
+                            && !scope.itemData.includes(print)) {
+                        scope.itemData.push(print);
+                    }
+                }
+
+                async function displayPrints (prints, url) {
+                    await Promise.all(prints.map((print) => displayPrint(print, url)));
+                    if (lastUrl !== url) return;
+                    scope.loading = false;
+                    scope.loadingMore = false;
+                    // if nothing to display - load next data
+                    if (scope.itemData.length === 0) {
+                        scope.getNextPage();
+                        return;
+                    }
+                    // when cards will be displayed - trigger loading next data
+                    // if user is close to end of list
+                    await waitForElement($elem[0], "#print-list");
+                    console.log($elem.find("#print-list").length);
+                    if ($elem.find("#print-list").scroll().length === 0) {
+                        scope.getNextPage();
+                    }
+                }
+
                 scope.load = () => {
                     scope.loading = true;
                     scope.loadingMore = false;
+
+                    if (!scope.seriesFilter) scope.seriesFilter = "allSeries";
+                    scope.filters.sett = typeof scope.seriesFilter === "number"
+                        ? scope.seriesFilter
+                        : null;
+
                     const url = scope.getUrl();
+                    if (url === lastUrl) {
+                        scope.itemData = [];
+                        displayPrints(scope.fullItemData, url);
+                        return;
+                    }
+
                     lastUrl = url;
                     artResource.retrievePaginated(url).then((data) => {
                         if (lastUrl !== url) return;
-                        scope.itemData = data;
-                        scope.loading = false;
+                        scope.itemData = [];
+                        scope.fullItemData = data;
+                        displayPrints(data, url);
                     });
                 };
 
                 scope.getNextPage = () => {
-                    if (scope.loading || !scope.itemData.next) return;
+                    if (scope.loading || !scope.fullItemData.next) return;
                     scope.loading = true;
                     scope.loadingMore = true;
-                    scope.itemData.retrieveNext().then((data) => {
-                        scope.loading = false;
-                        scope.loadingMore = false;
+                    scope.fullItemData.retrieveNext().then((data) => {
+                        displayPrints(data, lastUrl);
                     });
                 };
 
@@ -2242,12 +2326,24 @@ async function addTradeWindowEnhancements () {
                         .map(({ id, name }) => ({ id, name, $name: name.replace(stopWord, "") }))
                         .sort((a, b) => a.$name.localeCompare(b.$name)));
 
-                    if (settData[scope.settId]) scope.filters.sett = scope.settId;
+                    if (settData[scope.settId]) {
+                        scope.seriesFilter = scope.settId;
+                        scope.filters.sett = scope.settId;
+                    }
                 }
 
+                scope.collectedSetts = [
+                    { id: "allSeries", name: "Choose a Series" },
+                    { id: "infinite", name: "Unlimited series" },
+                    { id: "finite", name: "Limited series" },
+                    { id: "freePackAvailable", name: "Free packs available" },
+                    { id: "anyPackAvailable", name: "Any packs available" },
+                    { id: "outOfPrint", name: "Out of print series" },
+                    { id: null, name: "" },
+                ];
+                scope.seriesFilter = scope.settId ?? "allSeries";
                 scope.load();
-                scope.collectedSetts = [{ id: null, name: "Choose a Series" }];
-                scope.filters.sett = scope.collectedSetts[0].id;
+                scope.seriesFilter = "allSeries";
                 const data = userCollections.getCollections(givingUser);
                 if (data instanceof Promise) {
                     data.then(prepareSettsForDisplay);
