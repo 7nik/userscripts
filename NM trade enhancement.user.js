@@ -70,15 +70,8 @@ GM_addStyle(`
     }
 
     .trade--add-items--filters input.search,
-    .trade--add-items--filters select.series,
-    .trade--add-items--filters select.customSeries {
+    .trade--add-items--filters select.series{
         width: 47.8%;
-    }
-    .trade--add-items--filters .customSeries {
-        margin-left: 1%;
-    }
-    .trade--add-items--filters .customSeries + .series {
-        display: none;
     }
     .trade--add-items--filters span.reset {
         border: none;
@@ -1699,8 +1692,7 @@ async function addTradeWindowEnhancements () {
                     ng-click="filters.sett = print.sett_id; load()"></span>
                 <span class="icon-button" ng-click="hideSeries(print.sett_id)">🗙</span>
             </span>`,
-        );
-        template = template.replace(
+        ).replace(
             "<ul",
             `<div class="hiddenSeries" ng-if="hiddenSeries.length && !filters.sett">
                 <span class="small-caps">Hidden series: </span>
@@ -1710,6 +1702,12 @@ async function addTradeWindowEnhancements () {
                 </span>
             </div>
             <ul`,
+        ).replace(
+            "<select",
+            `<span class="reset tip" title="Reset series" ng-click="filters.sett = null; load()">
+                <i class='reset-sett'></i>
+            </span>
+            <select`,
         );
         $templateCache.put("/static/common/trades/partial/add.html", template);
         debug("trades/partial/add.html patched");
