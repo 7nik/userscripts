@@ -925,6 +925,12 @@ async function wishlistCards (ev) {
     } while (cards.length > count);
     cards = cards.filter((card) => !card.favorite);
 
+    // restore the filters now to avoid small lagging that is visible due to animation
+    favoriteFilter.selected = favorite;
+    filters.ownership = ownership;
+    filters.duplicate = duplicate;
+    applyFilters();
+
     // create container with stars that display the wishlist status of the cards
     const div = document.createElement("div");
     div.id = "wishlist--animate";
@@ -955,11 +961,6 @@ async function wishlistCards (ev) {
     }
 
     div.remove();
-    // restore the filters
-    favoriteFilter.selected = favorite;
-    filters.ownership = ownership;
-    filters.duplicate = duplicate;
-    applyFilters();
 }
 
 /**
