@@ -1694,6 +1694,7 @@ async function addTradeWindowEnhancements () {
                                 : "—"}`,
                     });
                     scope.load();
+                    scope.loading = false;
                 };
 
                 scope.showSeries = (settId) => {
@@ -1701,6 +1702,7 @@ async function addTradeWindowEnhancements () {
                     if (pos >= 0) {
                         scope.hiddenSeries.splice(pos, 1);
                         scope.load();
+                        scope.loading = false;
                     }
                 };
 
