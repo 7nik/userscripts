@@ -1828,11 +1828,11 @@ async function addTradeWindowEnhancements () {
 
                 let lastUrl;
                 async function displayPrint (print, url) {
-                    let showSeries = !!scope.filters.sett;
+                    let showSeries;
                     let data;
                     switch (scope.seriesFilter) {
                         case "allSeries":
-                            showSeries = !scope.hiddenSeries.find(({ id }) => id === print.sett_id);
+                            showSeries = true;
                             break;
                         case "finite": {
                             showSeries = print.num_prints_total !== "unlimited";
@@ -1862,8 +1862,10 @@ async function addTradeWindowEnhancements () {
                             showSeries = new Date(data.discontinue_date) < Date.now();
                             break;
                         }
-                        // no default
+                        default:
+                            showSeries = !!scope.filters.sett;
                     }
+                    showSeries &&= !scope.hiddenSeries.find(({ id }) => id === print.sett_id);
                     if (lastUrl === url // filtering is still actuall
                             && showSeries
                             && !nmTrades.hasPrintId(offerType, print.print_id)
