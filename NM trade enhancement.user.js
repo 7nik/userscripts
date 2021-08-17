@@ -1335,16 +1335,22 @@ async function addTradeWindowEnhancements () {
                 settId: "=nmCollectionProgressSettId",
             },
             template: `
-                <span ng-class="{'text-warning': !hasCollection}">
+                <span ng-class="{'text-warning': ready && !hasCollection}">
                     {{username}}:&nbsp;
-                    <a ng-if="hasCollection" href="{{link}}" target="_blank" class="href-link">
+                    <span ng-if="!ready">?</span>
+                    <a ng-if="ready && hasCollection"
+                        href="{{link}}"
+                        target="_blank"
+                        class="href-link"
+                    >
                         {{progress}}
                     </a>
-                    <span ng-if="!hasCollection">—</span>
+                    <span ng-if="ready && !hasCollection">—</span>
                 </span>
             `.trim().replace(/\n\s+/g, ""),
             replace: true,
             async link (scope, $elem) {
+                scope.ready = false;
                 scope.username = scope.user.id === NM.you.attributes.id
                     ? "You"
                     : scope.user.first_name;
@@ -1353,6 +1359,7 @@ async function addTradeWindowEnhancements () {
                 const sett = data instanceof Promise ? await data : data;
 
                 scope.hasCollection = !!sett;
+                scope.ready = true;
                 if (!sett) return;
 
                 scope.link = sett.permalink.concat(`/user${scope.user.links.profile}/cards/`);
