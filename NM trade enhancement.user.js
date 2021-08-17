@@ -1715,7 +1715,7 @@ async function addTradeWindowEnhancements () {
             `<select class="btn small subdued series" ng-model=filters.sett`,
             `<select class="btn small subdued series" ng-model=seriesFilter`,
         )
-            .replace(" && displayPrintInList(print)", "");
+            .replace(`ng-if="showCards() && displayPrintInList(print)"`, "");
         $templateCache.put("/static/common/trades/partial/add.html", template);
         debug("trades/partial/add.html patched");
 
@@ -1795,25 +1795,49 @@ async function addTradeWindowEnhancements () {
         };
     }]);
 
-    // load and keep users' collections when trade is loading
-    angular.module("nm.trades").run(["nmTrades", "userCollections", (nmTrades, userCollections) => {
-        const origSetWindowState = nmTrades.setWindowState;
-        nmTrades.setWindowState = (state) => {
-            if (state === "create" || state === "view") {
-                // preload collections
-                userCollections.getCollections(nmTrades.getResponder());
-                userCollections.getCollections(nmTrades.getBidder());
-            }
-            origSetWindowState(state);
-        };
-        const origClearTradeQuery = nmTrades.clearTradeQuery;
-        nmTrades.clearTradeQuery = () => {
-            userCollections.dropCollection(nmTrades.getTradingPartner());
-            origClearTradeQuery();
-        };
+    // load user collections when trade is loading and notify about added/removed cards
+    angular.module("nm.trades").run([
+        "nmTrades",
+        "userCollections",
+        "artSubscriptionService",
+        (nmTrades, userCollections, artSubscriptionService) => {
+            const origSetWindowState = nmTrades.setWindowState;
+            nmTrades.setWindowState = (state) => {
+                if (state === "create" || state === "view") {
+                    // preload collections
+                    userCollections.getCollections(nmTrades.getResponder());
+                    userCollections.getCollections(nmTrades.getBidder());
+                }
+                origSetWindowState(state);
+            };
+            const origClearTradeQuery = nmTrades.clearTradeQuery;
+            nmTrades.clearTradeQuery = () => {
+                userCollections.dropCollection(nmTrades.getTradingPartner());
+                origClearTradeQuery();
+            };
 
-        debug("nmTrades patched 2");
-    }]);
+            const origAddItem = nmTrades.addItem;
+            nmTrades.addItem = ((offerType, itemType, print) => {
+                origAddItem(offerType, itemType, print);
+                artSubscriptionService.broadcast(
+                    "trade-change",
+                    { offerType, action: "added", print },
+                );
+            });
+
+            const origRemoveItem = nmTrades.removeItem;
+            nmTrades.removeItem = ((offerType, itemType, index) => {
+                const print = nmTrades.getOfferData(offerType).prints[index];
+                origRemoveItem(offerType, itemType, index);
+                artSubscriptionService.broadcast(
+                    "trade-change",
+                    { offerType, action: "removed", print },
+                );
+            });
+
+            debug("nmTrades patched 2");
+        },
+    ]);
 
     // a directive to display collection progress
     angular.module("nm.trades").directive(
@@ -2150,7 +2174,6 @@ async function addTradeWindowEnhancements () {
 
                 scope.addPrint = (print) => {
                     nmTrades.addItem(offerType, "prints", print);
-                    scope.itemData.splice(scope.itemData.indexOf(print), 1);
                     scope.closeAddItems();
                 };
 
@@ -2319,6 +2342,20 @@ async function addTradeWindowEnhancements () {
                         displayPrints(data, lastUrl);
                     });
                 };
+
+                function tradeChanged (ev) {
+                    if (ev.offerType !== offerType) return;
+                    if (ev.action === "added") {
+                        scope.itemData.splice(scope.itemData.indexOf(ev.print), 1);
+                    } else if (scope.fullItemData.includes(ev.print)) {
+                        displayPrint(ev.print, lastUrl);
+                    }
+                }
+
+                artSubscriptionService.subscribe("trade-change", tradeChanged);
+                scope.$on("$destroy", () => {
+                    artSubscriptionService.unsubscribe("trade-change", tradeChanged);
+                });
 
                 // initiate all data
                 const stopWord = /^the /;
