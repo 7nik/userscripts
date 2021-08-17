@@ -1685,11 +1685,15 @@ async function addTradeWindowEnhancements () {
                                 ? `${partnerSett.totalOwned}/${partnerSett.totalCount}`
                                 : "—"}`,
                     });
+                    scope.load();
                 };
 
                 scope.showSeries = (settId) => {
                     const pos = scope.hiddenSeries.findIndex(({ id }) => id === settId);
-                    if (pos >= 0) scope.hiddenSeries.splice(pos, 1);
+                    if (pos >= 0) {
+                        scope.hiddenSeries.splice(pos, 1);
+                        scope.load();
+                    }
                 };
 
                 scope.selectSeries = (settId) => {
