@@ -1715,8 +1715,7 @@ async function addTradeWindowEnhancements () {
             `<select class="btn small subdued series" ng-model=filters.sett`,
             `<select class="btn small subdued series" ng-model=seriesFilter`,
         )
-            .replace(`ng-if="showCards() && displayPrintInList(print)"`, "")
-            .replace(`ng-if=showCards()`, "");
+            .replace(" && displayPrintInList(print)", "");
         $templateCache.put("/static/common/trades/partial/add.html", template);
         debug("trades/partial/add.html patched");
 
@@ -2186,6 +2185,10 @@ async function addTradeWindowEnhancements () {
                 };
 
                 scope.isEmpty = () => scope.items.length === 0;
+
+                // now users can trade only cards, but it cannot be removed because otherwise,
+                // tips will be processed before calling getTooltip
+                scope.showCards = () => true;
 
                 scope.getPrintCount = artPieceService.getPrintCount.bind(artPieceService);
 
