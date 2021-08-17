@@ -1139,7 +1139,8 @@ async function addTradeWindowEnhancements () {
                     ng-class="{'disabled': filterSets.length == 1}"
                     ng-disabled="filterSets.length == 1"></select>
                 <span class="icon-button" ng-click="deleteFilterSet()">🗑</span>
-                <span class=trade--side--header--actions ng-click`);
+                <span class=trade--side--header--actions ng-click`)
+            .replace("!itemData.length && !showLoading()", "!itemData.length && !loadingMore");
         $templateCache.put("/static/common/trades/partial/add.html", template);
         debug("trades/partial/add.html patched");
 
@@ -1713,7 +1714,8 @@ async function addTradeWindowEnhancements () {
 
                 scope.getUrl = () => artUrl.updateParams(scope.baseUrl, scope.filters);
 
-                scope.showLoading = () => scope.typing || (scope.loading && !scope.loadingMore);
+                scope.showLoading = () => scope.typing
+                    || scope.loading && !scope.loadingMore;
 
                 scope.getTooltip = (filter) => {
                     switch (filter) {
@@ -1885,6 +1887,7 @@ async function addTradeWindowEnhancements () {
                     scope.filterSetId = null;
                     scope.loading = true;
                     scope.loadingMore = false;
+                    scope.itemData = [];
 
                     if (!scope.seriesFilter) scope.seriesFilter = "allSeries";
                     scope.filters.sett = typeof scope.seriesFilter === "number"
@@ -1893,7 +1896,6 @@ async function addTradeWindowEnhancements () {
 
                     const url = scope.getUrl();
                     if (url === lastUrl) {
-                        scope.itemData = [];
                         displayPrints(scope.fullItemData, url);
                         return;
                     }
@@ -1901,7 +1903,6 @@ async function addTradeWindowEnhancements () {
                     lastUrl = url;
                     artResource.retrievePaginated(url).then((data) => {
                         if (lastUrl !== url) return;
-                        scope.itemData = [];
                         scope.fullItemData = data;
                         displayPrints(data, url);
                     });
