@@ -1882,10 +1882,12 @@ async function addTradeWindowEnhancements () {
                     scope.loading = false;
                     scope.loadingMore = false;
                     // if nothing to display - load next data
-                    if (scope.itemData.length === 0) {
+                    if (scope.itemData.length < 10) {
                         scope.getNextPage();
                         return;
                     }
+                    // avoid infinite card loading when not adding cards
+                    if (!scope.addItemsActive) return;
                     // when cards will be displayed - trigger loading next data
                     // if user is close to end of list
                     await waitForElement($elem[0], "#print-list");
