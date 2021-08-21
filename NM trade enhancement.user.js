@@ -884,6 +884,11 @@ function makePiecePeekable (piece) {
  * @param {HTMLElement} container - <div.collection--filters>
  */
 function addWishlistButton (container) {
+    // add button to only your collections
+    // use such check because the container is added, it's `scope.isOwner` is still false
+    if (window.location.pathname.match(/user\/(.+)\/cards/)[1] !== NM.you.attributes.username) {
+        return;
+    }
     const button = document.createElement("span");
     button.className = "btn wislist-btn tip";
     button.textContent = "Wishlist cards";
