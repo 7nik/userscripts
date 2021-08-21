@@ -1103,7 +1103,7 @@ async function addTradeWindowEnhancements () {
                     filters,
                     // eslint-disable-next-line no-alert
                     state: window.confirm("Include choosed series?") ? seriesFilter : undefined,
-                    hiddenSeries: { ...hiddenSeries },
+                    hiddenSeries: [...hiddenSeries],
                 };
                 if (!(name in setsObj)) {
                     setsArr.splice(-1, 0, { id: name, name });
