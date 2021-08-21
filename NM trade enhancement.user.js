@@ -992,171 +992,12 @@ function addRollbackTradeButton () {
             debug("rollbackTradeButton initiated");
         },
     ]);
-
-    // replace method `nmTrades.startCounter` with one that doesn't resets variable `_tradeId`
-    angular.module("nm.trades").run(["nmTrades", (nmTrades) => {
-        const replaceArray = (target, source) => {
-            target.splice(0, target.length, ...source);
-        };
-        nmTrades.setOfferData = (offerType, prints) => {
-            replaceArray(nmTrades.getOfferData(offerType).prints, prints);
-            replaceArray(nmTrades.getPrintIds(offerType), prints.map((print) => print.print_id));
-        };
-        nmTrades.startCounter = () => {
-            nmTrades.startModify(); // to set `_parentId`
-
-            // swap offers without overwriting arrays
-            const bidOffer = nmTrades.getOfferData("bidder_offer").prints.slice();
-            const respOffer = nmTrades.getOfferData("responder_offer").prints.slice();
-
-            nmTrades.setOfferData("bidder_offer", respOffer);
-            nmTrades.setOfferData("responder_offer", bidOffer);
-
-            // swap bidder and responder without overwriting objects themself
-            const bidder = nmTrades.getBidder();
-            const responder = nmTrades.getResponder();
-
-            Object.getOwnPropertyNames(bidder).forEach((prop) => {
-                [bidder[prop], responder[prop]] = [responder[prop], bidder[prop]];
-            });
-
-            nmTrades.setWindowState("counter");
-        };
-        debug("nmTrades patched");
-    }]);
-
-    // add the button to the template
-    angular.module("nmApp").run(["$templateCache", ($templateCache) => {
-        let template = $templateCache.get("/static/common/trades/partial/footer.html");
-        template = template.replace(
-            "<span>Offer Trade</span></button>",
-            `<span>Offer Trade</span></button>
-            <button class="btn subdued"
-                    ng-if="getWindowState()==='counter' || getWindowState()==='modify'"
-                    ng-controller="rollbackTradeButton"
-                    ng-click="cancelChanges()">
-                <span>Back</span>
-            </button>`,
-        );
-        $templateCache.put("/static/common/trades/partial/footer.html", template);
-        debug("trades/partial/footer.html patched");
-    }]);
-}
-
-/**
- * Cache list of partners for 15 minutes.
- */
-function addCachingPartnerList () {
-    (window.artModule ?? angular.module("Art")).run(["artResource", (artResource) => {
-        const origFunc = artResource.retrievePaginatedAllowCancel;
-        const cache = {};
-        artResource.retrievePaginatedAllowCancel = (config) => {
-            // this function is used only in the partner search list
-            // so it safe to use only the url as a key
-            if (!(config.url in cache)) {
-                cache[config.url] = origFunc(config);
-                const timer = setTimeout(() => { delete cache[config.url]; }, 15 * 60 * 1000);
-                // do not cache bad responces
-                cache[config.url].catch(() => {
-                    delete cache[config.url];
-                    clearTimeout(timer);
-                });
-            }
-            return cache[config.url];
-        };
-        debug("artResource patched");
-    }]);
 }
 
 /**
  * Apply enhancement to the trade window
  */
 async function addTradeWindowEnhancements () {
-    angular.module("nmApp").run(["$templateCache", ($templateCache) => {
-        // we cannot override a directive so we replace it in the template to our own directive
-        let template = $templateCache.get("/static/common/trades/partial/create.html");
-        template = template.replaceAll("nm-trades-add", "nm-trades-add2");
-        $templateCache.put("/static/common/trades/partial/create.html", template);
-        debug("trades/partial/create.html patched");
-
-        const patches = {
-            "<dt class=small-caps>Rarity</dt>": `
-                <dt class=small-caps>Collected</dt>
-                <dd>
-                    <span
-                        nm-collection-progress=you
-                        nm-collection-progress-sett-id=print.sett_id
-                    ></span>,
-                    <span
-                        nm-collection-progress=partner
-                        nm-collection-progress-sett-id=print.sett_id
-                    ></span>
-                </dd>
-                <dt class=small-caps>Rarity</dt>
-            `,
-            "</li>": `<span nm-used-in-trades=print class="card-trading"></span></li>`,
-        };
-        template = $templateCache.get("/static/common/trades/partial/add.html");
-        // eslint-disable-next-line guard-for-in, no-restricted-syntax
-        for (const original in patches) {
-            template = template.replace(original, patches[original]);
-        }
-        template = template.replace(
-            "{{print.sett_name}}</a>",
-            `{{print.sett_name}}</a>
-            <span ng-if="!filters.sett">
-                <span class="icon-button search-series-button"
-                    ng-click="selectSeries(print.sett_id)"></span>
-                <span class="icon-button" ng-click="hideSeries(print.sett_id)">🗙</span>
-            </span>`,
-        ).replace(
-            "<ul",
-            `<div class="hiddenSeries" ng-if="hiddenSeries.length && !filters.sett">
-                <span class="small-caps">Hidden series: </span>
-                <span ng-repeat="sett in hiddenSeries">
-                    <span class="tip" title="{{sett.tip}}">{{sett.name}}</span>
-                    <a ng-click="showSeries(sett.id)">✕</a>{{$last ? "" : ","}}
-                </span>
-            </div>
-            <ul`,
-        ).replace(
-            `<select class="btn small subdued series"`,
-            `<span class="reset tip" title="Reset series" ng-click="selectSeries(null)">
-                <i class='reset-sett'></i>
-            </span>
-            <select class="btn small subdued series"`,
-        ).replace(
-            `<select class="btn small subdued series" ng-model=filters.sett`,
-            `<select class="btn small subdued series" ng-model=$parent.seriesFilter`,
-        )
-            .replace(`ng-if="showCards() && displayPrintInList(print)"`, "")
-            .replaceAll("will give", "will give, use filter set")
-            .replace("<span class=trade--side--header--actions ng-click", `
-                <select class="btn small subdued filter-sets"
-                    ng-model=filterSetId
-                    ng-options="fset.id as fset.name for fset in filterSets"
-                    ng-change=applyFilterSet()
-                    ng-class="{'disabled': filterSets.length == 1}"
-                    ng-disabled="filterSets.length == 1"></select>
-                <span class="icon-button" ng-click="deleteFilterSet()">🗑</span>
-                <span class=trade--side--header--actions ng-click`)
-            .replace("!itemData.length && !showLoading()", "!itemData.length && !loadingMore");
-        $templateCache.put("/static/common/trades/partial/add.html", template);
-        debug("trades/partial/add.html patched");
-
-        template = $templateCache.get("/static/common/trades/partial/item-list.html");
-        // eslint-disable-next-line guard-for-in, no-restricted-syntax
-        for (const original in patches) {
-            template = template.replace(original, patches[original]);
-        }
-        template = template.replace(
-            "#{{print.print_num}}",
-            `<span nm-print-chooser=print></span>`,
-        );
-        $templateCache.put("/static/common/trades/partial/item-list.html", template);
-        debug("trades/partial/item-list.html patched");
-    }]);
-
     // a service to get user collection and thier progress
     angular.module("nm.trades").factory("userCollections", [() => {
         debug("userCollections initiated");
@@ -1281,50 +1122,6 @@ async function addTradeWindowEnhancements () {
             },
         };
     }]);
-
-    // load user collections when trade is loading and notify about added/removed cards
-    angular.module("nm.trades").run([
-        "nmTrades",
-        "userCollections",
-        "artSubscriptionService",
-        (nmTrades, userCollections, artSubscriptionService) => {
-            const origSetWindowState = nmTrades.setWindowState;
-            nmTrades.setWindowState = (state) => {
-                if (state === "create" || state === "view") {
-                    // preload collections
-                    userCollections.getCollections(nmTrades.getResponder());
-                    userCollections.getCollections(nmTrades.getBidder());
-                }
-                origSetWindowState(state);
-            };
-            const origClearTradeQuery = nmTrades.clearTradeQuery;
-            nmTrades.clearTradeQuery = () => {
-                userCollections.dropCollection(nmTrades.getTradingPartner());
-                origClearTradeQuery();
-            };
-
-            const origAddItem = nmTrades.addItem;
-            nmTrades.addItem = ((offerType, itemType, print) => {
-                origAddItem(offerType, itemType, print);
-                artSubscriptionService.broadcast(
-                    "trade-change",
-                    { offerType, action: "added", print },
-                );
-            });
-
-            const origRemoveItem = nmTrades.removeItem;
-            nmTrades.removeItem = ((offerType, itemType, index) => {
-                const print = nmTrades.getOfferData(offerType).prints[index];
-                origRemoveItem(offerType, itemType, index);
-                artSubscriptionService.broadcast(
-                    "trade-change",
-                    { offerType, action: "removed", print },
-                );
-            });
-
-            debug("nmTrades patched 2");
-        },
-    ]);
 
     // a directive to display collection progress
     angular.module("nm.trades").directive(
@@ -1988,6 +1785,268 @@ async function addTradeWindowEnhancements () {
     ]);
 }
 
+/**
+ * Patch the given object with templates;
+ * @param  {$cacheFactory.Cache} $templateCache - map of templates
+ */
+function patchTemplates ($templateCache) {
+    [{
+        names: ["/static/common/trades/partial/create.html"],
+        patches: [{
+            // we cannot override a directive so we replace it in the template to our own directive
+            target: "nm-trades-add",
+            replace: "nm-trades-add2",
+        }],
+    }, {
+        names: [
+            "/static/common/trades/partial/add.html",
+            "/static/common/trades/partial/item-list.html",
+        ],
+        patches: [{
+            // insert collection progress
+            target: "<dt class=small-caps>Rarity</dt>",
+            prepend:
+                `<dt class=small-caps>Collected</dt>
+                <dd>
+                    <span
+                        nm-collection-progress=you
+                        nm-collection-progress-sett-id=print.sett_id
+                    ></span>,
+                    <span
+                        nm-collection-progress=partner
+                        nm-collection-progress-sett-id=print.sett_id
+                    ></span>
+                </dd>`,
+        }, {
+            // insert card usage in trades
+            target: "</li>",
+            prepend: `<span nm-used-in-trades=print class="card-trading"></span>`,
+        }],
+    }, {
+        names: ["/static/common/trades/partial/add.html"],
+        patches: [{
+            // insert buttons to select or hide card's series
+            target: "{{print.sett_name}}</a>",
+            append:
+                `<span ng-if="!filters.sett">
+                    <span class="icon-button search-series-button"
+                        ng-click="selectSeries(print.sett_id)"></span>
+                    <span class="icon-button" ng-click="hideSeries(print.sett_id)">🗙</span>
+                </span>`,
+        }, {
+            // display list of hidden series
+            target: "<ul",
+            prepend:
+                `<div class="hiddenSeries" ng-if="hiddenSeries.length && !filters.sett">
+                    <span class="small-caps">Hidden series: </span>
+                    <span ng-repeat="sett in hiddenSeries">
+                        <span class="tip" title="{{sett.tip}}">{{sett.name}}</span>
+                        <a ng-click="showSeries(sett.id)">✕</a>{{$last ? "" : ","}}
+                    </span>
+                </div>`,
+        }, {
+            // insert button to reset selected series
+            target: `<select class="btn small subdued series"`,
+            prepend:
+                `<span class="reset tip" title="Reset series" ng-click="selectSeries(null)">
+                    <i class='reset-sett'></i>
+                </span>`,
+        }, {
+            // display series filters in the list of collecting series
+            target: `<select class="btn small subdued series" ng-model=filters.sett`,
+            replace: `<select class="btn small subdued series" ng-model=$parent.seriesFilter`,
+        }, {
+            // more advanced filtering is used instead of
+            target: `ng-if="showCards() && displayPrintInList(print)"`,
+            replace: "",
+        }, {
+            target: "will give",
+            append: ", use filter set",
+        }, {
+            // insert list of filter sets
+            target: "<span class=trade--side--header--actions ng-click",
+            prepend: `
+                <select class="btn small subdued filter-sets"
+                    ng-model=filterSetId
+                    ng-options="fset.id as fset.name for fset in filterSets"
+                    ng-change=applyFilterSet()
+                    ng-class="{'disabled': filterSets.length == 1}"
+                    ng-disabled="filterSets.length == 1"></select>
+                <span class="icon-button" ng-click="deleteFilterSet()">🗑</span>`,
+        }, {
+            // fix loading indicator
+            target: "!itemData.length && !showLoading()",
+            replace: "!itemData.length && !loadingMore",
+        }],
+    }, {
+        names: ["/static/common/trades/partial/item-list.html"],
+        patches: [{
+            // insert the print chooser
+            target: "#{{print.print_num}}",
+            replace: "<span nm-print-chooser=print></span>",
+        }],
+    }, {
+        names: ["/static/common/trades/partial/footer.html"],
+        patches: [{
+            // insert button to rollback the trade
+            target: "<span>Offer Trade</span></button>",
+            append:
+                `<button class="btn subdued"
+                    ng-if="getWindowState()==='counter' || getWindowState()==='modify'"
+                    ng-controller="rollbackTradeButton"
+                    ng-click="cancelChanges()"
+                >
+                    <span>Back</span>
+                </button>`,
+        }],
+    }].forEach(({ names, patches }) => names.forEach((name) => {
+        let template = $templateCache.get(name);
+        // eslint-disable-next-line object-curly-newline
+        patches.forEach(({ target, prepend, replace, append }) => {
+            if (replace != null) {
+                template = template.replaceAll(target, replace);
+            } else if (prepend != null) {
+                template = template.replaceAll(target, prepend.concat(target));
+            } else {
+                template = template.replaceAll(target, target.concat(append));
+            }
+        });
+        $templateCache.put(name, template);
+    }));
+    debug("templates patched");
+}
+
+/**
+ * Patch the nmTrades service
+ * @param  {Service} nmTrades - service to patch
+ * @param  {Service} userCollections - service to get user's collections
+ * @param  {Service} artSubscriptionService - service to broadcast messages
+ */
+function patchNMTrades (nmTrades, userCollections, artSubscriptionService) {
+    const replaceArray = (target, source) => {
+        target.splice(0, target.length, ...source);
+    };
+    // make setting the trading cards easier
+    nmTrades.setOfferData = (offerType, prints) => {
+        replaceArray(nmTrades.getOfferData(offerType).prints, prints);
+        replaceArray(nmTrades.getPrintIds(offerType), prints.map((print) => print.print_id));
+    };
+    // replace method `nmTrades.startCounter` with one that doesn't resets variable `_tradeId`
+    nmTrades.startCounter = () => {
+        nmTrades.startModify(); // to set `_parentId`
+
+        // swap offers without overwriting arrays
+        const bidOffer = nmTrades.getOfferData("bidder_offer").prints.slice();
+        const respOffer = nmTrades.getOfferData("responder_offer").prints.slice();
+
+        nmTrades.setOfferData("bidder_offer", respOffer);
+        nmTrades.setOfferData("responder_offer", bidOffer);
+
+        // swap bidder and responder without overwriting objects themself
+        const bidder = nmTrades.getBidder();
+        const responder = nmTrades.getResponder();
+
+        Object.getOwnPropertyNames(bidder).forEach((prop) => {
+            [bidder[prop], responder[prop]] = [responder[prop], bidder[prop]];
+        });
+
+        nmTrades.setWindowState("counter");
+    };
+    // load user collections when trade is loading and notify about added/removed cards
+    const origSetWindowState = nmTrades.setWindowState;
+    nmTrades.setWindowState = (state) => {
+        if (state === "create" || state === "view") {
+            // preload collections
+            userCollections.getCollections(nmTrades.getResponder());
+            userCollections.getCollections(nmTrades.getBidder());
+        }
+        origSetWindowState(state);
+    };
+    const origClearTradeQuery = nmTrades.clearTradeQuery;
+    nmTrades.clearTradeQuery = () => {
+        userCollections.dropCollection(nmTrades.getTradingPartner());
+        origClearTradeQuery();
+    };
+    // broadcast a message when the trade get changed
+    const origAddItem = nmTrades.addItem;
+    nmTrades.addItem = ((offerType, itemType, print) => {
+        origAddItem(offerType, itemType, print);
+        artSubscriptionService.broadcast(
+            "trade-change",
+            { offerType, action: "added", print },
+        );
+    });
+    const origRemoveItem = nmTrades.removeItem;
+    nmTrades.removeItem = ((offerType, itemType, index) => {
+        const print = nmTrades.getOfferData(offerType).prints[index];
+        origRemoveItem(offerType, itemType, index);
+        artSubscriptionService.broadcast(
+            "trade-change",
+            { offerType, action: "removed", print },
+        );
+    });
+
+    debug("nmTrades patched");
+}
+
+/**
+ * Patch artResource to cache list of partners for 15 minutes.
+ */
+function patchArtResource (artResource) {
+    const origFunc = artResource.retrievePaginatedAllowCancel;
+    const cache = {};
+    artResource.retrievePaginatedAllowCancel = (config) => {
+        // this function is used only in the partner search list
+        // so it safe to use only the url as a key
+        if (!(config.url in cache)) {
+            cache[config.url] = origFunc(config);
+            const timer = setTimeout(() => { delete cache[config.url]; }, 15 * 60 * 1000);
+            // do not cache bad responces
+            cache[config.url].catch(() => {
+                delete cache[config.url];
+                clearTimeout(timer);
+            });
+        }
+        return cache[config.url];
+    };
+    debug("artResource patched");
+}
+
+/**
+ * Apply patches with two ways
+ */
+function applyPatches () {
+    let applied = false;
+    const patcher = [
+        "$templateCache",
+        "nmTrades",
+        "userCollections",
+        "artSubscriptionService",
+        "artResource",
+        (
+            $templateCache,
+            nmTrades,
+            userCollections,
+            artSubscriptionService,
+            artResource,
+        ) => {
+            patchTemplates($templateCache);
+            patchNMTrades(nmTrades, userCollections, artSubscriptionService);
+            patchArtResource(artResource);
+            applied = true;
+        },
+    ];
+
+    angular.module("nmApp").run(patcher);
+    window.addEventListener("load", () => {
+        if (applied) return;
+        debug("late patching");
+        const getService = angular.element(document.body).injector().get;
+        const func = patcher.pop();
+        func(...patcher.map(getService));
+    });
+}
+
 // =============================================================================
 //                         Program execution start
 // =============================================================================
@@ -2003,7 +2062,7 @@ document.addEventListener("DOMContentLoaded", () => {
     forAllElements(document, "div[data-art-piece-asset='piece']", makePiecePeekable);
     forAllElements(document, "div.collection--filters", addWishlistButton);
 
+    applyPatches();
     addRollbackTradeButton();
-    addCachingPartnerList();
     addTradeWindowEnhancements();
 });
