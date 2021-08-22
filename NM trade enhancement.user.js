@@ -1091,7 +1091,17 @@ async function addTradeWindowEnhancements () {
                     hiddenSeries,
                 } = setsObj[id];
                 const seriesFilter = settName !== false ? filters.sett ?? state : undefined;
-                return { filters, seriesFilter, hiddenSeries };
+                return {
+                    filters: {
+                        // these props are optional so add "non-selected status"
+                        wish_list_by: false,
+                        incomplete_by: false,
+                        not_owned_by: false,
+                        ...filters,
+                    },
+                    seriesFilter,
+                    hiddenSeries,
+                };
             },
             saveFilterSet (filters, seriesFilter, hiddenSeries) {
                 let name = prompt("Enter name of fitler set"); // eslint-disable-line no-alert
