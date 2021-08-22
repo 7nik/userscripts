@@ -105,6 +105,7 @@ GM_addStyle(`
         white-space: nowrap;
     }
     #print-list .hiddenSeries a {
+        cursor: pointer;
         color: #9f96a8;
         position: relative;
         bottom: -1px;
