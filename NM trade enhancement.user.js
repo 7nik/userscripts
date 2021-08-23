@@ -267,6 +267,10 @@ GM_addStyle(`
             left: var(--endX);
         }
     }
+
+    div.set-header--collect-it + div.set-header--collect-it {
+        display: none;
+    }
 `);
 
 const cardsInTrades = (() => {
@@ -1802,6 +1806,65 @@ async function addTradeWindowEnhancements () {
 }
 
 /**
+ * Adds a button to open a promo pack if available
+ */
+function addPromoPackButton () {
+    angular.module("neonmobApp").directive("nmPromoPackBtn", [
+        "poRoute",
+        "artOverlay",
+        "artMessage",
+        "poPackSelect",
+        "poMilestones",
+        "artConfig",
+        "$http",
+        (poRoute, artOverlay, artMessage, poPackSelect, poMilestones, artConfig, $http) => ({
+            scope: {
+                sett: "=nmPromoPackBtn",
+            },
+            link: (scope, $elem) => {
+                const { promoCode, settId } = loadValue("promoCode", {});
+                if (!promoCode || +settId !== scope.sett.id) {
+                    $elem.remove();
+                    return;
+                }
+                $elem.click(async () => {
+                    // merged re-implementation of nmPromoCodes.redeemPromoCode and
+                    // poRoute.launchOpenPromoPack to correctly proceed errors
+                    artOverlay.show("promocodes-redeeming");
+
+                    poPackSelect.setPackType(poPackSelect.PROMO_PACK);
+                    poPackSelect.startPackSelect(scope.sett.links.self);
+                    try {
+                        await poMilestones.initPoMilestones();
+                        await poPackSelect.fetchSett();
+                        const resp = await $http.post(artConfig.api["api-promo-codes-redeem"], {
+                            code: promoCode,
+                            store_signup_sett: false,
+                        });
+                        await poRoute.openPack(resp.data.pack);
+                    } catch (ex) {
+                        artOverlay.hide();
+                        if (ex.status === 400) {
+                            artMessage.showAlert(ex.data.detail);
+                        } else {
+                            artMessage.showAlert(`
+                                Sorry, we were not able to redeem your promocode.
+                                Please try again by going to the url or
+                                contact via the feedback button.`);
+                        }
+                        console.log(ex);
+                    } finally {
+                        saveValue("promoCode", {});
+                        $elem.remove();
+                    }
+                });
+                debug("nmPromoPackBtn initiated");
+            },
+        }),
+    ]);
+}
+
+/**
  * Patch the given object with templates;
  * @param  {$cacheFactory.Cache} $templateCache - map of templates
  */
@@ -1915,8 +1978,26 @@ function patchTemplates ($templateCache) {
                     <span>Back</span>
                 </button>`,
         }],
+    }, {
+        names: ["partials/art/set-header.partial.html"],
+        patches: [{
+            target: `<div class="set-header--collect-it" nm-collect-it-button="sett"></div>`,
+            prepend: `
+                <div class="set-header--collect-it" nm-promo-pack-btn=sett>
+                    <span class="btn reward collect-it-button">Open promo pack</span>
+                </div>`,
+        }],
     }].forEach(({ names, patches }) => names.forEach((name) => {
         let template = $templateCache.get(name);
+        let fromCache = true;
+        if (!template) {
+            template = document.getElementById(name)?.textContent;
+            fromCache = false;
+        }
+        if (!template) {
+            console.error(`Couldn't get template ${name}`);
+            return;
+        }
         // eslint-disable-next-line object-curly-newline
         patches.forEach(({ target, prepend, replace, append }) => {
             if (replace != null) {
@@ -1927,7 +2008,11 @@ function patchTemplates ($templateCache) {
                 template = template.replaceAll(target, target.concat(append));
             }
         });
-        $templateCache.put(name, template);
+        if (fromCache) {
+            $templateCache.put(name, template);
+        } else {
+            document.getElementById(name).textContent = template;
+        }
     }));
     debug("templates patched");
 }
@@ -1985,22 +2070,22 @@ function patchNMTrades (nmTrades, userCollections, artSubscriptionService) {
     };
     // broadcast a message when the trade get changed
     const origAddItem = nmTrades.addItem;
-    nmTrades.addItem = ((offerType, itemType, print) => {
+    nmTrades.addItem = (offerType, itemType, print) => {
         origAddItem(offerType, itemType, print);
         artSubscriptionService.broadcast(
             "trade-change",
             { offerType, action: "added", print },
         );
-    });
+    };
     const origRemoveItem = nmTrades.removeItem;
-    nmTrades.removeItem = ((offerType, itemType, index) => {
+    nmTrades.removeItem = (offerType, itemType, index) => {
         const print = nmTrades.getOfferData(offerType).prints[index];
         origRemoveItem(offerType, itemType, index);
         artSubscriptionService.broadcast(
             "trade-change",
             { offerType, action: "removed", print },
         );
-    });
+    };
 
     debug("nmTrades patched");
 }
@@ -2067,6 +2152,26 @@ function applyPatches () {
 //                         Program execution start
 // =============================================================================
 
+if (window.location.pathname.startsWith("/redeem/")) {
+    // cancel auto-opening a promo pack and redirect to series page
+    const getCookie = (name) => document.cookie.split(";")
+        .find((str) => str.trim().startsWith(name))
+        ?.split("=")?.[1];
+    const promoCode = getCookie("promo_code");
+    if (promoCode) {
+        const settId = getCookie("promo_sett_url").match(/\d+/)[0];
+        saveValue("promoCode", { promoCode, settId });
+        // remove cookies to not trigger auto-opening of the promo pack
+        document.cookie = "promo_code=;max-age=0;path=/";
+        document.cookie = "promo_sett_url=;max-age=0;path=/";
+        document.location = `/series/${settId}/`;
+    } else {
+        document.location = "/";
+    }
+    // further execution will only cause errors
+    return;
+}
+
 fixAutoWithdrawnTrade();
 updateCardsInTrade();
 
@@ -2081,4 +2186,5 @@ document.addEventListener("DOMContentLoaded", () => {
     applyPatches();
     addRollbackTradeButton();
     addTradeWindowEnhancements();
+    addPromoPackButton();
 });
