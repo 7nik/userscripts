@@ -828,8 +828,12 @@ async function addTradePreview (notification) {
  * @param {Event} ev - keyup event
  */
 function addHotkeys (ev) {
-    if (["Enter", "NumpadEnter", "Space"].includes(ev.code)) {
-        document.querySelector("#message.show #confirm-btn")?.click();
+    if (["Enter", "NumpadEnter", "Space"].includes(ev.code)
+        && document.querySelector("#message.show #confirm-btn, #alert.show #alert-btn")
+    ) {
+        document.querySelector("#message.show #confirm-btn, #alert.show #alert-btn").click();
+        ev.preventDefault();
+        ev.stopPropagation();
     }
     if (ev.code === "Escape") {
         // if a confirm message is shown
