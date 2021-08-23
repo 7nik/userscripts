@@ -1390,7 +1390,7 @@ async function addTradeWindowEnhancements () {
             scope: {
                 partner: "=nmTradesAdd2",
                 direction: "@nmTradesAdd2Direction",
-                settId: "=?nmTradesAdd2Sett",
+                settId: "@nmTradesAdd2Sett",
             },
             // $scope.direction is either 'give' or 'receive'
             // if 'give' this is the items the logged in user will give
@@ -1413,6 +1413,15 @@ async function addTradeWindowEnhancements () {
                 const offerType = scope.direction === "give" ? "bidder_offer" : "responder_offer";
                 const receivingUser = scope.direction === "give" ? scope.partner : scope.you;
                 const givingUser = scope.direction === "give" ? scope.you : scope.partner;
+
+                // if all cards are from the same series, set it as intial
+                scope.settId = +scope.settId || null;
+                if (!scope.settId && nmTrades.getOfferData(offerType).prints.length > 0) {
+                    const [print, ...prints] = nmTrades.getOfferData(offerType).prints;
+                    scope.settId = prints.every((pr) => pr.sett_id === print.sett_id)
+                        ? print.sett_id
+                        : null;
+                }
 
                 scope.notOwnedBy = {
                     val: false,
