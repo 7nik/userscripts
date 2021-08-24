@@ -1390,7 +1390,7 @@ async function addTradeWindowEnhancements () {
             scope: {
                 partner: "=nmTradesAdd2",
                 direction: "@nmTradesAdd2Direction",
-                settId: "@nmTradesAdd2Sett",
+                settId: "=?nmTradesAdd2Sett",
             },
             // $scope.direction is either 'give' or 'receive'
             // if 'give' this is the items the logged in user will give
@@ -1415,10 +1415,10 @@ async function addTradeWindowEnhancements () {
                 const givingUser = scope.direction === "give" ? scope.you : scope.partner;
 
                 // if all cards are from the same series, set it as intial
-                scope.settId = +scope.settId || null;
-                if (!scope.settId && nmTrades.getOfferData(offerType).prints.length > 0) {
+                scope.initSettId = +scope.settId || null;
+                if (!scope.initSettId && nmTrades.getOfferData(offerType).prints.length > 0) {
                     const [print, ...prints] = nmTrades.getOfferData(offerType).prints;
-                    scope.settId = prints.every((pr) => pr.sett_id === print.sett_id)
+                    scope.initSettId = prints.every((pr) => pr.sett_id === print.sett_id)
                         ? print.sett_id
                         : null;
                 }
@@ -1442,7 +1442,7 @@ async function addTradeWindowEnhancements () {
                     user_id: givingUser.id,
                     partner_id: receivingUser.id,
                     search: null,
-                    sett: scope.settId,
+                    sett: scope.initSettId,
                     duplicates_only: false,
                     common: false,
                     uncommon: false,
@@ -1783,9 +1783,9 @@ async function addTradeWindowEnhancements () {
                         .map(({ id, name }) => ({ id, name, $name: name.replace(stopWord, "") }))
                         .sort((a, b) => a.$name.localeCompare(b.$name)));
 
-                    if (settData[scope.settId]) {
-                        scope.seriesFilter = scope.settId;
-                        scope.filters.sett = scope.settId;
+                    if (settData[scope.initSettId]) {
+                        scope.seriesFilter = scope.initSettId;
+                        scope.filters.sett = scope.initSettId;
                     }
                 }
 
@@ -1798,7 +1798,7 @@ async function addTradeWindowEnhancements () {
                     { id: "outOfPrint", name: "Out of print series" },
                     { id: null, name: "" },
                 ];
-                scope.seriesFilter = scope.settId ?? "allSeries";
+                scope.seriesFilter = scope.initSettId ?? "allSeries";
                 if (tradeFilterSets.hasDefaultFilterSet()) {
                     scope.filterSetId = "Default";
                     scope.applyFilterSet(); // triggers scope.load()
