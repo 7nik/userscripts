@@ -1012,7 +1012,7 @@ function addRollbackTradeButton () {
  * Apply enhancement to the trade window
  */
 async function addTradeWindowEnhancements () {
-    // a service to get user collection and thier progress
+    // a service to get user collection and their progress
     angular.module("nm.trades").factory("userCollections", [() => {
         debug("userCollections initiated");
         const collections = {};
@@ -1112,7 +1112,7 @@ async function addTradeWindowEnhancements () {
                 };
             },
             saveFilterSet (filters, seriesFilter, hiddenSeries) {
-                let name = prompt("Enter name of fitler set"); // eslint-disable-line no-alert
+                let name = prompt("Enter name of filter set"); // eslint-disable-line no-alert
                 if (!name) {
                     return null;
                 }
@@ -1121,7 +1121,9 @@ async function addTradeWindowEnhancements () {
                 const filterSet = {
                     filters: { ...filters },
                     // eslint-disable-next-line no-alert
-                    state: window.confirm("Include choosed series?") ? seriesFilter : undefined,
+                    state: window.confirm("Include the selected series?")
+                        ? seriesFilter
+                        : undefined,
                     hiddenSeries: [...hiddenSeries],
                 };
                 if (!(name in setsObj)) {
