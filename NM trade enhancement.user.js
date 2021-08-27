@@ -2198,6 +2198,14 @@ document.addEventListener("DOMContentLoaded", () => {
     forAllElements(document, "div[data-art-piece-asset='piece']", makePiecePeekable);
     forAllElements(document, "div.collection--filters", addWishlistButton);
 
+    try {
+        angular.module("nm.trades");
+    } catch {
+        console.warn("[NM trade enhancements] Nothing to patch!");
+        // to not break angular
+        return;
+    }
+
     applyPatches();
     addRollbackTradeButton();
     addTradeWindowEnhancements();
