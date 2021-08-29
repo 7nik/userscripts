@@ -2337,6 +2337,7 @@ async function addNeighborPostsButtons (postsData) {
             || pageIs(PAGES.moderatePreTags, false, sourceUrl)
             || pageIs(PAGES.uploadPicture, false, sourceUrl)
             || pageIs(PAGES.comments, false, sourceUrl)
+            || pageIs(PAGES.main, true, sourceUrl)
     ) {
         window.opener?.postMessage({ cmd: "get_posts_data" }, PAGES.origin);
         return;
@@ -4050,8 +4051,10 @@ window.addEventListener("message", ({ data, source }) => {
                         .map((a) => +a.href.match(/\d+/)[0]),
                 };
             }
-            postsData.lastPost = postsData.postIds.length - 1;
-            source.postMessage({ cmd: "posts_data", postsData }, PAGES.origin);
+            if (postsData) {
+                postsData.lastPost = postsData.postIds.length - 1;
+                source.postMessage({ cmd: "posts_data", postsData }, PAGES.origin);
+            }
             break;
         }
         case "posts_data":
