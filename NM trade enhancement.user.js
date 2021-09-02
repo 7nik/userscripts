@@ -1788,6 +1788,10 @@ async function addTradeWindowEnhancements () {
                     if (settData[scope.initSettId]) {
                         scope.seriesFilter = scope.initSettId;
                         scope.filters.sett = scope.initSettId;
+                    } else if (scope.initSettId) {
+                        scope.seriesFilter = "allSeries";
+                        scope.filters.sett = null;
+                        scope.load();
                     }
                 }
 
@@ -1964,8 +1968,7 @@ function patchTemplates ($templateCache) {
                     ng-model=filterSetId
                     ng-options="fset.id as fset.name for fset in filterSets"
                     ng-change=applyFilterSet()
-                    ng-class="{'disabled': filterSets.length == 1}"
-                    ng-disabled="filterSets.length == 1"></select>
+                ></select>
                 <span class="icon-button" ng-click="deleteFilterSet()">🗑</span>`,
         }, {
             // fix loading indicator
