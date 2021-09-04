@@ -894,8 +894,8 @@ function makePiecePeekable (piece) {
  */
 function addWishlistButton (container) {
     // add button to only your collections
-    // use such check because the container is added, it's `scope.isOwner` is still false
-    if (window.location.pathname.match(/user\/(.+)\/cards/)[1] !== NM.you.attributes.username) {
+    // use such check because when the container is just added, it's `scope.isOwner` is still false
+    if (window.location.pathname.match(/user\/(.+)\/cards/)?.[1] !== NM.you.attributes.username) {
         return;
     }
     const button = document.createElement("span");
