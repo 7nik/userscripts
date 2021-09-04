@@ -772,7 +772,7 @@ async function fixFreebieCount (button) {
 async function addLastActionAgo (header, watchForChanges = true) {
     const userId = getScope(header).recipient.id;
     const lastActionAgo = await api("napi", `/activityfeed/user/${userId}/?amount=5&page=1`)
-        .then((data) => data[0].created);
+        .then((data) => data[0]?.created ?? "roughly never");
 
     const div = document.createElement("div");
     div.className = "last-action";
@@ -785,7 +785,7 @@ async function addLastActionAgo (header, watchForChanges = true) {
         rootNode:  header.querySelector(".nm-conversation--header h3 a"),
         queries: [{ characterData: true }],
         callback: (summaries) => {
-            header.querySelector(".last-action").remove();
+            header.querySelector(".last-action")?.remove();
             addLastActionAgo(header, false);
         },
     });
