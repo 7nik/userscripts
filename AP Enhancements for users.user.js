@@ -2398,7 +2398,7 @@ async function addNeighborPostsButtons (postsData) {
  */
 function addPaginationHotkeys () {
     // there are too many pages with pagination to list them
-    if (pageIs.searchPosts || getElem(".numeric_pages a")) {
+    if (pageIs.searchPosts || pageIs.main || getElem(".numeric_pages a")) {
         hotkeys.push(
             {
                 hotkey: "Z",
