@@ -2005,6 +2005,15 @@ function patchTemplates ($templateCache) {
                     <span class="btn reward collect-it-button">Open promo pack</span>
                 </div>`,
         }],
+    }, {
+        names: ["partials/trade/piece-trader-list.partial.html"],
+        patches: [{
+            target: /span\s+data-ng-pluralize([^}]*)}} (Owners|Collectors)/g,
+            replace: (str, p1, p2) => `span
+                class="tip"
+                title="{{itemData.count}} ${p2}"
+                data-ng-pluralize${p1}}} ${p2}`,
+        }],
     }].forEach(({ names, patches }) => names.forEach((name) => {
         let template = $templateCache.get(name);
         let fromCache = true;
