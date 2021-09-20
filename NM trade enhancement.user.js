@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      2.0-beta
+// @version      2.0.1
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -1660,8 +1660,8 @@ async function addTradeWindowEnhancements () {
                     scope.filterSetId = filterSetId;
                 };
 
-                let lastUrl;
-                async function displayPrint (print, url) {
+                let currLock = 0;
+                async function displayPrint (print, lock) {
                     let showSeries;
                     let data;
                     switch (scope.seriesFilter) {
@@ -1700,7 +1700,7 @@ async function addTradeWindowEnhancements () {
                             showSeries = !!scope.filters.sett;
                     }
                     showSeries &&= !scope.hiddenSeries.find(({ id }) => id === print.sett_id);
-                    if (lastUrl === url // filtering is still actuall
+                    if (currLock === lock // filtering is still actuall
                             && showSeries
                             && !nmTrades.hasCard(offerType, print)
                             && !scope.itemData.includes(print)
@@ -1709,9 +1709,9 @@ async function addTradeWindowEnhancements () {
                     }
                 }
 
-                async function displayPrints (prints, url) {
-                    await Promise.all(prints.map((print) => displayPrint(print, url)));
-                    if (lastUrl !== url) return;
+                async function displayPrints (prints, lock) {
+                    await Promise.all(prints.map((print) => displayPrint(print, lock)));
+                    if (currLock !== lock) return;
                     scope.loading = false;
                     scope.loadingMore = false;
                     // if nothing to display - load next data
@@ -1729,6 +1729,7 @@ async function addTradeWindowEnhancements () {
                     }
                 }
 
+                let prevUrl;
                 scope.load = () => {
                     scope.filterSetId = null;
                     scope.loading = true;
@@ -1739,27 +1740,33 @@ async function addTradeWindowEnhancements () {
                     scope.filters.sett = typeof scope.seriesFilter === "number"
                         ? scope.seriesFilter
                         : null;
+                    currLock += 1;
 
                     const url = scope.getUrl();
-                    if (url === lastUrl) {
-                        displayPrints(scope.fullItemData, url);
+                    // if were changed only user-side filters
+                    if (url === prevUrl) {
+                        displayPrints(scope.fullItemData, currLock);
                         return;
                     }
 
-                    lastUrl = url;
+                    prevUrl = url;
+                    const lock = currLock;
                     artResource.retrievePaginated(url).then((data) => {
-                        if (lastUrl !== url) return;
+                        if (currLock !== lock) return;
                         scope.fullItemData = data;
-                        displayPrints(data, url);
+                        displayPrints(data, currLock);
                     });
                 };
 
+                let lock2 = false;
                 scope.getNextPage = () => {
-                    if (scope.loading || !scope.fullItemData.next) return;
+                    if (lock2 || scope.loading || !scope.fullItemData.next) return;
                     scope.loading = true;
                     scope.loadingMore = true;
+                    lock2 = true;
                     scope.fullItemData.retrieveNext().then((data) => {
-                        displayPrints(data, lastUrl);
+                        lock2 = false;
+                        displayPrints(data, currLock);
                     });
                 };
 
@@ -1770,7 +1777,7 @@ async function addTradeWindowEnhancements () {
                     } else {
                         // print of the same card
                         const print = scope.fullItemData.find(({ id }) => id === ev.print.id);
-                        if (print) displayPrint(print, lastUrl);
+                        if (print) displayPrint(print, currLock);
                     }
                 }
 
@@ -2002,6 +2009,7 @@ function patchTemplates ($templateCache) {
     }, {
         names: ["partials/art/set-header.partial.html"],
         patches: [{
+            // add button for promo pack
             target: `<div class="set-header--collect-it" nm-collect-it-button="sett"></div>`,
             prepend: `
                 <div class="set-header--collect-it" nm-promo-pack-btn=sett>
@@ -2011,6 +2019,7 @@ function patchTemplates ($templateCache) {
     }, {
         names: ["partials/trade/piece-trader-list.partial.html"],
         patches: [{
+            // allow to see the total number of needs/seekers
             target: /span\s+data-ng-pluralize([^}]*)}} (Owners|Collectors)/g,
             replace: (str, p1, p2) => `span
                 class="tip"
@@ -2118,9 +2127,8 @@ function patchNMTrades (nmTrades, userCollections, artSubscriptionService) {
     };
 
     // check if a card is added to trade
-    nmTrades.hasCard = (offerType, card) => {
-        return !!nmTrades.getOfferData(offerType).prints.find(({ id }) => id === card.id);
-    };
+    nmTrades.hasCard = (offerType, card) => !!nmTrades
+        .getOfferData(offerType).prints.find(({ id }) => id === card.id);
 
     debug("nmTrades patched");
 }
