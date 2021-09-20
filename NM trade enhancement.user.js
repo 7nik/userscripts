@@ -1702,8 +1702,9 @@ async function addTradeWindowEnhancements () {
                     showSeries &&= !scope.hiddenSeries.find(({ id }) => id === print.sett_id);
                     if (lastUrl === url // filtering is still actuall
                             && showSeries
-                            && !nmTrades.hasPrintId(offerType, print.print_id)
-                            && !scope.itemData.includes(print)) {
+                            && !nmTrades.hasCard(offerType, print)
+                            && !scope.itemData.includes(print)
+                    ) {
                         scope.itemData.push(print);
                     }
                 }
@@ -1766,8 +1767,10 @@ async function addTradeWindowEnhancements () {
                     if (ev.offerType !== offerType) return;
                     if (ev.action === "added") {
                         scope.itemData.splice(scope.itemData.indexOf(ev.print), 1);
-                    } else if (scope.fullItemData.includes(ev.print)) {
-                        displayPrint(ev.print, lastUrl);
+                    } else {
+                        // print of the same card
+                        const print = scope.fullItemData.find(({ id }) => id === ev.print.id);
+                        if (print) displayPrint(print, lastUrl);
                     }
                 }
 
@@ -2112,6 +2115,11 @@ function patchNMTrades (nmTrades, userCollections, artSubscriptionService) {
             "trade-change",
             { offerType, action: "removed", print },
         );
+    };
+
+    // check if a card is added to trade
+    nmTrades.hasCard = (offerType, card) => {
+        return !!nmTrades.getOfferData(offerType).prints.find(({ id }) => id === card.id);
     };
 
     debug("nmTrades patched");
