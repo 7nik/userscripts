@@ -140,6 +140,12 @@ GM_addStyle(`
         top: 15px;
         right: 20px;
     }
+    .trade--item .print-chooser {
+        border: none;
+        background: none;
+        color: #5f5668;
+        cursor: pointer;
+    }
 
     #trade--search--empty {
         animation: fadeIn 0s 0.15s backwards;
@@ -1325,7 +1331,8 @@ async function addTradeWindowEnhancements () {
             >
                 #{{card.print_num}}
             </span>
-            <select ng-if="active() && state === 'choose'"
+            <select class="print-chooser"
+                ng-if="active() && state === 'choose'"
                 ng-model="$parent.print"
                 ng-options="print as '#'+print.print_num for print in prints"
                 ng-change="setPrint()"
@@ -1338,6 +1345,9 @@ async function addTradeWindowEnhancements () {
         },
         link (scope, $elem) {
             const giving = $elem.closest(".trade--side").is(".trade--you");
+            const offerType = giving ? "bidder_offer" : "responder_offer";
+            const offer = nmTrades.getOfferData(offerType).prints.slice();
+            const print = offer.find(({ id }) => id === scope.card.id);
             // allow to change print during editing the trade and only on users side
             scope.active = () => giving
                 && ["create", "modify", "counter"].includes(nmTrades.getWindowState());
@@ -1349,13 +1359,11 @@ async function addTradeWindowEnhancements () {
                 const url = `/users/${user.id}/piece/${scope.card.id}/detail/`;
                 const details = await api("api", url);
                 scope.prints = details.refs[details.payload[1]].prints;
-                scope.print = scope.prints[scope.prints.length - 1];
+                scope.print = scope.prints.find((p) => p.id === print.print_id)
+                    ?? scope.prints[scope.prints.length - 1];
                 scope.state = "choose";
             };
             scope.setPrint = () => {
-                const offerType = giving ? "bidder_offer" : "responder_offer";
-                const offer = nmTrades.getOfferData(offerType).prints.slice();
-                const print = offer.find(({ id }) => id === scope.card.id);
                 const pos = offer.indexOf(print);
                 print.print_id = scope.print.id;
                 print.print_num = scope.print.print_num;
