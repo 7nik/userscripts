@@ -2264,8 +2264,6 @@ if (window.location.pathname.startsWith("/redeem/") && !loadValue("openPromo", t
         document.cookie = "promo_code=;max-age=0;path=/";
         document.cookie = "promo_sett_url=;max-age=0;path=/";
         document.location = `/series/${settId}/`;
-    } else {
-        document.location = "/";
     }
     // further execution will only cause errors
     return;
