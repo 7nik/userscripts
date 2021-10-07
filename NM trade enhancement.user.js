@@ -1902,6 +1902,25 @@ function addPromoPackButton () {
 }
 
 /**
+ * Adds a controller for NM Trade Enhancements settings block on the account settings page
+ */
+function addTradeEnhancementsSettings () {
+    // the nm.account.settings module is available only at the account settings page
+    if (!window.location.pathname.startsWith("/account/")) return;
+    angular.module("nm.account.settings").controller("nmTradeEnhancementsSettingsController", [
+        "$scope",
+        ($scope) => {
+            $scope.disableAutoOpeningPromo = !loadValue("openPromo", true);
+            $scope.updatePromo = () => {
+                saveValue("openPromo", !$scope.disableAutoOpeningPromo);
+                console.log($scope.disableAutoOpeningPromo);
+            };
+            debug("nmTradeEnhancementsSettingsController initiated");
+        },
+    ]);
+}
+
+/**
  * Patch the given object with templates;
  * @param  {$cacheFactory.Cache} $templateCache - map of templates
  */
@@ -2033,6 +2052,35 @@ function patchTemplates ($templateCache) {
                 class="tip"
                 title="{{itemData.count}} ${p2}"
                 data-ng-pluralize${p1}}} ${p2}`,
+        }],
+    }, {
+        names: ["/static/page/account/partial/account-settings.partial.html"],
+        patches: [{
+            // add settings to enable/disable auto-opening of promo packs
+            target: `account-settings-email-subscriptions.partial.html'"></div>`,
+            append:
+                `<fieldset class="nmte-settings--fieldset"
+                    data-ng-controller=nmTradeEnhancementsSettingsController
+                >
+                    <h2 class=strike-through-header>Trade Enhancements</h2>
+                    <div class="field checkbox-slider--field">
+                        <span class=input>
+                            <span class=checkbox-slider>
+                                <input
+                                    type=checkbox
+                                    class=checkbox-slider--checkbox
+                                    id=nmte-promo
+                                    ng-model=disableAutoOpeningPromo
+                                    ng-change=updatePromo()
+                                >
+                                <span class=checkbox-slider--knob></span>
+                            </span>
+                            <label class=checkbox-slider--label for=nmte-promo>
+                                Disable auto-opening of promo packs
+                            </label>
+                        </span>
+                    </div>
+                </fieldset>`,
         }],
     }].forEach(({ names, patches }) => names.forEach((name) => {
         let template = $templateCache.get(name);
@@ -2203,7 +2251,7 @@ function applyPatches () {
 //                         Program execution start
 // =============================================================================
 
-if (window.location.pathname.startsWith("/redeem/")) {
+if (window.location.pathname.startsWith("/redeem/") && !loadValue("openPromo", true)) {
     // cancel auto-opening a promo pack and redirect to series page
     const getCookie = (name) => document.cookie.split(";")
         .find((str) => str.trim().startsWith(name))
@@ -2242,8 +2290,9 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
     }
 
-    applyPatches();
     addRollbackTradeButton();
     addTradeWindowEnhancements();
     addPromoPackButton();
+    addTradeEnhancementsSettings();
+    applyPatches();
 });
