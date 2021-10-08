@@ -853,6 +853,12 @@ function addHotkeys (ev) {
         }
         // otherwise an overlay will be closed by the angular
     }
+    if (ev.code === "ArrowRight") {
+        document.querySelector("#piece-detail-container .next")?.click();
+    }
+    if (ev.code === "ArrowLeft") {
+        document.querySelector("#piece-detail-container .previous")?.click();
+    }
 }
 
 /**
