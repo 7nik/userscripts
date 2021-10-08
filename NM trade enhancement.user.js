@@ -2055,6 +2055,7 @@ function patchTemplates ($templateCache) {
         }],
     }, {
         names: ["/static/page/account/partial/account-settings.partial.html"],
+        pages: ["/account/"],
         patches: [{
             // add settings to enable/disable auto-opening of promo packs
             target: `account-settings-email-subscriptions.partial.html'"></div>`,
@@ -2082,7 +2083,11 @@ function patchTemplates ($templateCache) {
                     </div>
                 </fieldset>`,
         }],
-    }].forEach(({ names, patches }) => names.forEach((name) => {
+    }].forEach(({ names, patches, pages }) => names.forEach((name) => {
+        // if set to apply the patch only on certain pages
+        if (pages && pages.every((page) => !window.location.pathname.startsWith(page))) {
+            return;
+        }
         let template = $templateCache.get(name);
         let fromCache = true;
         if (!template) {
