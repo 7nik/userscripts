@@ -1927,17 +1927,19 @@ function addTradeEnhancementsSettings () {
 }
 
 /**
- * Add a controller for providing cards in the same order as in the series checklist
+ * Add a directive for providing cards in the same order as in the series checklist
  */
 function addChecklistOrderCards () {
-    angular.module("neonmobApp").controller("fixCardOrder", ["$scope", ($scope) => {
-        $scope.$watch("pieces", (newValue, oldValue) => {
-            $scope.$parent.checklistCards = new Array(8).fill(0)
-                .map((_, i) => i)
-                .flatMap((rarity) => newValue?.filter((piece) => piece.rarity.rarity === rarity));
-        });
-        debug("fixCardOrder initiated");
-    }]);
+    angular.module("neonmobApp").directive("addChecklistOrderedCards", [() => ({
+        scope: { pieces: "=addChecklistOrderedCards" },
+        link: (scope, $elem) => {
+            scope.$watch("pieces", (newValue, oldValue) => {
+                scope.$parent.checklistCards = scope.pieces?.slice()
+                    .sort((a, b) => a.rarity.rarity - b.rarity.rarity);
+            });
+            debug("addChecklistOrderedCards initiated");
+        },
+    })]);
 }
 
 /**
@@ -2104,15 +2106,21 @@ function patchTemplates ($templateCache) {
                 </fieldset>`,
         }],
     }, {
+        // make cards order match with one in the series checklist
+        names: ["partials/art/sett-checklist.partial.html"],
+        patches: [{
+            target: `id="sett-checklist" `,
+            append: `add-checklist-ordered-cards="pieces" `,
+        }, {
+            target: `data-art-sett-checklist-rarity-group="pieces"`,
+            replace: `data-art-sett-checklist-rarity-group="checklistCards"`,
+        }],
+    }, {
         names: ["partials/art/sett-checklist-rarity-group.partial.html"],
         patches: [{
             // enable arrows on the detailed card view
             target: `nm-show-piece-detail="piece" `,
-            append: `nm-show-piece-detail-collection="checklistCards" `,
-        }, {
-            // make cards order match with one in the series checklist
-            target: `class="set-checklist--rarity-group`,
-            prepend: `ng-controller="fixCardOrder" `,
+            append: `nm-show-piece-detail-collection="pieces" `,
         }],
     }].forEach(({ names, patches, pages }) => names.forEach((name) => {
         // if set to apply the patch only on certain pages
