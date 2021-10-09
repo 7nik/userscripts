@@ -308,8 +308,10 @@ class Trade {
         const youAreBidder = trade.bidder.id === NM.you.attributes.id;
         this.you = youAreBidder ? trade.bidder : trade.responder;
         this.yourOffer = youAreBidder ? trade.bidder_offer.prints : trade.responder_offer.prints;
+        this.yourOffer.reverse().sort((a, b) => b.rarity.rarity - a.rarity.rarity);
         this.partner = youAreBidder ? trade.responder : trade.bidder;
         this.parnerOffer = youAreBidder ? trade.responder_offer.prints : trade.bidder_offer.prints;
+        this.parnerOffer.reverse().sort((a, b) => b.rarity.rarity - a.rarity.rarity);
     }
 
     /**
@@ -2130,6 +2132,16 @@ function patchTemplates ($templateCache) {
                     {{ favoriteFilter.selected ? "Unwishlist cards" : "Wishlist cards" }}
                 </span>`,
         }],
+    }, {
+        // sort cards by rarity in a trade preview in the conversation
+        names: ["partials/component/comments.partial.html"],
+        patches: [{
+            target: `comment.attachment.bidder_offer.prints`,
+            append: ` | orderBy:'rarity.rarity':true`,
+        }, {
+            target: `comment.attachment.responder_offer.prints`,
+            append: ` | orderBy:'rarity.rarity':true`,
+        }],
     }].forEach(({ names, patches, pages }) => names.forEach((name) => {
         // if set to apply the patch only on certain pages
         if (pages && pages.every((page) => !window.location.pathname.startsWith(page))) {
@@ -2207,6 +2219,10 @@ function patchNMTrades (nmTrades, userCollections, artSubscriptionService) {
             // preload collections
             userCollections.getCollections(nmTrades.getResponder());
             userCollections.getCollections(nmTrades.getBidder());
+            // sort cards by rarity
+            const comp = (a, b) => b.rarity.rarity - a.rarity.rarity;
+            nmTrades.getOfferData("bidder_offer").prints.reverse().sort(comp);
+            nmTrades.getOfferData("responder_offer").prints.reverse().sort(comp);
         }
         origSetWindowState(state);
     };
