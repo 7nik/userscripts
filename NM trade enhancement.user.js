@@ -901,92 +901,84 @@ function makePiecePeekable (piece) {
 }
 
 /**
- * Adds button to wishlist all unowned cards according to rariry filters
- * @param {HTMLElement} container - <div.collection--filters>
+ * Adds a controller to wishlist or unwishlist all unowned cards according to rariry filters
  */
-function addWishlistButton (container) {
-    // add button to only your collections
-    // use such check because when the container is just added, it's `scope.isOwner` is still false
-    if (window.location.pathname.match(/user\/(.+)\/cards/)?.[1] !== NM.you.attributes.username) {
-        return;
-    }
-    const button = document.createElement("span");
-    button.className = "btn wislist-btn tip";
-    button.textContent = "Wishlist cards";
-    button.title = "Wishlist unowned cards according to the chosen rarities";
-    button.addEventListener("click", wishlistCards);
-    container.append(button);
-}
+function addWishlistButton () {
+    angular.module("nm.trades").controller("wishlistCardsButton", ["$scope", ($scope) => {
+        $scope.toggleWishlists = async (ev) => {
+            // as we don't have access to the list of all cards
+            // we'll make CollectionController to show cards we need and save them all
 
-/**
- * Wishlist all unowned card according to rarity filters
- * @param  {Event} ev - The button click event
- */
-async function wishlistCards (ev) {
-    const container = ev.target.closest(".sett-detail-container");
-    const {
-        applyFilters,
-        favoriteFilter,
-        filters,
-        getNextPage,
-    } = getScope(container);
+            // save current filters
+            const { ownership, duplicate } = $scope.filters;
+            const favorite  = $scope.favoriteFilter?.selected;
+            const wishlistMode = !favorite;
 
-    // save current filters
-    const { ownership, duplicate } = filters;
-    const favorite  = favoriteFilter?.selected;
+            // set temporal filters
+            $scope.favoriteFilter.selected = false;
+            $scope.filters.ownership = "unowned";
+            $scope.filters.duplicate = null;
+            $scope.applyFilters();
 
-    // set temporal filters
-    favoriteFilter.selected = false;
-    filters.ownership = "unowned";
-    filters.duplicate = null;
-    applyFilters();
+            // get the cards
+            let cards = [];
+            let count;
+            do {
+                count = cards.length;
+                $scope.getNextPage();
+                cards = $scope.columns.flat();
+            } while (cards.length > count);
+            cards = cards.filter((card) => card.favorite !== wishlistMode);
 
-    // display and save all cards
-    let cards = [];
-    let count;
-    do {
-        count = cards.length;
-        getNextPage();
-        cards = getScope(container).columns.flat();
-    } while (cards.length > count);
-    cards = cards.filter((card) => !card.favorite);
+            // restore the filters now to avoid small lagging that is visible due to animation
+            $scope.favoriteFilter.selected = favorite;
+            $scope.filters.ownership = ownership;
+            $scope.filters.duplicate = duplicate;
+            $scope.applyFilters();
 
-    // restore the filters now to avoid small lagging that is visible due to animation
-    favoriteFilter.selected = favorite;
-    filters.ownership = ownership;
-    filters.duplicate = duplicate;
-    applyFilters();
+            // create object that will link card and it's card on the screen
+            const stars = cards.map((card) => {
+                const x0 = ev.clientX / window.innerWidth * 100;
+                const y0 = ev.clientY / window.innerHeight * 100;
+                const x = 5 + Math.random() * 90;
+                const y = 5 + Math.random() * 90;
+                const d = Math.hypot(x0 - x, y0 - y);
+                const elem = document.createElement("i");
+                elem.className = wishlistMode ? "icon-like" : "icon-liked";
+                elem.style.setProperty("--endX",  `${x}%`);
+                elem.style.setProperty("--endY", `${y}%`);
+                elem.style.setProperty("--time", `${1 + Math.random() * cards.length * 0.4}s`);
+                return { card, elem, d };
+            });
+            stars.sort((a, b) => b.d - a.d);
 
-    // create container with stars that display the wishlist status of the cards
-    const div = document.createElement("div");
-    div.id = "wishlist--animate";
-    div.style.setProperty("--startX", `${ev.clientX / window.innerWidth * 100}%`);
-    div.style.setProperty("--startY", `${ev.clientY / window.innerHeight * 100}%`);
-    div.append(...cards.map(({ id }) => {
-        const i = document.createElement("i");
-        i.className = "icon-like";
-        i.id = `card-${id}`;
-        i.style.setProperty("--endX",  `${5 + Math.random() * 90}%`);
-        i.style.setProperty("--endY", `${5 + Math.random() * 90}%`);
-        i.style.setProperty("--time", `${1 + Math.random() * cards.length * 0.67}s`);
-        return i;
-    }));
-    document.body.prepend(div);
+            // create container with stars that display the wishlist status of the cards
+            const div = document.createElement("div");
+            div.id = "wishlist--animate";
+            div.style.setProperty("--startX", `${ev.clientX / window.innerWidth * 100}%`);
+            div.style.setProperty("--startY", `${ev.clientY / window.innerHeight * 100}%`);
+            div.append(...stars.map(({ elem }) => elem));
+            document.body.prepend(div);
 
-    // sequentially favorite the cards
-    const params = {
-        method: "POST",
-        headers: new Headers({ "X-CSRFToken": document.cookie.match(/csrftoken=(\w+)/)[1] }),
-    };
-    // eslint-disable-next-line no-restricted-syntax
-    for (const card of cards) {
-        // eslint-disable-next-line no-await-in-loop
-        await api("api", `/pieces/${card.id}/favorite/`, params);
-        card.favorite = !card.favorite;
-        div.querySelector(`#card-${card.id}`).className = "icon-liked";
-    }
+            // sequentially favorite the cards
+            const params = {
+                method: "POST",
+                headers: new Headers({
+                    "X-CSRFToken": document.cookie.match(/csrftoken=(\w+)/)[1],
+                }),
+            };
+            // eslint-disable-next-line no-restricted-syntax
+            for (const star of stars) {
+                // eslint-disable-next-line no-await-in-loop
+                await api("api", `/pieces/${star.card.id}/favorite/`, params);
+                star.card.favorite = !star.card.favorite;
+                star.elem.className = wishlistMode ? "icon-liked" : "icon-like";
+            }
 
-    div.remove();
+            div.remove();
+            $scope.applyFilters();
+        };
+    }]);
 }
 
 /**
@@ -2122,6 +2114,22 @@ function patchTemplates ($templateCache) {
             target: `nm-show-piece-detail="piece" `,
             append: `nm-show-piece-detail-collection="pieces" `,
         }],
+    }, {
+        names: ["partials/collection/collection-prints.partial.html"],
+        patches: [{
+            // add button to wishlist/unwishlist cards in collection
+            target: `<div class="collection--sett-actions">`,
+            append: `
+                <span
+                    class="btn wislist-btn tip"
+                    title="Wishlist/unwishlist unowned cards according to the chosen rarities"
+                    ng-if="isOwner"
+                    ng-controller="wishlistCardsButton"
+                    ng-click="toggleWishlists($event)"
+                >
+                    {{ favoriteFilter.selected ? "Unwishlist cards" : "Wishlist cards" }}
+                </span>`,
+        }],
     }].forEach(({ names, patches, pages }) => names.forEach((name) => {
         // if set to apply the patch only on certain pages
         if (pages && pages.every((page) => !window.location.pathname.startsWith(page))) {
@@ -2322,7 +2330,6 @@ document.addEventListener("DOMContentLoaded", () => {
     forAllElements(document, "li.nm-notification, li.nm-notifications-feed--item", addTradePreview);
     forAllElements(document, "span.collect-it.collect-it-button", fixFreebieCount);
     forAllElements(document, "div[data-art-piece-asset='piece']", makePiecePeekable);
-    forAllElements(document, "div.collection--filters", addWishlistButton);
 
     try {
         angular.module("nm.trades");
@@ -2337,5 +2344,6 @@ document.addEventListener("DOMContentLoaded", () => {
     addPromoPackButton();
     addTradeEnhancementsSettings();
     addChecklistOrderCards();
+    addWishlistButton();
     applyPatches();
 });
