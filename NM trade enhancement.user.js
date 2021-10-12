@@ -305,6 +305,8 @@ const cardsInTrades = (() => {
     };
 })();
 
+const templatePatches = [];
+
 const debug = (...args) => console.debug("[NM trade enhancement]", ...args);
 
 /**
@@ -883,6 +885,14 @@ function addHotkeys (ev) {
  * the colored/animed version of a card by clicking and holding on it.
  */
 function makePiecePeekable () {
+    // replace directive with custom one
+    templatePatches.push({
+        names: ["partials/art/piece/piece.partial.html"],
+        patches: [{
+            target: `data-art-piece-asset="piece"`,
+            replace: `data-art-peekable-piece-asset="piece"`,
+        }],
+    });
     // based on https://d1ld1je540hac5.cloudfront.net/_dev/angular-app/art/piece/piece-asset.directive.js
     angular.module("Art").directive("artPeekablePieceAsset", () => ({
         templateUrl: "partials/art/piece/piece-asset.partial.html",
@@ -1055,6 +1065,23 @@ function makePiecePeekable () {
  * Adds a controller to wishlist or unwishlist all unowned cards according to rariry filters
  */
 function addWishlistButton () {
+    // add button to wishlist/unwishlist cards in collection
+    templatePatches.push({
+        names: ["partials/collection/collection-prints.partial.html"],
+        patches: [{
+            target: `<div class="collection--sett-actions">`,
+            append: `
+                <span
+                    class="btn wislist-btn tip"
+                    title="Wishlist/unwishlist unowned cards according to the chosen rarities"
+                    ng-if="isOwner"
+                    ng-controller="wishlistCardsButton"
+                    ng-click="toggleWishlists($event)"
+                >
+                    {{ favoriteFilter.selected ? "Unwishlist cards" : "Wishlist cards" }}
+                </span>`,
+        }],
+    });
     angular.module("nm.trades").controller("wishlistCardsButton", ["$scope", ($scope) => {
         $scope.toggleWishlists = async (ev) => {
             // as we don't have access to the list of all cards
@@ -1136,6 +1163,21 @@ function addWishlistButton () {
  * Patches AngularJS to show button to rollback an edited trade.
  */
 function addRollbackTradeButton () {
+    // insert button to rollback the trade
+    templatePatches.push({
+        names: ["/static/common/trades/partial/footer.html"],
+        patches: [{
+            target: "<span>Offer Trade</span></button>",
+            append:
+                `<button class="btn subdued"
+                    ng-if="getWindowState()==='counter' || getWindowState()==='modify'"
+                    ng-controller="rollbackTradeButton"
+                    ng-click="cancelChanges()"
+                >
+                    <span>Back</span>
+                </button>`,
+        }],
+    });
     // add logic of the button
     angular.module("nm.trades").controller("rollbackTradeButton", [
         "$scope",
@@ -1304,6 +1346,28 @@ async function addTradeWindowEnhancements () {
         };
     }]);
 
+    // insert collection progress
+    templatePatches.push({
+        names: [
+            "/static/common/trades/partial/add.html",
+            "/static/common/trades/partial/item-list.html",
+        ],
+        patches: [{
+            target: "<dt class=small-caps>Rarity</dt>",
+            prepend:
+                `<dt class=small-caps>Collected</dt>
+                <dd>
+                    <span
+                        nm-collection-progress=you
+                        nm-collection-progress-sett-id=print.sett_id
+                    ></span>,
+                    <span
+                        nm-collection-progress=partner
+                        nm-collection-progress-sett-id=print.sett_id
+                    ></span>
+                </dd>`,
+        }],
+    });
     // a directive to display collection progress
     angular.module("nm.trades").directive(
         "nmCollectionProgress",
@@ -1376,6 +1440,17 @@ async function addTradeWindowEnhancements () {
         })],
     );
 
+    // insert card usage in trades
+    templatePatches.push({
+        names: [
+            "/static/common/trades/partial/add.html",
+            "/static/common/trades/partial/item-list.html",
+        ],
+        patches: [{
+            target: "</li>",
+            prepend: `<span nm-used-in-trades=print class="card-trading"></span>`,
+        }],
+    });
     // a directive to mark cards used in other trades
     angular.module("nm.trades").directive("nmUsedInTrades", ["nmTrades", (nmTrades) => {
         const attachTip = async (elem, tradeIds) => {
@@ -1466,6 +1541,14 @@ async function addTradeWindowEnhancements () {
         };
     }]);
 
+    // insert the print chooser
+    templatePatches.push({
+        names: ["/static/common/trades/partial/item-list.html"],
+        patches: [{
+            target: "#{{print.print_num}}",
+            replace: "<span nm-print-chooser=print></span>",
+        }],
+    });
     // a directive to allow users to choose print
     angular.module("nm.trades").directive("nmPrintChooser", ["nmTrades", (nmTrades) => ({
         template: `
@@ -1522,6 +1605,69 @@ async function addTradeWindowEnhancements () {
         },
     })]);
 
+    templatePatches.push({
+        names: ["/static/common/trades/partial/create.html"],
+        patches: [{
+            // we cannot override a directive so we replace it in the template to our own directive
+            target: "nm-trades-add",
+            replace: "nm-trades-add2",
+        }],
+    }, {
+        names: ["/static/common/trades/partial/add.html"],
+        patches: [{
+            // insert buttons to select or hide card's series
+            target: "{{print.sett_name}}</a>",
+            append:
+                `<span ng-if="!filters.sett">
+                    <span class="icon-button search-series-button"
+                        ng-click="selectSeries(print.sett_id)"></span>
+                    <span class="icon-button" ng-click="hideSeries(print.sett_id)">🗙</span>
+                </span>`,
+        }, {
+            // display list of hidden series
+            target: "<ul",
+            prepend:
+                `<div class="hiddenSeries" ng-if="hiddenSeries.length && !filters.sett">
+                    <span class="small-caps">Hidden series: </span>
+                    <span ng-repeat="sett in hiddenSeries">
+                        <span class="tip" title="{{sett.tip}}">{{sett.name}}</span>
+                        <a ng-click="showSeries(sett.id)">✕</a>{{$last ? "" : ","}}
+                    </span>
+                </div>`,
+        }, {
+            // insert button to reset selected series
+            target: `<select class="btn small subdued series"`,
+            prepend:
+                `<span class="reset tip" title="Reset series" ng-click="selectSeries(null)">
+                    <i class='reset-sett'></i>
+                </span>`,
+        }, {
+            // display series filters in the list of collecting series
+            target: `<select class="btn small subdued series" ng-model=filters.sett`,
+            replace: `<select class="btn small subdued series" ng-model=$parent.seriesFilter`,
+        }, {
+            // more advanced filtering is used instead of
+            target: `ng-if="showCards() && displayPrintInList(print)"`,
+            replace: "",
+        }, {
+            target: "will give",
+            append: ", use filter set",
+        }, {
+            // insert list of filter sets
+            target: "<span class=trade--side--header--actions ng-click",
+            prepend: `
+                <select class="btn small subdued filter-sets"
+                    ng-model=filterSetId
+                    ng-options="fset.id as fset.name for fset in filterSets"
+                    ng-change=applyFilterSet()
+                ></select>
+                <span class="icon-button" ng-click="deleteFilterSet()">🗑</span>`,
+        }, {
+            // fix loading indicator
+            target: "!itemData.length && !showLoading()",
+            replace: "!itemData.length && !loadingMore",
+        }],
+    });
     // based on https://d1ld1je540hac5.cloudfront.net/client/common/trades/module/add.js
     angular.module("nm.trades").directive("nmTradesAdd2", [
         "$timeout",
@@ -1995,6 +2141,18 @@ async function addTradeWindowEnhancements () {
  * Adds a button to open a promo pack if available
  */
 function addPromoPackButton () {
+    // add button for promo pack
+    templatePatches.push({
+        names: ["partials/art/set-header.partial.html"],
+        patches: [{
+            target: `<div class="set-header--collect-it" nm-collect-it-button="sett"></div>`,
+            prepend: `
+                <div class="set-header--collect-it" nm-promo-pack-btn=sett>
+                    <span class="btn reward collect-it-button">Open promo pack</span>
+                </div>`,
+        }],
+    });
+    // define the button logic
     angular.module("neonmobApp").directive("nmPromoPackBtn", [
         "poRoute",
         "artOverlay",
@@ -2056,173 +2214,11 @@ function addPromoPackButton () {
 function addTradeEnhancementsSettings () {
     // the nm.account.settings module is available only at the account settings page
     if (!window.location.pathname.startsWith("/account/")) return;
-    angular.module("nm.account.settings").controller("nmTradeEnhancementsSettingsController", [
-        "$scope",
-        ($scope) => {
-            $scope.disableAutoOpeningPromo = !loadValue("openPromo", true);
-            $scope.updatePromo = () => {
-                saveValue("openPromo", !$scope.disableAutoOpeningPromo);
-                console.log($scope.disableAutoOpeningPromo);
-            };
-            debug("nmTradeEnhancementsSettingsController initiated");
-        },
-    ]);
-}
-
-/**
- * Add a directive for providing cards in the same order as in the series checklist
- */
-function addChecklistOrderCards () {
-    angular.module("neonmobApp").directive("addChecklistOrderedCards", [() => ({
-        scope: { pieces: "=addChecklistOrderedCards" },
-        link: (scope, $elem) => {
-            scope.$watch("pieces", (newValue, oldValue) => {
-                scope.$parent.checklistCards = scope.pieces?.slice()
-                    .sort((a, b) => a.rarity.rarity - b.rarity.rarity);
-            });
-            debug("addChecklistOrderedCards initiated");
-        },
-    })]);
-}
-
-/**
- * Patch the given object with templates;
- * @param  {$cacheFactory.Cache} $templateCache - map of templates
- */
-function patchTemplates ($templateCache) {
-    [{
-        names: ["/static/common/trades/partial/create.html"],
-        patches: [{
-            // we cannot override a directive so we replace it in the template to our own directive
-            target: "nm-trades-add",
-            replace: "nm-trades-add2",
-        }],
-    }, {
-        names: [
-            "/static/common/trades/partial/add.html",
-            "/static/common/trades/partial/item-list.html",
-        ],
-        patches: [{
-            // insert collection progress
-            target: "<dt class=small-caps>Rarity</dt>",
-            prepend:
-                `<dt class=small-caps>Collected</dt>
-                <dd>
-                    <span
-                        nm-collection-progress=you
-                        nm-collection-progress-sett-id=print.sett_id
-                    ></span>,
-                    <span
-                        nm-collection-progress=partner
-                        nm-collection-progress-sett-id=print.sett_id
-                    ></span>
-                </dd>`,
-        }, {
-            // insert card usage in trades
-            target: "</li>",
-            prepend: `<span nm-used-in-trades=print class="card-trading"></span>`,
-        }],
-    }, {
-        names: ["/static/common/trades/partial/add.html"],
-        patches: [{
-            // insert buttons to select or hide card's series
-            target: "{{print.sett_name}}</a>",
-            append:
-                `<span ng-if="!filters.sett">
-                    <span class="icon-button search-series-button"
-                        ng-click="selectSeries(print.sett_id)"></span>
-                    <span class="icon-button" ng-click="hideSeries(print.sett_id)">🗙</span>
-                </span>`,
-        }, {
-            // display list of hidden series
-            target: "<ul",
-            prepend:
-                `<div class="hiddenSeries" ng-if="hiddenSeries.length && !filters.sett">
-                    <span class="small-caps">Hidden series: </span>
-                    <span ng-repeat="sett in hiddenSeries">
-                        <span class="tip" title="{{sett.tip}}">{{sett.name}}</span>
-                        <a ng-click="showSeries(sett.id)">✕</a>{{$last ? "" : ","}}
-                    </span>
-                </div>`,
-        }, {
-            // insert button to reset selected series
-            target: `<select class="btn small subdued series"`,
-            prepend:
-                `<span class="reset tip" title="Reset series" ng-click="selectSeries(null)">
-                    <i class='reset-sett'></i>
-                </span>`,
-        }, {
-            // display series filters in the list of collecting series
-            target: `<select class="btn small subdued series" ng-model=filters.sett`,
-            replace: `<select class="btn small subdued series" ng-model=$parent.seriesFilter`,
-        }, {
-            // more advanced filtering is used instead of
-            target: `ng-if="showCards() && displayPrintInList(print)"`,
-            replace: "",
-        }, {
-            target: "will give",
-            append: ", use filter set",
-        }, {
-            // insert list of filter sets
-            target: "<span class=trade--side--header--actions ng-click",
-            prepend: `
-                <select class="btn small subdued filter-sets"
-                    ng-model=filterSetId
-                    ng-options="fset.id as fset.name for fset in filterSets"
-                    ng-change=applyFilterSet()
-                ></select>
-                <span class="icon-button" ng-click="deleteFilterSet()">🗑</span>`,
-        }, {
-            // fix loading indicator
-            target: "!itemData.length && !showLoading()",
-            replace: "!itemData.length && !loadingMore",
-        }],
-    }, {
-        names: ["/static/common/trades/partial/item-list.html"],
-        patches: [{
-            // insert the print chooser
-            target: "#{{print.print_num}}",
-            replace: "<span nm-print-chooser=print></span>",
-        }],
-    }, {
-        names: ["/static/common/trades/partial/footer.html"],
-        patches: [{
-            // insert button to rollback the trade
-            target: "<span>Offer Trade</span></button>",
-            append:
-                `<button class="btn subdued"
-                    ng-if="getWindowState()==='counter' || getWindowState()==='modify'"
-                    ng-controller="rollbackTradeButton"
-                    ng-click="cancelChanges()"
-                >
-                    <span>Back</span>
-                </button>`,
-        }],
-    }, {
-        names: ["partials/art/set-header.partial.html"],
-        patches: [{
-            // add button for promo pack
-            target: `<div class="set-header--collect-it" nm-collect-it-button="sett"></div>`,
-            prepend: `
-                <div class="set-header--collect-it" nm-promo-pack-btn=sett>
-                    <span class="btn reward collect-it-button">Open promo pack</span>
-                </div>`,
-        }],
-    }, {
-        names: ["partials/trade/piece-trader-list.partial.html"],
-        patches: [{
-            // allow to see the total number of needs/seekers
-            target: /span\s+data-ng-pluralize([^}]*)}} (Owners|Collectors)/g,
-            replace: (str, p1, p2) => `span
-                class="tip"
-                title="{{itemData.count}} ${p2}"
-                data-ng-pluralize${p1}}} ${p2}`,
-        }],
-    }, {
+    // add settings to enable/disable auto-opening of promo packs
+    templatePatches.push({
         names: ["/static/page/account/partial/account-settings.partial.html"],
         pages: ["/account/"],
         patches: [{
-            // add settings to enable/disable auto-opening of promo packs
             target: `account-settings-email-subscriptions.partial.html'"></div>`,
             append:
                 `<fieldset class="nmte-settings--fieldset"
@@ -2248,8 +2244,26 @@ function patchTemplates ($templateCache) {
                     </div>
                 </fieldset>`,
         }],
-    }, {
-        // make cards order match with one in the series checklist
+    });
+    angular.module("nm.account.settings").controller("nmTradeEnhancementsSettingsController", [
+        "$scope",
+        ($scope) => {
+            $scope.disableAutoOpeningPromo = !loadValue("openPromo", true);
+            $scope.updatePromo = () => {
+                saveValue("openPromo", !$scope.disableAutoOpeningPromo);
+                console.log($scope.disableAutoOpeningPromo);
+            };
+            debug("nmTradeEnhancementsSettingsController initiated");
+        },
+    ]);
+}
+
+/**
+ * Add a directive for providing cards in the same order as in the series checklist
+ */
+function addChecklistOrderCards () {
+    // make cards order match with one in the series checklist
+    templatePatches.push({
         names: ["partials/art/sett-checklist.partial.html"],
         patches: [{
             target: `id="sett-checklist" `,
@@ -2258,28 +2272,40 @@ function patchTemplates ($templateCache) {
             target: `data-art-sett-checklist-rarity-group="pieces"`,
             replace: `data-art-sett-checklist-rarity-group="checklistCards"`,
         }],
+    });
+    angular.module("neonmobApp").directive("addChecklistOrderedCards", [() => ({
+        scope: { pieces: "=addChecklistOrderedCards" },
+        link: (scope, $elem) => {
+            scope.$watch("pieces", (newValue, oldValue) => {
+                scope.$parent.checklistCards = scope.pieces?.slice()
+                    .sort((a, b) => a.rarity.rarity - b.rarity.rarity);
+            });
+            debug("addChecklistOrderedCards initiated");
+        },
+    })]);
+}
+
+/**
+ * Patch the given object with templates;
+ * @param  {$cacheFactory.Cache} $templateCache - map of templates
+ */
+function patchTemplates ($templateCache) {
+    templatePatches.push({
+        names: ["partials/trade/piece-trader-list.partial.html"],
+        patches: [{
+            // allow to see the total number of needs/seekers
+            target: /span\s+data-ng-pluralize([^}]*)}} (Owners|Collectors)/g,
+            replace: (str, p1, p2) => `span
+                class="tip"
+                title="{{itemData.count}} ${p2}"
+                data-ng-pluralize${p1}}} ${p2}`,
+        }],
     }, {
         names: ["partials/art/sett-checklist-rarity-group.partial.html"],
         patches: [{
             // enable arrows on the detailed card view
             target: `nm-show-piece-detail="piece" `,
             append: `nm-show-piece-detail-collection="pieces" `,
-        }],
-    }, {
-        names: ["partials/collection/collection-prints.partial.html"],
-        patches: [{
-            // add button to wishlist/unwishlist cards in collection
-            target: `<div class="collection--sett-actions">`,
-            append: `
-                <span
-                    class="btn wislist-btn tip"
-                    title="Wishlist/unwishlist unowned cards according to the chosen rarities"
-                    ng-if="isOwner"
-                    ng-controller="wishlistCardsButton"
-                    ng-click="toggleWishlists($event)"
-                >
-                    {{ favoriteFilter.selected ? "Unwishlist cards" : "Wishlist cards" }}
-                </span>`,
         }],
     }, {
         // sort cards by rarity in a trade preview in the conversation
@@ -2291,14 +2317,8 @@ function patchTemplates ($templateCache) {
             target: `comment.attachment.responder_offer.prints`,
             append: ` | orderBy:'rarity.rarity':true`,
         }],
-    }, {
-        names: ["partials/art/piece/piece.partial.html"],
-        patches: [{
-            // make it to load the colored version of card but display it as the gray one
-            target: `data-art-piece-asset="piece"`,
-            replace: `data-art-peekable-piece-asset="piece"`,
-        }],
-    }].forEach(({ names, patches, pages }) => names.forEach((name) => {
+    });
+    templatePatches.forEach(({ names, patches, pages }) => names.forEach((name) => {
         // if set to apply the patch only on certain pages
         if (pages && pages.every((page) => !window.location.pathname.startsWith(page))) {
             return;
