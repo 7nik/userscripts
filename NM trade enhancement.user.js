@@ -1029,6 +1029,7 @@ function makePiecePeekable () {
 
                     $elem.on("mousedown", (ev) => {
                         $scope.$apply(() => {
+                            ev.preventDefault();
                             $scope.pieceClass = $scope.pieceClass.replace(" gray-card", "");
                             if ($scope.videoSources) {
                                 if ($scope.videoSources[0].mime_type === "image/gif") {
