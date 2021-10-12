@@ -914,16 +914,15 @@ function makePiecePeekable () {
             "wsLumberjack",
             "artConstants",
             ($scope, $elem, artPieceService, artUser, wsLumberjack, artConstants) => {
-                const hasPiece = artPieceService.hasPiece(artUser, $scope.piece);
                 const adaptors = {
                     video: {
                         getSize: () => ($scope.requestedSize === "xlarge"
-                            ? (hasPiece ? "original" : "large")
+                            ? (!$scope.isPublic && hasPiece() ? "original" : "large")
                             : $scope.requestedSize),
                         isValid () {
                             try {
                                 const canViewVideo = $scope.isPublic
-                                    || (artUser.isAuthenticated() && hasPiece);
+                                    || (artUser.isAuthenticated() && hasPiece());
                                 if (!canViewVideo) return false;
 
                                 if (!$scope.fluid && this.getSize() && this.getData()) {
@@ -959,7 +958,7 @@ function makePiecePeekable () {
                     const adaptor = adaptors[$scope.assetType];
 
                     $scope.pieceClass = `piece-${$scope.assetType}`;
-                    if (!hasPiece) $scope.pieceClass += " gray-card";
+                    if (!$scope.isPublic && !hasPiece()) $scope.pieceClass += " gray-card";
                     if ($scope.assetType === "video" && adaptor.getSize() === "original") {
                         $scope.pieceClass += " original";
                     }
@@ -1018,9 +1017,11 @@ function makePiecePeekable () {
                     return { width, height };
                 }
 
+                function hasPiece () { return artPieceService.hasPiece(artUser, $scope.piece); }
+
                 init();
 
-                if (!hasPiece) {
+                if (!$scope.isPublic && !hasPiece()) {
                     const type = $scope.piece.piece_assets.video ? "animated" : "colored";
                     tippy($elem[0], {
                         content: `Press and hold to see the ${type} version`,
