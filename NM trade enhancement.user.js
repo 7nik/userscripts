@@ -277,6 +277,19 @@ GM_addStyle(`
     div.set-header--collect-it + div.set-header--collect-it {
         display: none;
     }
+
+    .gray-card img {
+        filter: grayscale(1);
+    }
+    /* block showing of video context menu */
+    .piece-video.original::after {
+        content: "";
+        display: block;
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        top: 0;
+    }
 `);
 
 const cardsInTrades = (() => {
@@ -853,6 +866,8 @@ function addHotkeys (ev) {
             document.querySelector(".nm-modal--actionbar--left").click();
             ev.stopPropagation();
         }
+        // remove tippy tips
+        $("[data-tippy-root]").remove();
         // otherwise an overlay will be closed by the angular
     }
     if (ev.code === "ArrowRight") {
@@ -864,42 +879,176 @@ function addHotkeys (ev) {
 }
 
 /**
- * On detailed view of a card makes grayed image colored/animed at clicking and holding on it.
- * @param  {HTMLElement} piece - <div[data-art-piece-asset='piece']>
+ * Adds an alternative directive for displaying a piece which allows to see
+ * the colored/animed version of a card by clicking and holding on it.
  */
-function makePiecePeekable (piece) {
-    if (!piece.querySelector("img[src*='_gray']")) return;
+function makePiecePeekable () {
+    // based on https://d1ld1je540hac5.cloudfront.net/_dev/angular-app/art/piece/piece-asset.directive.js
+    angular.module("Art").directive("artPeekablePieceAsset", () => ({
+        templateUrl: "partials/art/piece/piece-asset.partial.html",
+        scope: {
+            piece: "=artPeekablePieceAsset",
+            requestedSize: "=?artSize",
+            width: "=?artWidth",
+            height: "=?artHeight",
+            fluid: "=?artFluid",
+            isPublic: "=?artPublic",
+            showLoading: "=?artShowLoading",
+            isPackOpenPage: "=?artPackOpenPage",
+        },
+        controller: [
+            "$scope",
+            "$element",
+            "artPieceService",
+            "artUser",
+            "wsLumberjack",
+            "artConstants",
+            ($scope, $elem, artPieceService, artUser, wsLumberjack, artConstants) => {
+                const hasPiece = artPieceService.hasPiece(artUser, $scope.piece);
+                const adaptors = {
+                    video: {
+                        getSize: () => ($scope.requestedSize === "xlarge"
+                            ? (hasPiece ? "original" : "large")
+                            : $scope.requestedSize),
+                        isValid () {
+                            try {
+                                const canViewVideo = $scope.isPublic
+                                    || (artUser.isAuthenticated() && hasPiece);
+                                if (!canViewVideo) return false;
 
-    const { imageSize, piece: { piece_assets: { image, video } } } = getScope(piece);
-    const videoSize = imageSize === "xlarge" ? "large" : imageSize;
+                                if (!$scope.fluid && this.getSize() && this.getData()) {
+                                    return true;
+                                }
+                            } catch (ex) {
+                                wsLumberjack.exception(ex);
+                            }
+                            return false;
+                        },
+                        getData () { return $scope.piece.piece_assets.video?.[this.getSize()]; },
+                    },
+                    image: {
+                        getSize: () => $scope.requestedSize,
+                        isValid: () => true,
+                        getData () { return $scope.piece.piece_assets.image[this.getSize()]; },
+                    },
+                };
+                // used by Sett creator only
+                const redrawAssetListener = $scope.$on("artRedrawAsset", (ev, pieceId) => {
+                    if ($scope.piece.id !== pieceId) return;
+                    init();
+                });
 
-    piece.addEventListener("mousedown", (ev) => {
-        if (ev.button !== 0) return;
-        ev.preventDefault();
+                function init () {
+                    $scope.requestedSize = $scope.requestedSize || "large";
+                    $scope.fluid = !!$scope.fluid;
+                    $scope.isPublic = !!$scope.isPublic;
+                    $scope.showLoading = $scope.showLoading !== false;
+                    $scope.settVersion = artConstants.VERSION_TYPES.limited;
 
-        let elem;
-        if (video) {
-            elem = document.createElement("video");
-            elem.autoplay = true;
-            elem.loop = true;
-            elem.innerHTML = video[videoSize].sources
-                .map(({ mime_type: type, url }) => `<source src="${url}" type="${type}">`)
-                .join("");
-            elem.addEventListener("loadedmetadata", () => { elem.style.cursor = null; });
-        } else {
-            elem = document.createElement("img");
-            elem.src = image[imageSize].url;
-            elem.addEventListener("load", () => { elem.style.cursor = null; });
-        }
-        elem.style.position = "absolute";
-        elem.style.top = "0";
-        elem.style.width = "100%";
-        elem.style.height = "100%";
-        elem.style.background = "transparent";
-        elem.style.cursor = "progress";
-        piece.firstElementChild.append(elem);
-        window.addEventListener("mouseup", () => elem.remove(), { once: true });
-    });
+                    $scope.assetType = calcAssetType();
+                    const adaptor = adaptors[$scope.assetType];
+
+                    $scope.pieceClass = `piece-${$scope.assetType}`;
+                    if (!hasPiece) $scope.pieceClass += " gray-card";
+                    if ($scope.assetType === "video" && adaptor.getSize() === "original") {
+                        $scope.pieceClass += " original";
+                    }
+
+                    $scope.videoSources = [];
+                    $scope.imageUrl = "";
+                    $scope.posterUrl = "";
+
+                    const pieceData = adaptor.getData();
+                    if (!pieceData) return;
+
+                    $scope.videoSources = adaptors.video.getData()?.sources;
+                    $scope.imageUrl = adaptors.image.getData().url;
+                    $scope.posterUrl = $scope.imageUrl;
+
+                    $scope.dimensionStyle = getDimensionStyle(pieceData);
+                    $scope.calcedWidth = $scope.dimensionStyle.width;
+                    $scope.calcedHeight = $scope.dimensionStyle.height;
+                }
+
+                function calcAssetType () {
+                    const adaptor = adaptors[$scope.piece.asset_type];
+                    if (adaptor && adaptor.isValid()) return $scope.piece.asset_type;
+                    return "image";
+                }
+
+                function getDimensionStyle (data) {
+                    const ratio = data.width / data.height;
+                    let height;
+                    let width;
+
+                    if ($scope.fluid) return {};
+
+                    if ($scope.width && $scope.height) {
+                        if (ratio < $scope.width / $scope.height) {
+                            height = $scope.height;
+                            width = Math.ceil($scope.height * ratio);
+                        } else {
+                            width = $scope.width;
+                            height = Math.ceil($scope.width / ratio);
+                        }
+                    } else if ($scope.height) {
+                        height = $scope.height;
+                        width = Math.ceil($scope.height * ratio);
+                    } else if ($scope.width) {
+                        width = $scope.width;
+                        height = Math.ceil($scope.width / ratio);
+                    } else {
+                        width = data.width;
+                        height = data.height;
+                    }
+
+                    width = Math.min(width, data.width);
+                    height = Math.min(height, data.height);
+
+                    return { width, height };
+                }
+
+                init();
+
+                if (!hasPiece) {
+                    const type = $scope.piece.piece_assets.video ? "animated" : "colored";
+                    tippy($elem[0], {
+                        content: `Press and hold to see the ${type} version`,
+                        theme: "tooltip",
+                    });
+
+                    $elem.on("mousedown", (ev) => {
+                        $scope.$apply(() => {
+                            $scope.pieceClass = $scope.pieceClass.replace(" gray-card", "");
+                            if ($scope.videoSources) {
+                                if ($scope.videoSources[0].mime_type === "image/gif") {
+                                    $scope.imageUrl = $scope.videoSources[0].url;
+                                } else if (ev.button === 0) {
+                                    $scope.assetType = "video";
+                                }
+                            }
+                        });
+                    });
+                    $elem.on("mouseup", () => {
+                        $scope.$apply(() => {
+                            $scope.pieceClass += " gray-card";
+                            if ($scope.videoSources) {
+                                if ($scope.videoSources[0].mime_type === "image/gif") {
+                                    $scope.imageUrl = $scope.posterUrl;
+                                } else {
+                                    $scope.assetType = "image";
+                                }
+                            }
+                        });
+                    });
+                }
+
+                $scope.$on("$destroy", () => {
+                    redrawAssetListener();
+                });
+            },
+        ],
+    }));
 }
 
 /**
@@ -2142,6 +2291,13 @@ function patchTemplates ($templateCache) {
             target: `comment.attachment.responder_offer.prints`,
             append: ` | orderBy:'rarity.rarity':true`,
         }],
+    }, {
+        names: ["partials/art/piece/piece.partial.html"],
+        patches: [{
+            // make it to load the colored version of card but display it as the gray one
+            target: `data-art-piece-asset="piece"`,
+            replace: `data-art-peekable-piece-asset="piece"`,
+        }],
     }].forEach(({ names, patches, pages }) => names.forEach((name) => {
         // if set to apply the patch only on certain pages
         if (pages && pages.every((page) => !window.location.pathname.startsWith(page))) {
@@ -2345,7 +2501,6 @@ document.addEventListener("DOMContentLoaded", () => {
     forAllElements(document, "div.nm-conversation--header", addLastActionAgo);
     forAllElements(document, "li.nm-notification, li.nm-notifications-feed--item", addTradePreview);
     forAllElements(document, "span.collect-it.collect-it-button", fixFreebieCount);
-    forAllElements(document, "div[data-art-piece-asset='piece']", makePiecePeekable);
 
     try {
         angular.module("nm.trades");
@@ -2361,5 +2516,6 @@ document.addEventListener("DOMContentLoaded", () => {
     addTradeEnhancementsSettings();
     addChecklistOrderCards();
     addWishlistButton();
+    makePiecePeekable();
     applyPatches();
 });
