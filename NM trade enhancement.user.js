@@ -57,39 +57,73 @@ GM_addStyle(`
         display: none;
     }
 
-    .trade--side--header .filter-sets + .icon-button {
+    .trade--add-items--filters {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: stretch;
+        align-content: space-between;
+        height: 89px;
+    }
+    .trade--add-items--filters input.search {
+        font-size: 12px;
+        height: auto;
+        padding: 0.5em 0.6em;
+        width: 20px;
+    }
+    .trade--add-items--filters .filter-sets {
+        width: calc(49% - 50px);
+        flex-grow: 1;
+    }
+    .trade--add-items--filters input.search:focus {
+        width: calc(50% - 30px);
+        margin: 0;
+        flex-grow: 1;
+    }
+    .trade--add-items--filters input.search:focus + .filter-sets {
         display: none;
-        color: #5f5668;
-        margin-left: 0.3em;
     }
-    .trade--side--header:hover .filter-sets + .icon-button {
-        display: initial;
+    .trade--add-items--filters .icon-button {
+        align-self: flex-end;
+        padding: 13px 0 0 5px;
+        font-size: inherit;
+        width: 30px;
+        display: none;
+        cursor: pointer;
     }
-    .trade--side--header .filter-sets + .icon-button:hover {
+    .trade--add-items--filters .icon-button:hover {
         color: #085b85;
     }
-
-    .trade--add-items--filters input.search,
-    .trade--add-items--filters select.series{
-        width: 47.8%;
-    }
     .trade--add-items--filters span.reset {
-        border: none;
-        margin: 5px -0.75% 5px 0;
-        width: 3%;
-        cursor: pointer;
+        font-size: inherit;
         text-align: right;
+        align-self: flex-end;
+        width: 30px;
+        cursor: pointer;
     }
     .trade--add-items--filters span.reset .reset-sett {
         display: inline-block;
-        width: 100%;
-        max-width: 18px;
+        vertical-align: middle;
+        width: 18px;
         height: 18px;
         opacity: 0.8;
         background-image: url(${RESET_BUTTON_ICON});
         background-size: contain;
         background-position: bottom;
         background-repeat: no-repeat;
+    }
+    .trade--add-items--filters .filter-sets:hover + .icon-button,
+    .trade--add-items--filters .filter-sets + .icon-button:hover {
+        display: initial;
+    }
+    .trade--add-items--filters .filter-sets:hover + .icon-button + .reset,
+    .trade--add-items--filters .filter-sets + .icon-button:hover + .reset {
+        display: none;
+    }
+    .trade--add-items--filters select.series{
+        flex-grow: 1;
+    }
+    .trade--add-items--filters .filter-group {
+        margin: 0;
     }
 
     #print-list .hiddenSeries {
@@ -1628,10 +1662,18 @@ async function addTradeWindowEnhancements () {
                     </span>
                 </div>`,
         }, {
-            // insert button to reset selected series
+            // insert list of filter sets and button to reset selected series
             target: `<select class="btn small subdued series"`,
             prepend:
-                `<span class="reset tip" title="Reset series" ng-click="selectSeries(null)">
+                `<select class="btn small subdued filter-sets"
+                    ng-model=$parent.filterSetId
+                    ng-options="fset.id as fset.name for fset in filterSets"
+                    ng-change=applyFilterSet()
+                ></select>
+                <span class="icon-button tip"
+                    title="Delete filter set"
+                    ng-click="deleteFilterSet()">🗑</span>
+                <span class="reset tip" title="Reset series" ng-click="selectSeries(null)">
                     <i class='reset-sett'></i>
                 </span>`,
         }, {
@@ -1642,19 +1684,6 @@ async function addTradeWindowEnhancements () {
             // more advanced filtering is used instead of
             target: `ng-if="showCards() && displayPrintInList(print)"`,
             replace: "",
-        }, {
-            target: "will give",
-            append: ", use filter set",
-        }, {
-            // insert list of filter sets
-            target: "<span class=trade--side--header--actions ng-click",
-            prepend: `
-                <select class="btn small subdued filter-sets"
-                    ng-model=filterSetId
-                    ng-options="fset.id as fset.name for fset in filterSets"
-                    ng-change=applyFilterSet()
-                ></select>
-                <span class="icon-button" ng-click="deleteFilterSet()">🗑</span>`,
         }, {
             // fix loading indicator
             target: "!itemData.length && !showLoading()",
@@ -2278,6 +2307,9 @@ function addChecklistOrderCards () {
     })]);
 }
 
+/**
+ * Shows in which trades the card is used if it is
+ */
 function addUsageInTrades () {
     templatePatches.push({
         // insert card usage on collection page
