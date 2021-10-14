@@ -161,7 +161,7 @@ GM_addStyle(`
     .tippy-box[data-theme~='trade'] {
         background: #efefef;
         border-radius: 5px;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, .15);
+        filter: drop-shadow(0 1px 4px rgb(0, 0, 0, 0.35));
         width: 280px;
         max-width: 280px;
     }
@@ -290,17 +290,114 @@ GM_addStyle(`
         position: absolute;
         top: 0;
     }
+
+    .collection--prints .card-trading-icon {
+        position: absolute;
+        left: 3%;
+        top: 3%;
+    }
+    .collection--prints .card-trading-icon:not([data-length="0"]) {
+        cursor: pointer;
+        z-index: 4;
+        color: white;
+        box-shadow: 1.5px -1.5px white, -1.5px 1.5px white, 1.5px 1.5px white, -1.5px -1.5px white;
+        font-size: 9pt;
+        background: black;
+        padding: 2px;
+        margin: 5px;
+        opacity: 0.85;
+        transform: rotate(45deg);
+        line-height: 1;
+    }
+    .card-trading-icon:not([data-length="0"])::before {
+        display: inline-block;
+        font-family: 'glyphter nm icon font';
+        content: '\\0053';
+    }
+    .collection--prints .card-trading-icon:not([data-length="0"])::before {
+        vertical-align: top;
+        transform: rotate(-45deg);
+    }
+    .set-checklist .card-trading-icon:not([data-length="0"])::before {
+        vertical-align: text-top;
+        font-size: 12px;
+        color: #857a90;
+    }
+    .collection--prints [ng-if="!piece.own_count"] ~ .card-trading-icon {
+        opacity: 0.5;
+    }
+    .trade-preview--print.highlight-card {
+        border-radius: 5px;
+        box-shadow: 0 2px 5px #8400ff;
+    }
 `);
 
 const cardsInTrades = (() => {
     let res;
     return {
+        lastUpdate: -1,
         receive: {},
         give: {},
         loading: new Promise((resolve) => { res = resolve; }),
         ready () {
             cardsInTrades.loading = false;
             res();
+        },
+        /**
+         * Returns list of trades where the given card is involved
+         * @param  {object} print - the involved card
+         * @param  {("give"|"receive"|"both")} dir - how the card should be involved in a trade
+         * @param  {("print"|"card")} level - look for a certain print or all prints
+         * @return {Promise<number[]>} - list of trade IDs
+         */
+        getTrades: async (print, dir = "both", level = "print") => {
+            if (cardsInTrades.loading) await cardsInTrades.loading;
+
+            const tradeIds = [];
+            if (!print) return tradeIds;
+
+            if (level === "print") {
+                if (dir === "give" || dir === "both") {
+                    tradeIds.push(...cardsInTrades.give[print.id]?.[print.print_id] ?? []);
+                }
+                if (dir === "receive" || dir === "both") {
+                    tradeIds.push(...cardsInTrades.receive[print.id]?.[print.print_id] ?? []);
+                }
+            } else {
+                if (cardsInTrades.give[print.id] && (dir === "give" || dir === "both")) {
+                    // eslint-disable-next-line guard-for-in, no-restricted-syntax
+                    for (const pid in cardsInTrades.give[print.id]) {
+                        tradeIds.push(...cardsInTrades.give[print.id][pid]);
+                    }
+                }
+                if (cardsInTrades.receive[print.id] && (dir === "receive" || dir === "both")) {
+                    // eslint-disable-next-line guard-for-in, no-restricted-syntax
+                    for (const pid in cardsInTrades.receive[print.id]) {
+                        tradeIds.push(...cardsInTrades.receive[print.id][pid]);
+                    }
+                }
+            }
+
+            return tradeIds;
+        },
+        /**
+         * Updates usage in trades for the given print
+         * @param  {number} tradeId - the trade ID with the print
+         * @param  {("give"|"receive")} side - how the print is involved in the trade
+         * @param  {number} cid - card ID
+         * @param  {number} pid - print ID
+         * @param  {(-1,+1)} change - remove or add the print
+         */
+        updatePrint: (tradeId, side, cid, pid, change) => {
+            if (!(cid in cardsInTrades[side])) cardsInTrades[side][cid] = {};
+            if (!(pid in cardsInTrades[side][cid])) cardsInTrades[side][cid][pid] = [];
+            if (change > 0) {
+                cardsInTrades[side][cid][pid].push(tradeId);
+            } else {
+                cardsInTrades[side][cid][pid] = cardsInTrades[side][cid][pid]
+                    .filter((id) => id !== tradeId);
+            }
+            cardsInTrades.lastUpdate = Date.now();
         },
     };
 })();
@@ -333,7 +430,7 @@ class Trade {
      * Creates the trade preview
      * @return {HTMLElement} Element with trade preview
      */
-    makeTradePreview () {
+    makeTradePreview (highlightCardId) {
         const a = document.createElement("a");
         a.className = "trade-preview";
         a.href = `?view-trade=${this.id}`;
@@ -350,6 +447,11 @@ class Trade {
         // eslint-disable-next-line no-underscore-dangle
         a.addEventListener("click", () => a._tippy?.hide());
 
+        if (highlightCardId) {
+            const card = a.querySelector(`[data-print-id="${highlightCardId}"`);
+            if (card) card.classList.add("highlight-card");
+        }
+
         return a;
     }
 
@@ -360,7 +462,7 @@ class Trade {
      */
     static makeThumb (print) {
         return `
-        <span class="trade-preview--print">
+        <span class="trade-preview--print" data-print-id="${print.id}">
             <div class="piece small fluid">
                 <figure class="front">
                     <img class="asset" src="${print.piece_assets.image.small.url}">
@@ -634,24 +736,14 @@ function getSeriesInfo (settId) {
  * Keep data in the variable `cardsInTrades` syncronized with pending
  */
 async function updateCardsInTrade () {
-    const updatePrint = (tradeId, side, pid, change) => {
-        if (pid in cardsInTrades[side]) {
-            if (change > 0) {
-                cardsInTrades[side][pid].push(tradeId);
-            } else {
-                cardsInTrades[side][pid] = cardsInTrades[side][pid]
-                    .filter((id) => id !== tradeId);
-            }
-        } else if (change > 0) {
-            cardsInTrades[side][pid] = [tradeId];
-        }
-    };
     const updateTrade = async ({ object: { id } }, change) => {
         const trade = await Trade.get(id);
-        // you can propose the same print in multiple trades
-        trade.yourOffer.forEach(({ print_id: pid }) => updatePrint(id, "give", pid, change));
-        // but you usually do only one trade for a some print do group by card id
-        trade.parnerOffer.forEach(({ id: pid }) => updatePrint(id, "receive", pid, change));
+        trade.yourOffer.forEach(({ id: cid, print_id: pid }) => {
+            cardsInTrades.updatePrint(id, "give", cid, pid, change);
+        });
+        trade.parnerOffer.forEach(({ id: cid, print_id: pid }) => {
+            cardsInTrades.updatePrint(id, "receive", cid, pid, change);
+        });
     };
 
     onTradeChange(
@@ -1442,107 +1534,6 @@ async function addTradeWindowEnhancements () {
         })],
     );
 
-    // insert card usage in trades
-    templatePatches.push({
-        names: [
-            "/static/common/trades/partial/add.html",
-            "/static/common/trades/partial/item-list.html",
-        ],
-        patches: [{
-            target: "</li>",
-            prepend: `<span nm-used-in-trades=print class="card-trading"></span>`,
-        }],
-    });
-    // a directive to mark cards used in other trades
-    angular.module("nm.trades").directive("nmUsedInTrades", ["nmTrades", (nmTrades) => {
-        const attachTip = async (elem, tradeIds) => {
-            // destroy preivous tip if presented
-            // eslint-disable-next-line no-underscore-dangle
-            elem._tippy?.destroy();
-            if (tradeIds.length === 0) return;
-
-            const trades = await Promise.all(tradeIds.map((id) => Trade.get(id)));
-
-            const tip = document.createElement("div");
-            if (trades.length === 1) {
-                tip.append(trades[0].makeTradePreview());
-            } else {
-                let pos = 0;
-                const controls = document.createElement("header");
-                controls.className = "text-prominent text-small";
-                controls.innerHTML = `
-                    <a class="off">&lt;</a>
-                    trade with <span>${trades[0].partner.name}</span>
-                    <a>&gt;</a>`;
-                const [prev, currTrade, next] = controls.children;
-
-                const showTradePreivew = async (change) => {
-                    pos += change;
-                    if (pos < 0 || pos >= trades.length) {
-                        pos -= change;
-                        return;
-                    }
-                    prev.classList.toggle("off", pos === 0);
-                    next.classList.toggle("off", pos === trades.length - 1);
-                    currTrade.textContent = trades[pos].partner.name;
-                    controls.nextSibling.replaceWith(trades[pos].makeTradePreview());
-                };
-                prev.addEventListener("click", (ev) => showTradePreivew(-1));
-                next.addEventListener("click", (ev) => showTradePreivew(+1));
-
-                tip.append(
-                    controls,
-                    trades[pos].makeTradePreview(),
-                );
-            }
-
-            tippy(elem, {
-                appendTo: document.body,
-                delay: [500, 200],
-                interactive: true,
-                content: tip,
-                theme: "trade",
-            });
-        };
-        const getTrades = async (print, elem) => {
-            if (cardsInTrades.loading) await cardsInTrades.loading;
-
-            const giving = elem.closest(".trade--side").matches(".trade--you");
-            const pid = print[giving ? "print_id" : "id"];
-            let tradeIds = cardsInTrades[giving ? "give" : "receive"][pid] ?? [];
-
-            // exclude the current trade
-            if (tradeIds?.length > 0 && nmTrades.getId()) {
-                const currentTrade = nmTrades.getId();
-                tradeIds = tradeIds.filter((trade) => trade !== currentTrade);
-            }
-
-            return tradeIds;
-        };
-
-        return {
-            scope: {
-                print: "=nmUsedInTrades",
-            },
-            template: `
-                <span ng-if="length > 0" class="text-warning">
-                    <span ng-if="length === 1">Used in another trade</span>
-                    <span ng-if="length > 1">Used in {{length}} more trades</span>
-                </span>
-            `,
-            async link (scope, $elem) {
-                scope.length = 0;
-                scope.$watch(
-                    () => scope.print.print_id,
-                    () => getTrades(scope.print, $elem[0]).then((trades) => {
-                        scope.$apply(() => { scope.length = trades.length; });
-                        attachTip($elem[0], trades);
-                    }),
-                );
-            },
-        };
-    }]);
-
     // insert the print chooser
     templatePatches.push({
         names: ["/static/common/trades/partial/item-list.html"],
@@ -2287,6 +2278,129 @@ function addChecklistOrderCards () {
     })]);
 }
 
+function addUsageInTrades () {
+    templatePatches.push({
+        // insert card usage on collection page
+        names: ["partials/collection/collection-prints.partial.html"],
+        patches: [{
+            target: `title="Limited Edition"></span>`,
+            append: `<span
+                data-ng-controller="nmUsageInTrades"
+                data-length="{{trades.length}}"
+                class="card-trading-icon"></span>`,
+        }],
+    }, {
+        // insert card usage on series page
+        names: ["partials/art/sett-checklist-rarity-group.partial.html"],
+        patches: [{
+            target: `</li>`,
+            prepend: `<span
+                data-ng-controller="nmUsageInTrades"
+                data-length="{{trades.length}}"
+                class="card-trading-icon"></span>`,
+        }],
+    }, {
+        // insert card usage in trades
+        names: [
+            "/static/common/trades/partial/add.html",
+            "/static/common/trades/partial/item-list.html",
+        ],
+        patches: [{
+            target: "</li>",
+            prepend: `
+                <span data-ng-controller="nmUsageInTrades" class="card-trading">
+                    <span ng-if="trades.length === 1" class="text-warning">
+                        Used in another trade
+                    </span>
+                    <span ng-if="trades.length > 1" class="text-warning">
+                        Used in {{trades.length}} more trades
+                    </span>
+                </span>`,
+        }],
+    });
+    angular.module("nm.trades").controller("nmUsageInTrades", [
+        "$scope",
+        "$element",
+        "nmTrades",
+        ($scope, $elem, nmTrades) => {
+            const dir = $scope.traderName
+                ? ($scope.traderName === "you" ? "give" : "receive")
+                : "both";
+            const lvl = dir === "give" ? "print" : "card";
+            const currentTrade = $scope.print ? nmTrades.getId() : null;
+            $scope.trades = [];
+
+            async function loadTrades () {
+                let trades = await cardsInTrades.getTrades($scope.print ?? $scope.piece, dir, lvl);
+                // exclude the current trade
+                if (trades.length > 0 && currentTrade) {
+                    trades = trades.filter((trade) => trade !== currentTrade);
+                }
+                attachTip($elem[0], trades, $scope.piece?.id);
+                $scope.$apply(() => { $scope.trades = trades; });
+            }
+
+            if ($scope.print) {
+                // when in a trade
+                $scope.$watch(() => $scope.print.print_id, loadTrades);
+            } else {
+                // when viewing the card
+                $scope.$watch(() => cardsInTrades.lastUpdate, loadTrades);
+            }
+        },
+    ]);
+
+    async function attachTip (elem, tradeIds, cardId) {
+        // destroy preivous tip if presented
+        // eslint-disable-next-line no-underscore-dangle
+        elem._tippy?.destroy();
+        if (tradeIds.length === 0) return;
+
+        const trades = await Promise.all(tradeIds.map((id) => Trade.get(id)));
+
+        const tip = document.createElement("div");
+        if (trades.length === 1) {
+            tip.append(trades[0].makeTradePreview(cardId));
+        } else {
+            let pos = 0;
+            const controls = document.createElement("header");
+            controls.className = "text-prominent text-small";
+            controls.innerHTML = `
+                <a class="off">&lt;</a>
+                trade with <span>${trades[0].partner.name}</span>
+                <a>&gt;</a>`;
+            const [prev, currTrade, next] = controls.children;
+
+            const showTradePreivew = async (change) => {
+                pos += change;
+                if (pos < 0 || pos >= trades.length) {
+                    pos -= change;
+                    return;
+                }
+                prev.classList.toggle("off", pos === 0);
+                next.classList.toggle("off", pos === trades.length - 1);
+                currTrade.textContent = trades[pos].partner.name;
+                controls.nextSibling.replaceWith(trades[pos].makeTradePreview(cardId));
+            };
+            prev.addEventListener("click", (ev) => showTradePreivew(-1));
+            next.addEventListener("click", (ev) => showTradePreivew(+1));
+
+            tip.append(
+                controls,
+                trades[pos].makeTradePreview(cardId),
+            );
+        }
+
+        tippy(elem, {
+            appendTo: document.body,
+            delay: [500, 200],
+            interactive: true,
+            content: tip,
+            theme: "trade",
+        });
+    }
+}
+
 /**
  * Patch the given object with templates;
  * @param  {$cacheFactory.Cache} $templateCache - map of templates
@@ -2538,6 +2652,7 @@ document.addEventListener("DOMContentLoaded", () => {
     addTradeEnhancementsSettings();
     addChecklistOrderCards();
     addWishlistButton();
+    addUsageInTrades();
     makePiecePeekable();
     applyPatches();
 });
