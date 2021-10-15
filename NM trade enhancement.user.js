@@ -122,9 +122,6 @@ GM_addStyle(`
     .trade--add-items--filters select.series{
         flex-grow: 1;
     }
-    .trade--add-items--filters .filter-group {
-        margin: 0;
-    }
 
     #print-list .hiddenSeries {
         padding: 5px 20px;
