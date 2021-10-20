@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      2.1.0
+// @version      2.1.1
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -2353,7 +2353,7 @@ function addUsageInTrades () {
         "nmTrades",
         ($scope, $elem, nmTrades) => {
             const dir = $scope.traderName
-                ? ($scope.traderName === "you" ? "give" : "receive")
+                ? ($elem.closest(".trade--side.trade--you").length > 0 ? "give" : "receive")
                 : "both";
             const lvl = dir === "give" ? "print" : "card";
             const currentTrade = $scope.print ? nmTrades.getId() : null;
