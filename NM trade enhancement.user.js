@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      2.1.1
+// @version      2.1.2
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -918,7 +918,7 @@ async function fixFreebieCount (button) {
 async function addLastActionAgo (header, watchForChanges = true) {
     const userId = getScope(header).recipient.id;
     const lastActionAgo = await api("napi", `/activityfeed/user/${userId}/?amount=5&page=1`)
-        .then((data) => data[0]?.created ?? "roughly never");
+        .then((data) => data[0]?.created ?? "one eternity ago");
 
     const div = document.createElement("div");
     div.className = "last-action";
@@ -1614,17 +1614,18 @@ async function addTradeWindowEnhancements () {
                 const user = giving ? NM.you.attributes : nmTrades.getTradingPartner();
                 const url = `/users/${user.id}/piece/${scope.card.id}/detail/`;
                 const details = await api("api", url);
-                scope.prints = details.refs[details.payload[1]].prints;
-                scope.print = scope.prints.find((p) => p.id === print.print_id)
-                    ?? scope.prints[scope.prints.length - 1];
-                scope.state = "choose";
+                scope.$apply(() => {
+                    scope.prints = details.refs[details.payload[1]].prints;
+                    scope.print = scope.prints.find((p) => p.id === print.print_id)
+                        ?? scope.prints[scope.prints.length - 1];
+                    scope.state = "choose";
+                });
             };
             scope.setPrint = () => {
-                const pos = offer.indexOf(print);
                 print.print_id = scope.print.id;
                 print.print_num = scope.print.print_num;
-                // no direct access the variable _selectedIds so we modify is such way
-                nmTrades.getPrintIds(offerType).splice(pos, 1, print.print_id);
+                // no direct access the variable _selectedIds so we modify in such way
+                nmTrades.setOfferData(offerType, nmTrades.getOfferData(offerType).prints);
             };
         },
     })]);
@@ -2352,7 +2353,7 @@ function addUsageInTrades () {
         "$element",
         "nmTrades",
         ($scope, $elem, nmTrades) => {
-            const dir = $scope.traderName
+            const dir = $scope.print // if it's a trade window
                 ? ($elem.closest(".trade--side.trade--you").length > 0 ? "give" : "receive")
                 : "both";
             const lvl = dir === "give" ? "print" : "card";
