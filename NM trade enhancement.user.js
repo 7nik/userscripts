@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      2.1.2
+// @version      2.1.3
 // @description  Adds enhancements to the trading window
 // @author       7nik
 // @homepageURL  https://github.com/7nik/userscripts
@@ -2543,8 +2543,14 @@ function patchNMTrades (nmTrades, userCollections, artSubscriptionService) {
             userCollections.getCollections(nmTrades.getBidder());
             // sort cards by rarity
             const comp = (a, b) => b.rarity.rarity - a.rarity.rarity;
-            nmTrades.getOfferData("bidder_offer").prints.reverse().sort(comp);
-            nmTrades.getOfferData("responder_offer").prints.reverse().sort(comp);
+            nmTrades.setOfferData(
+                "bidder_offer",
+                nmTrades.getOfferData("bidder_offer").prints.sort(comp),
+            );
+            nmTrades.setOfferData(
+                "responder_offer",
+                nmTrades.getOfferData("responder_offer").prints.sort(comp),
+            );
         }
         origSetWindowState(state);
     };
