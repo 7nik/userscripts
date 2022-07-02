@@ -56,6 +56,9 @@ GM_addStyle(`
     .trade--side--items--loading:empty {
         display: none;
     }
+    .pack-tier--pack .pack {
+        height: 120px;
+    }
 
     .trade--add-items--filters {
         display: flex;
@@ -64,7 +67,7 @@ GM_addStyle(`
         align-content: space-between;
         height: 89px;
     }
-    .trade--add-items--filters input.search {
+    .trade--add-items--filters input.small.search {
         font-size: 12px;
         height: auto;
         padding: 0.5em 0.6em;
@@ -631,7 +634,10 @@ function loadValue (name, defValue) {
     if (fullName in localStorage) {
         return JSON.parse(localStorage[fullName]);
     }
-    return GM_getValue(name, defValue);
+    // TODO: rid of GM_getValue
+    const value = GM_getValue(name, defValue);
+    if (value !== defValue) saveValue(name, value);
+    return value;
 }
 
 /**
