@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         NM trade enhancement
 // @namespace    7nik
-// @version      2.1.4
+// @version      2.9.9
 // @description  Adds enhancements to the trading window
 // @author       7nik
-// @homepageURL  https://github.com/7nik/userscripts
-// @supportURL   https://github.com/7nik/userscripts/issues
-// @updateURL    https://github.com/7nik/userscripts/raw/master/NM%20trade%20enhancement.user.js
-// @downloadURL  https://github.com/7nik/userscripts/raw/master/NM%20trade%20enhancement.user.js
+// @icon         https://github.com/7nik/nm-trade-enhancements/raw/master/app/images/icon.svg
+// @homepageURL  https://github.com/7nik/nm-trade-enhancements
+// @supportURL   https://github.com/7nik/nm-trade-enhancements/issues
+// @updateURL    https://github.com/7nik/nm-trade-enhancements/releases/latest/download/userscript.meta.js
+// @downloadURL  https://github.com/7nik/nm-trade-enhancements/releases/latest/download/userscript.user.js
 // @match        https://www.neonmob.com/*
 // @grant        GM_addStyle
 // @grant        GM_getValue
